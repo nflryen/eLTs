@@ -1,29 +1,26 @@
-import { requireOps } from "@/lib/auth/roles";
-import { getAttentionQueue } from "@/app/actions/attention";
+import { getDashboardTelemetry } from "@/app/actions/admin-dashboard";
 import { readSectorLens } from "@/lib/sector-lens.server";
-import { AttentionQueueView } from "@/components/admin/attention-queue";
 import { SectorLens } from "@/components/admin/sector-lens";
+import { AdminDashboard } from "@/components/admin/dashboard/admin-dashboard";
 
 /**
- * Admin home = "Hari Ini".
+ * Admin home — executive dashboard.
  *
- * Replaces a 450-line cockpit of four KPI cards, a sector strip, an action list
- * and a 5-day agenda — all of which read from tables that did not exist and
- * invented financial figures. Those numbers were worse than nothing: a
- * dashboard that lies is less useful than one that says "belum ada data".
+ * Authorisation lives in `getDashboardTelemetry()` via `requireStaff()`, so the
+ * page itself holds no role logic. Restricted financial metrics are dropped
+ * server-side (`state: "hidden"`), which means an ADMIN cannot recover Founder
+ * figures from the client bundle even though both render the same component.
  *
- * The home screen is now a ranked work queue. Everything shown is computed from
- * live data, every row has the action that resolves it, and when the queue is
- * empty the page says so plainly so the operator can stop working.
+ * `readSectorLens` is independent of telemetry and degrades to the default
+ * sector on its own, so a lens failure cannot blank the dashboard.
  */
 export default async function AdminHomePage() {
-  const { admin } = await requireOps();
-  const [queue, lens] = await Promise.all([getAttentionQueue(), readSectorLens()]);
+  const [telemetry, lens] = await Promise.all([getDashboardTelemetry(), readSectorLens()]);
 
   return (
     <div className="space-y-5">
       <SectorLens active={lens} />
-      <AttentionQueueView queue={queue} ownerName={admin.display_name} />
+      <AdminDashboard data={telemetry} />
     </div>
   );
 }
