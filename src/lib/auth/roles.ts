@@ -193,6 +193,44 @@ export async function requireRole(minimum: RoleKey): Promise<RoleSession> {
 }
 
 /**
+ * Invokes `has_permission_for_caller()` for the signed-in caller.
+ *
+ * WHY NOT `const rpc = supabase.rpc; rpc(...)`
+ * --------------------------------------------
+ * Extracting a prototype method into a variable DETACHES it. The call then runs
+ * with `this === undefined`, so PostgREST's `this.rest` dereference throws
+ * "Cannot read properties of undefined (reading 'rest')" before any HTTP
+ * request is made. Every `requirePermission()` check previously died that way
+ * and failed closed on a TypeError, so the permission layer never actually ran.
+ *
+ * `Function.prototype.call` keeps the receiver while allowing a narrower
+ * signature: supabase-js resolves a one-argument RPC's `Args` through the
+ * generic `Database` type, and for this entry that resolution is `undefined`.
+ */
+type PermissionRpc = (
+  this: unknown,
+  fn: "has_permission_for_caller",
+  args: { p_permission_key: string },
+) => PromiseLike<{
+  data: boolean | null;
+  error: { code?: string } | null;
+}>;
+
+async function callPermissionCheck(
+  supabase: Awaited<ReturnType<typeof createServerSupabase>>,
+  key: string,
+): Promise<{ data: boolean | null; error: { code?: string } | null }> {
+  const rpc = supabase.rpc as unknown as PermissionRpc;
+  const { data, error } = await rpc.call(supabase, "has_permission_for_caller", {
+    p_permission_key: key,
+  });
+  return {
+    data: typeof data === "boolean" ? data : null,
+    error: error ? { code: error.code } : null,
+  };
+}
+
+/**
  * Requires a specific permission grant. Use where rank alone cannot express the
  * rule — for example issuing an invoice without being able to settle one.
  */
@@ -200,21 +238,19 @@ export async function requirePermission(key: string): Promise<RoleSession> {
   const session = await getRoleSession();
   if (!session) throw new UnauthorizedError();
 
-  // Same reason as getRoleSession: `has_permission_for_caller()` reads
-  // `auth.uid()`, which only resolves on the user-scoped client.
-  //
-  // The generated `Database` type has a hand-written `Functions` block that
-  // does not model this RPC's argument object, so the call is typed through a
-  // narrow local signature rather than `any`. The runtime contract is the
-  // function definition in migration 0002.
+  /*
+   * `has_permission_for_caller()` reads `auth.uid()`, which only resolves on
+   * the user-scoped client.
+   *
+   * The call goes through `callPermissionCheck()` rather than a cast of
+   * `supabase.rpc`. Extracting a method into a variable DETACHES it: `rpc(...)`
+   * then runs with `this === undefined` and throws
+   * "Cannot read properties of undefined (reading 'rest')" before PostgREST is
+   * ever reached — which is exactly what this function used to do, so every
+   * `requirePermission()` check failed closed on a TypeError.
+   */
   const supabase = await createServerSupabase();
-  const rpc = supabase.rpc as unknown as (
-    fn: "has_permission_for_caller",
-    args: { p_permission_key: string },
-  ) => PromiseLike<{ data: boolean | null; error: { code?: string } | null }>;
-  const { data, error } = await rpc("has_permission_for_caller", {
-    p_permission_key: key,
-  });
+  const { data, error } = await callPermissionCheck(supabase, key);
   if (error) {
     console.error("permission_check_failed", { code: error.code });
     // Fail closed: an unreadable permission check is not a grant.
@@ -291,14 +327,9 @@ export async function requirePagePermission(key: string): Promise<RoleSession> {
     redirect("/admin/login");
   }
 
+  // Same detached-method trap as `requirePermission`; see `callPermissionCheck`.
   const supabase = await createServerSupabase();
-  const rpc = supabase.rpc as unknown as (
-    fn: "has_permission_for_caller",
-    args: { p_permission_key: string },
-  ) => PromiseLike<{ data: boolean | null; error: { code?: string } | null }>;
-  const { data, error } = await rpc("has_permission_for_caller", {
-    p_permission_key: key,
-  });
+  const { data, error } = await callPermissionCheck(supabase, key);
   if (error || data !== true) {
     redirect(DENIED_PATH);
   }
