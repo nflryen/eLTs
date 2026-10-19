@@ -5,6 +5,10 @@ import { Button } from "@/components/ui/button";
 import type { ProjectStatus, ProjectRow, CustomerRow } from "@/types/database";
 import { ProjectsFilter } from "@/components/admin/projects-filter";
 import { SortHeader } from "@/components/admin/projects-sort-header";
+import { ViewSwitcher } from "@/components/admin/projects/view-switcher";
+import { parseView } from "@/lib/projects/view";
+import { FolderCard, type FolderCardProject } from "@/components/admin/projects/folder-card";
+import { loadFolderMetrics, formatStorage } from "@/lib/workspace/folder-metrics";
 import { Suspense } from "react";
 
 /*
@@ -36,15 +40,17 @@ function parseSort(raw: string | undefined): { key: SortKey; dir: "asc" | "desc"
 }
 
 export default async function ProjectsPage(props: {
-  searchParams: Promise<{ q?: string; status?: string; sort?: string }>;
+  searchParams: Promise<{ q?: string; status?: string; sort?: string; view?: string }>;
 }) {
   const searchParams = await props.searchParams;
   const { supabase } = await requireOps();
   const sort = parseSort(searchParams.sort);
+  // Read the view server-side so the first paint is already correct.
+  const view = parseView(searchParams.view);
 
   let query = supabase
     .from("projects")
-    .select("id, name, slug, photography_type, status, shoot_date, created_at, customer_id, is_dp_paid, is_fully_paid, selection_locked_at, contract_value, dp_amount")
+    .select("id, name, slug, photography_type, service_pillar, status, shoot_date, created_at, customer_id, is_dp_paid, is_fully_paid, selection_locked_at, contract_value, dp_amount")
     .order(SORTABLE[sort.key], { ascending: sort.dir === "asc", nullsFirst: false });
 
   if (searchParams.status && searchParams.status !== "all") {
@@ -61,7 +67,7 @@ export default async function ProjectsPage(props: {
   if (!projectsData || error) {
     let fallbackQuery = supabase
       .from("projects")
-      .select("id, name, slug, photography_type, status, shoot_date, created_at, customer_id")
+      .select("id, name, slug, photography_type, service_pillar, status, shoot_date, created_at, customer_id")
       .order(SORTABLE[sort.key], { ascending: sort.dir === "asc", nullsFirst: false });
 
     if (searchParams.status && searchParams.status !== "all") {
@@ -99,6 +105,26 @@ export default async function ProjectsPage(props: {
     (customers ?? []).map((c) => [c.id, c.name])
   );
 
+  // Folder-card metrics in one aggregate pass (never N+1).
+  const metrics = await loadFolderMetrics(supabase, (projects ?? []).map((p) => p.id));
+
+  const cardProjects: FolderCardProject[] = (projects ?? []).map((p) => {
+    const m = metrics.get(p.id);
+    return {
+      id: p.id,
+      name: p.name,
+      slug: p.slug,
+      pillar: (p as { service_pillar?: string }).service_pillar ?? "",
+      status: p.status,
+      shootDate: p.shoot_date,
+      mediaCount: m?.mediaCount ?? 0,
+      crewCount: m?.crewCount ?? 0,
+      storageLabel: formatStorage(m?.storageBytes ?? null),
+      isDpPaid: p.is_dp_paid,
+      isFullyPaid: p.is_fully_paid,
+    };
+  });
+
   const counts = {
     total: projects?.length ?? 0,
     ready: projects?.filter((p) => p.status === "ready").length ?? 0,
@@ -120,9 +146,14 @@ export default async function ProjectsPage(props: {
         </Button>
       </div>
 
-      <Suspense fallback={<div className="h-[42px] mb-6 bg-[#fafafa] border border-[#ececee] rounded-md animate-pulse"></div>}>
-        <ProjectsFilter />
-      </Suspense>
+      <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <Suspense fallback={<div className="h-[42px] flex-1 animate-pulse rounded-[10px] bg-[#fafafa]" />}>
+          <ProjectsFilter />
+        </Suspense>
+        <Suspense fallback={<div className="h-[42px] w-[132px] animate-pulse rounded-[12px] bg-[#fafafa]" />}>
+          <ViewSwitcher view={view} />
+        </Suspense>
+      </div>
 
       {/* Stats Row */}
       <div className="grid grid-cols-3 gap-4 mb-6">
@@ -147,6 +178,31 @@ export default async function ProjectsPage(props: {
        * so they are now four scannable columns with one badge each, and the row
        * collapses to a single line of height.
        */}
+      {view === "cards" ? (
+        projects && projects.length > 0 ? (
+          <div
+            className="grid grid-cols-2 gap-3 md:grid-cols-3 md:gap-4 lg:grid-cols-4 xl:grid-cols-5 xl:gap-5"
+            aria-label="Proyek sebagai folder"
+          >
+            {cardProjects.map((p) => (
+              <FolderCard key={p.id} project={p} />
+            ))}
+          </div>
+        ) : (
+          <div className="rounded-[18px] border border-dashed border-[#d4d4d8] px-6 py-16 text-center">
+            <FolderKanban size={32} className="mx-auto mb-3 text-[#a1a1aa]" aria-hidden="true" />
+            <p className="mb-1 font-medium">Belum ada proyek</p>
+            <p className="mb-6 text-sm text-muted-foreground">
+              Buat proyek pertama untuk mulai membagikan galeri ke klien.
+            </p>
+            <Button asChild size="sm">
+              <Link href="/admin/projects/new">
+                <Plus size={16} /> Proyek Baru
+              </Link>
+            </Button>
+          </div>
+        )
+      ) : (
       <div className="overflow-hidden rounded-[18px] border border-[#ececee] bg-white">
         {projects && projects.length > 0 ? (
           <div className="overflow-x-auto">
@@ -264,6 +320,7 @@ export default async function ProjectsPage(props: {
           </div>
         )}
       </div>
+      )}
     </div>
   );
 }

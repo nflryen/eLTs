@@ -7,6 +7,8 @@ import { Menu, X } from "lucide-react";
 import type { ReactNode } from "react";
 import { ROLE_RANK, isPreviewableRole } from "@/lib/auth/role-meta";
 import { PreviewBanner } from "./role-switcher";
+import { MobileBottomNav } from "./mobile-bottom-nav";
+import { BottomSheet } from "./bottom-sheet";
 
 /**
  * Admin navigation shell.
@@ -134,6 +136,47 @@ function NavLinks({
   );
 }
 
+
+/**
+ * Tablet icon rail (768–1023px).
+ *
+ * A 256px sidebar consumes a third of a 768px viewport. The rail keeps every
+ * destination one tap away at 72px, and the full sidebar returns at 1024px.
+ * Labels are exposed to assistive tech via aria-label + a visually hidden span.
+ */
+function NavRail({ groups, pathname }: { groups: NavGroup[]; pathname: string }) {
+  return (
+    <nav aria-label="Navigasi utama" className="flex-1 space-y-4 overflow-y-auto px-2 py-4">
+      {groups.map((group) => (
+        <div key={group.label}>
+          <p className="sr-only">{group.label}</p>
+          <ul className="space-y-1">
+            {group.items.map((item) => {
+              const active = isActive(pathname, item.href);
+              return (
+                <li key={item.href}>
+                  <Link
+                    href={item.href}
+                    aria-current={active ? "page" : undefined}
+                    aria-label={item.label}
+                    title={item.label}
+                    className={`flex min-h-12 items-center justify-center rounded-[12px] transition-colors ${
+                      active ? "bg-[#09090b] text-white" : "text-[#3f3f46] hover:bg-[#fafafa]"
+                    }`}
+                  >
+                    <span className={active ? "text-white" : "text-[#71717a]"}>{item.icon}</span>
+                    <span className="sr-only">{item.label}</span>
+                  </Link>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      ))}
+    </nav>
+  );
+}
+
 export function AdminShell({
   groups,
   rank,
@@ -141,10 +184,16 @@ export function AdminShell({
   footer,
   headerSlot,
   children,
+  attentionCount = 0,
+  attentionItems = [],
 }: {
   groups: NavGroup[];
   /** Effective role rank of the signed-in user, resolved on the server. */
   rank: number;
+  /** Count shown on the mobile Notifikasi badge. */
+  attentionCount?: number;
+  /** Compact list rendered in the mobile notifications sheet. */
+  attentionItems?: Array<{ id: string; title: string; detail: string; href: string; severity: string }>;
   brandHref?: string;
   footer: ReactNode;
   headerSlot?: ReactNode;
@@ -153,6 +202,7 @@ export function AdminShell({
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [lastPath, setLastPath] = useState(pathname);
 
   /*
@@ -224,12 +274,27 @@ export function AdminShell({
   return (
     <div className="flex min-h-svh bg-[#f4f4f5]">
       {/* ── Desktop sidebar ─────────────────────────────────────────────── */}
-      <aside className="hidden w-64 shrink-0 flex-col border-r border-[#ececee] bg-white md:flex">
+      <aside className="hidden w-64 shrink-0 flex-col border-r border-[#ececee] bg-white lg:flex">
         <div className="flex h-16 items-center justify-between border-b border-[#ececee] px-5">
           {brand}
         </div>
         <NavLinks groups={allowed} pathname={pathname} />
         <div className="border-t border-[#ececee] p-3">{footer}</div>
+      </aside>
+
+      {/* ── Tablet icon rail (768–1023) ─────────────────────────────────── */}
+      <aside className="hidden w-[72px] shrink-0 flex-col border-r border-[#ececee] bg-white md:flex lg:hidden">
+        <div className="flex h-16 items-center justify-center border-b border-[#ececee]">
+          <Link
+            href={brandHref}
+            aria-label="Elts Studio OS"
+            className="font-serif text-lg font-bold tracking-tight text-[#09090b]"
+          >
+            E.
+          </Link>
+        </div>
+        <NavRail groups={allowed} pathname={pathname} />
+        <div className="border-t border-[#ececee] p-2">{footer}</div>
       </aside>
 
       {/* ── Mobile drawer ───────────────────────────────────────────────── */}
@@ -265,16 +330,11 @@ export function AdminShell({
 
       {/* ── Main column ─────────────────────────────────────────────────── */}
       <div className="flex min-w-0 flex-1 flex-col">
+        {/*
+         * No hamburger: the bottom bar owns primary navigation, and a second
+         * menu affordance at the top of the same screen is redundant.
+         */}
         <header className="sticky top-0 z-30 flex h-16 items-center justify-between gap-3 border-b border-[#ececee] bg-white px-4 md:hidden">
-          <button
-            type="button"
-            onClick={() => setDrawerOpen(true)}
-            aria-label="Buka menu"
-            aria-expanded={drawerOpen}
-            className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-[14px] border border-[#ececee] text-[#3f3f46] transition-colors hover:bg-[#fafafa] cursor-pointer"
-          >
-            <Menu size={18} />
-          </button>
           <div className="min-w-0 flex-1 truncate">{brand}</div>
           {headerSlot}
         </header>
@@ -282,7 +342,55 @@ export function AdminShell({
         {/* Unmissable while previewing: a simulation must never look real. */}
         <PreviewBanner rank={previewRank} />
 
-        <main className="min-w-0 flex-1 p-4 sm:p-6 md:p-8">{children}</main>
+        <main className="min-w-0 flex-1 p-4 pb-[calc(72px+env(safe-area-inset-bottom))] sm:p-6 md:pb-8 md:p-8">
+          {children}
+        </main>
+
+        <MobileBottomNav
+          attentionCount={attentionCount}
+          onOpenNotifications={() => setNotificationsOpen(true)}
+          onOpenMenu={() => setDrawerOpen(true)}
+        />
+
+        <BottomSheet
+          open={notificationsOpen}
+          onClose={() => setNotificationsOpen(false)}
+          title="Perlu Perhatian"
+          labelledBy="mobile-notif-title"
+        >
+          {attentionItems.length === 0 ? (
+            <p className="px-3 py-6 text-center text-sm text-[#71717a]">
+              Tidak ada yang menunggu tindakan.
+            </p>
+          ) : (
+            <ul className="divide-y divide-[#f4f4f5]">
+              {attentionItems.map((item) => (
+                <li key={item.id}>
+                  <Link
+                    href={item.href}
+                    onClick={() => setNotificationsOpen(false)}
+                    className="flex min-h-14 items-start gap-3 rounded-[12px] px-3 py-3 hover:bg-[#fafafa]"
+                  >
+                    <span
+                      aria-hidden="true"
+                      className={`mt-1.5 size-1.5 shrink-0 rounded-full ${
+                        item.severity === "critical"
+                          ? "bg-[#ff5a00]"
+                          : item.severity === "high"
+                            ? "bg-[#18181b]"
+                            : "bg-[#a1a1aa]"
+                      }`}
+                    />
+                    <span className="min-w-0">
+                      <span className="block truncate text-sm font-medium text-[#18181b]">{item.title}</span>
+                      <span className="mt-0.5 block text-xs text-[#71717a]">{item.detail}</span>
+                    </span>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          )}
+        </BottomSheet>
       </div>
     </div>
   );

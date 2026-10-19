@@ -6,6 +6,7 @@ import {
 } from "lucide-react";
 import { adminLogout } from "@/app/actions/admin-auth";
 import { requireStaff } from "@/lib/auth/roles";
+import { getAttentionQueue } from "@/app/actions/attention";
 import { Button } from "@/components/ui/button";
 import { AdminShell, type NavGroup } from "@/components/admin/admin-shell";
 import { RoleSwitcher } from "@/components/admin/role-switcher";
@@ -105,8 +106,30 @@ export default async function AdminLayout({ children }: { children: React.ReactN
     </div>
   );
 
+  /*
+   * The mobile bar needs the attention count before the user opens any page.
+   * A failure here must not break the shell, so it degrades to an empty queue.
+   */
+  const attention = await getAttentionQueue().catch(() => ({
+    items: [],
+    generatedAt: new Date().toISOString(),
+    summary: { critical: 0, high: 0, medium: 0, total: 0 },
+  }));
+
   return (
-    <AdminShell groups={NAV_GROUPS} rank={rank} footer={footer}>
+    <AdminShell
+      groups={NAV_GROUPS}
+      rank={rank}
+      footer={footer}
+      attentionCount={attention.summary.total}
+      attentionItems={attention.items.slice(0, 12).map((i) => ({
+        id: i.id,
+        title: i.title,
+        detail: i.detail,
+        href: i.actions[0]?.href ?? "/admin",
+        severity: i.severity,
+      }))}
+    >
       {children}
     </AdminShell>
   );
