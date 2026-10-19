@@ -103,7 +103,7 @@ begin
     -- (c) DROP the legacy blanket policy LAST
     execute format('drop policy if exists %I on public.%I', t || '_admin_all', t);
 
-    raise notice 'rbac: public.% → read>=% write>=%', t, read_rank, write_rank;
+    raise notice 'rbac: public.% -> read>=% write>=%', t, read_rank, write_rank;
   end loop;
 end $$;
 
@@ -130,6 +130,59 @@ begin
   end if;
 end $$;
 
+-- ── 2b. Tables that also carry public-read / public-insert policies ─────────
+-- `moodboard_cards`, `moodboard_comments` (client portal) and `studio_events`,
+-- `inquiries` (public booking + contact form) each have a deliberate anon
+-- policy alongside `{table}_admin_all`.
+--
+-- They are NOT in the admin-only loop above, and were therefore missed on the
+-- first pass — leaving a rank-80 blanket policy on four tables. Only the
+-- `_admin_all` policy is dropped here; every `*_public_*` policy is preserved.
+do $$
+declare
+  t text; read_rank integer; write_rank integer; tbl_exists boolean;
+  spec text[];
+  specs text[][] := array[
+    ['moodboard_cards',    '60',  '80'],
+    ['moodboard_comments', '60',  '80'],
+    ['studio_events',      '80',  '80'],
+    ['inquiries',          '80',  '80']
+  ];
+begin
+  foreach spec slice 1 in array specs loop
+    t := spec[1];
+    read_rank := spec[2]::integer;
+    write_rank := spec[3]::integer;
+
+    select exists (
+      select 1 from pg_class c join pg_namespace n on n.oid = c.relnamespace
+      where n.nspname = 'public' and c.relname = t and c.relkind = 'r'
+    ) into tbl_exists;
+    if not tbl_exists then
+      raise notice 'rbac: skipping absent table public.%', t;
+      continue;
+    end if;
+
+    execute format('alter table public.%I enable row level security', t);
+
+    execute format('drop policy if exists %I on public.%I', t || '_rbac_read', t);
+    execute format($f$
+      create policy %I on public.%I for select to authenticated
+        using (private.has_role_rank(%s))
+    $f$, t || '_rbac_read', t, read_rank);
+
+    execute format('drop policy if exists %I on public.%I', t || '_rbac_write', t);
+    execute format($f$
+      create policy %I on public.%I for all to authenticated
+        using (private.has_role_rank(%s))
+        with check (private.has_role_rank(%s))
+    $f$, t || '_rbac_write', t, write_rank, write_rank);
+
+    execute format('drop policy if exists %I on public.%I', t || '_admin_all', t);
+    raise notice 'rbac: public.% (public companion) read>=% write>=%', t, read_rank, write_rank;
+  end loop;
+end $$;
+
 -- ── 3. Verify no admin-only table was left unprotected ──────────────────────
 do $$
 declare
@@ -148,7 +201,9 @@ begin
         'project_expenses','project_invoices','invoice_payment_receipts',
         'money_splits','cash_ledger','vendor_purchase_orders',
         'vendor_purchase_order_items','outgoing_rental_orders',
-        'outgoing_rental_items','editor_tasks','document_sequences'
+        'outgoing_rental_items','editor_tasks','document_sequences',
+        -- public-companion tables handled in 2b
+        'moodboard_cards','moodboard_comments','studio_events','inquiries'
       )
   loop
     select count(*) into n

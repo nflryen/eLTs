@@ -3,6 +3,7 @@ import { withAdmin } from "@/lib/auth/admin";
 import { buildStreamB, ManifestInvariantError } from "@/app/actions/gear-exports";
 import { jakartaShortDate, jakartaTime } from "@/lib/datetime";
 import { escapeHtml, idr } from "@/lib/format";
+import { getStudioBankAccounts } from "@/lib/studio/payment-methods";
 
 export const runtime = "nodejs";
 
@@ -31,6 +32,9 @@ export const GET = withAdmin<{ id: string }>(
     const { id } = params;
     const url = new URL(req.url);
     const onlyVendor = url.searchParams.get("vendor");
+
+    // Vendor payments quote the studio's configured accounts, not literals.
+    const bankAccounts = await getStudioBankAccounts();
 
     let data;
     try {
@@ -145,8 +149,16 @@ export const GET = withAdmin<{ id: string }>(
       </div>
       <div class="tcol">
         <h3>Pembayaran</h3>
-        <div class="bank">BCA 3581216520<br><span>a.n. Emri Luthfan A.</span></div>
-        <div class="bank">Mandiri 1560023148218<br><span>a.n. Muhammad Rayyan Nufail</span></div>
+        ${
+          bankAccounts.length > 0
+            ? bankAccounts
+                .map(
+                  (b) =>
+                    `<div class="bank">${escapeHtml(b.bank)} ${escapeHtml(b.account_number)}<br><span>a.n. ${escapeHtml(b.account_holder)}</span></div>`,
+                )
+                .join("")
+            : `<div class="bank"><span>Detail rekening belum tersedia — hubungi studio.</span></div>`
+        }
       </div>
     </div>
 

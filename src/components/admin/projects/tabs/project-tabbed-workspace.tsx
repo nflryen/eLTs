@@ -44,6 +44,7 @@ import type {
   EquipmentPresetRow,
 } from "@/types/operations";
 import type { InventoryAssetRow } from "@/types/inventory";
+import type { StudioBankAccount } from "@/lib/studio/payment-methods";
 
 export type ProjectWorkspaceTab =
  | "overview"
@@ -63,6 +64,8 @@ interface ProjectTabbedWorkspaceProps {
   presets: EquipmentPresetRow[];
   initialSplit: MoneySplitRow | null;
   inventoryAssets: InventoryAssetRow[];
+  /** Configured studio accounts, supplied by the server. */
+  bankAccounts: StudioBankAccount[];
 }
 
 export function ProjectTabbedWorkspace({
@@ -76,6 +79,7 @@ export function ProjectTabbedWorkspace({
   presets,
   initialSplit,
   inventoryAssets,
+  bankAccounts,
 }: ProjectTabbedWorkspaceProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -159,11 +163,19 @@ export function ProjectTabbedWorkspace({
  ? `${origin}/invoice/${encodeURIComponent(invoiceNumber)}`
       : null;
 
+    // Payment accounts are supplied by the server, never literals here.
+    const bankLines =
+      bankAccounts.length > 0
+        ? `Rekening Pembayaran:\n${bankAccounts
+            .map((b) => `• ${b.bank}: ${b.account_number} a.n. ${b.account_holder}`)
+            .join("\n")}`
+        : "Rekening pembayaran belum tersedia. Silakan hubungi studio.";
+
  const text = `Halo Bapak/Ibu *${customer?.name || "Klien"}*,\nBerikut kami sampaikan rincian tagihan resmi dari *ELTS Creative & Digital Studio*:\n\n📋 *Proyek:* ${project.name}\n${invoiceRef}\n💰 *Nilai Kontrak:* Rp ${invoiceTotal.toLocaleString("id-ID")}\n${
       paidAmount > 0
  ? `✅ *Sudah Dibayar:* Rp ${paidAmount.toLocaleString("id-ID")}\n⏳ *Sisa Pelunasan:* Rp ${balanceDue.toLocaleString("id-ID")}`
  : `💳 *Total Tagihan:* Rp ${invoiceTotal.toLocaleString("id-ID")}`
-    }\n\nRekening Pembayaran:\n• BCA: 3581216520 a.n. Emri Luthfan A.\n• Mandiri: 1560023148218 a.n. Muhammad Rayyan Nufail\n${
+    }\n\n${bankLines}\n${
  invoiceUrl ? `\n📄 Unduh / Cetak Invoice Resmi:\n${invoiceUrl}\n` : ""
  }\nTerima kasih atas kerja samanya! 🙏`;
 

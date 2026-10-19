@@ -66,11 +66,29 @@ export function ClientInvoiceView({ invoice }: ClientInvoiceViewProps) {
       ? Number(invoice.balance_due)
       : Math.max(0, contractTotal - paidTotal);
 
+  /*
+   * Payment details come from the invoice DTO, which is populated from
+   * `public.studio_payment_methods`. This template previously hardcoded two
+   * account numbers, so changing the studio's bank still sent clients the old
+   * ones. When no account is configured the message asks the client to contact
+   * the studio rather than quoting an account that may be stale.
+   */
+  const bankLines = (invoice.studio_bank_details ?? [])
+    .filter((b) => b.bank && b.account_number)
+    .map(
+      (b) =>
+        `• ${b.bank}: ${b.account_number} a.n. ${b.account_holder ?? "-"}`,
+    );
+
+  const paymentBlock =
+    bankLines.length > 0
+      ? `Rekening Pembayaran:\n${bankLines.join("\n")}`
+      : "Rekening pembayaran belum tersedia. Silakan hubungi studio untuk detail pembayaran.";
+
   // Formatted WhatsApp copy message
   const waPhone = invoice.customer?.phone
     ? invoice.customer.phone.replace(/[^0-9]/g, "").replace(/^0/, "62")
     : "";
-
   const handleCopyWhatsApp = async () => {
     const origin = typeof window !== "undefined" ? window.location.origin : "https://elts.id";
     const invoiceUrl = `${origin}/invoice/${encodeURIComponent(invoice.invoice_number)}`;
@@ -79,7 +97,7 @@ export function ClientInvoiceView({ invoice }: ClientInvoiceViewProps) {
       paidTotal > 0
         ? `✅ *Terbayar:* ${formatIDR(paidTotal)}\n⏳ *Sisa Pelunasan:* ${formatIDR(balanceDueValue)}`
         : `💳 *Termin Down Payment (DP):* ${formatIDR(dpValue)}`
-    }\n\nRekening Pembayaran:\n• BCA: 3581216520 a.n. Emri Luthfan A.\n• Mandiri: 1560023148218 a.n. Muhammad Rayyan Nufail\n\n📄 Unduh / Cetak Invoice Resmi:\n${invoiceUrl}\n\nTerima kasih atas kerja samanya! 🙏`;
+    }\n\n${paymentBlock}\n\n📄 Unduh / Cetak Invoice Resmi:\n${invoiceUrl}\n\nTerima kasih atas kerja samanya! 🙏`;
 
     try {
       await navigator.clipboard.writeText(text);
@@ -332,19 +350,36 @@ export function ClientInvoiceView({ invoice }: ClientInvoiceViewProps) {
         {/* Studio Bank Accounts & Payment Instructions */}
         <div className="pt-4 border-t border-[#ececee] grid sm:grid-cols-2 gap-4 text-xs">
  <div className="space-y-2">
-            <span className="text-[10px] font-mono font-bold text-[#a1a1aa] uppercase tracking-wider block">
-              INSTRUKSI PEMBAYARAN TRANSFER:
-            </span>
-              <div className="p-3 bg-[#fafafa] rounded-[16px] border border-[#ececee] space-y-1 font-mono">
-                <p className="font-bold text-[#09090b]">Bank Central Asia (BCA)</p>
-                <p className="text-sm font-extrabold text-[#09090b] tracking-wider tabular-nums">3581216520</p>
-                <p className="text-[11px] text-[#52525b]">a.n. Emri Luthfan A.</p>
-              </div>
-              <div className="p-3 bg-[#fafafa] rounded-[16px] border border-[#ececee] space-y-1 font-mono">
-                <p className="font-bold text-[#09090b]">Bank Mandiri</p>
-                <p className="text-sm font-extrabold text-[#09090b] tracking-wider tabular-nums">1560023148218</p>
-                <p className="text-[11px] text-[#52525b]">a.n. Muhammad Rayyan Nufail</p>
-            </div>
+              {(invoice.studio_bank_details ?? []).length > 0 ? (
+                invoice.studio_bank_details.map((b) => (
+                  <div
+                    key={`${b.bank}-${b.account_number}`}
+                    className="p-3 bg-[#fafafa] rounded-[16px] border border-[#ececee] space-y-1 font-mono"
+                  >
+                    <p className="font-bold text-[#09090b]">{b.bank}</p>
+                    <p className="text-sm font-extrabold text-[#09090b] tracking-wider tabular-nums">
+                      {b.account_number}
+                    </p>
+                    <p className="text-[11px] text-[#52525b]">
+                      a.n. {b.account_holder ?? "-"}
+                    </p>
+                  </div>
+                ))
+              ) : (
+                /*
+                 * Honest empty state. Never render a placeholder account:
+                 * a client acting on a stale or invented number loses money.
+                 */
+                <div className="p-3 bg-[#fafafa] rounded-[16px] border border-dashed border-[#d4d4d8] space-y-1">
+                  <p className="font-bold text-[#09090b]">
+                    Detail pembayaran belum tersedia
+                  </p>
+                  <p className="text-[11px] text-[#52525b] leading-relaxed">
+                    Silakan hubungi studio melalui WhatsApp untuk memperoleh
+                    informasi rekening pembayaran yang berlaku.
+                  </p>
+                </div>
+              )}
           </div>
 
           <div className="space-y-2 text-[#52525b] leading-relaxed text-[11px]">

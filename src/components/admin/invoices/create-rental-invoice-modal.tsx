@@ -27,6 +27,7 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import type { StudioBankAccount } from "@/lib/studio/payment-methods";
 import {
   createRentalInvoiceAction,
   type AvailableAsset,
@@ -36,6 +37,8 @@ import {
 interface CreateRentalInvoiceModalProps {
   assets: AvailableAsset[];
   projects: AvailableProject[];
+  /** Configured studio accounts, used to prefill payment terms. */
+  bankAccounts: StudioBankAccount[];
   trigger?: React.ReactNode;
   onSuccess?: (invoiceNumber: string) => void;
 }
@@ -67,6 +70,7 @@ function toLocalDateString(date: Date): string {
 export function CreateRentalInvoiceModal({
   assets,
   projects,
+  bankAccounts,
   trigger,
   onSuccess,
 }: CreateRentalInvoiceModalProps) {
@@ -128,8 +132,17 @@ export function CreateRentalInvoiceModal({
   // Payment Terms
   const [dpPct, setDpPct] = useState<number>(30);
   const [dueDate, setDueDate] = useState<string>(todayStr);
-  const [clientNotes, setClientNotes] = useState<string>(
-    "Pembayaran transfer via rekening resmi BCA: 3581216520 a.n. Emri Luthfan A. atau Mandiri: 1560023148218 a.n. Muhammad Rayyan Nufail. Mohon konfirmasi bukti transfer via WhatsApp."
+  /*
+   * Prefilled payment terms come from configuration, not a literal string.
+   * A hardcoded default here means every new invoice is created quoting
+   * whatever account was current when this file was last edited.
+   */
+  const [clientNotes, setClientNotes] = useState<string>(() =>
+    bankAccounts.length > 0
+      ? `Pembayaran transfer via rekening resmi ${bankAccounts
+          .map((b) => `${b.bank}: ${b.account_number} a.n. ${b.account_holder}`)
+          .join(" atau ")}. Mohon konfirmasi bukti transfer via WhatsApp.`
+      : "Silakan hubungi studio untuk informasi rekening pembayaran.",
   );
 
   // When global duration changes, update duration on line items that matched previous duration

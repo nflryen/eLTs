@@ -26,6 +26,7 @@ import {
 import { Card, CardHeader, CardInner, Badge } from "@/components/ui/glass";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Button } from "@/components/ui/button";
+import type { StudioBankAccount } from "@/lib/studio/payment-methods";
 import {
   Dialog,
   DialogContent,
@@ -49,6 +50,8 @@ interface InvoicesHubClientProps {
   initialOverview: GlobalInvoicesOverview;
   assets: AvailableAsset[];
   projects: AvailableProject[];
+  /** Payment accounts from public.studio_payment_methods. */
+  bankAccounts: StudioBankAccount[];
 }
 
 function formatIDR(amount: number): string {
@@ -73,6 +76,7 @@ export function InvoicesHubClient({
   initialOverview,
   assets,
   projects,
+  bankAccounts,
 }: InvoicesHubClientProps) {
   const router = useRouter();
   const [data, setData] = useState<GlobalInvoicesOverview>(initialOverview);
@@ -117,13 +121,25 @@ export function InvoicesHubClient({
   // Handle WhatsApp Copy / Link
   const handleCopyWhatsApp = async (inv: GlobalInvoiceListItem) => {
     const origin = typeof window !== "undefined" ? window.location.origin : "https://elts.id";
+    /*
+     * Accounts come from configuration via props. The previous template
+     * hardcoded two account numbers, so a bank change silently kept sending
+     * clients the old details.
+     */
+    const bankLines =
+      bankAccounts.length > 0
+        ? `Rekening Resmi Pembayaran:\n${bankAccounts
+            .map((b) => `• ${b.bank}: ${b.account_number} a.n. ${b.account_holder}`)
+            .join("\n")}`
+        : "Rekening pembayaran belum tersedia. Silakan hubungi studio.";
+
     const invoiceUrl = `${origin}/invoice/${encodeURIComponent(inv.invoiceNumber)}`;
 
     const text = `Halo Bapak/Ibu *${inv.customerName}*,\nBerikut kami sampaikan rincian tagihan resmi dari *ELTS Creative & Digital Studio*:\n\n📋 *Layanan:* ${inv.projectName}\n🧾 *No. Invoice:* ${inv.invoiceNumber}\n📅 *Jatuh Tempo:* ${formatDate(inv.dueDate)}\n\n💰 *Total Tagihan:* ${formatIDR(inv.grossAmount)}\n${
       inv.paidAmount > 0
         ? `✅ *Sudah Terbayar:* ${formatIDR(inv.paidAmount)}\n⏳ *Sisa Pelunasan:* ${formatIDR(inv.balanceDue)}`
         : `⏳ *Sisa Tagihan:* ${formatIDR(inv.balanceDue)}`
-    }\n\nRekening Resmi Pembayaran:\n• BCA: 3581216520 a.n. Emri Luthfan A.\n• Mandiri: 1560023148218 a.n. Muhammad Rayyan Nufail\n\n📄 Unduh / Cetak Invoice Resmi:\n${invoiceUrl}\n\nTerima kasih atas kerja samanya! 🙏`;
+    }\n\n${bankLines}\n\n📄 Unduh / Cetak Invoice Resmi:\n${invoiceUrl}\n\nTerima kasih atas kerja samanya! 🙏`;
 
     try {
       if (navigator.clipboard?.writeText) {
@@ -165,6 +181,7 @@ export function InvoicesHubClient({
           <CreateRentalInvoiceModal
             assets={assets}
             projects={projects}
+            bankAccounts={bankAccounts}
             onSuccess={(invNum) => {
               router.refresh();
               router.push(`/invoice/${encodeURIComponent(invNum)}`);

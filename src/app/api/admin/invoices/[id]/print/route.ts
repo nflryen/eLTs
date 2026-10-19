@@ -1,5 +1,6 @@
 import { withAdmin } from "@/lib/auth/admin";
 import { escapeHtml, idr } from "@/lib/format";
+import { getStudioBankAccounts } from "@/lib/studio/payment-methods";
 import { z } from "zod";
 
 export const runtime = "nodejs";
@@ -43,6 +44,9 @@ export const GET = withAdmin<{ id: string }>(
 
     const url = new URL(req.url);
     const requestedVariant = (url.searchParams.get("variant") || "auto").toLowerCase();
+
+    // Payment accounts come from configuration, never from literals in this file.
+    const bankAccounts = await getStudioBankAccounts();
 
     // 1. Fetch from consolidated `project_invoices` table
     let invQuery = supabase.from("project_invoices").select(`
@@ -547,16 +551,22 @@ export const GET = withAdmin<{ id: string }>(
             REKENING RESMI STUDIO:
           </span>
           <div class="grid grid-cols-2 gap-2">
-            <div class="p-2 bg-[#fafafa] rounded-[10px] border border-[#ececee] space-y-0.5 font-mono text-[10px]">
-              <p class="font-bold text-[#09090b]">BCA</p>
-              <p class="font-extrabold text-[#09090b] tracking-wider tabular-nums">3581216520</p>
-              <p class="text-[9.5px] text-[#52525b]">Emri Luthfan A.</p>
-            </div>
-            <div class="p-2 bg-[#fafafa] rounded-[10px] border border-[#ececee] space-y-0.5 font-mono text-[10px]">
-              <p class="font-bold text-[#09090b]">Mandiri</p>
-              <p class="font-extrabold text-[#09090b] tracking-wider tabular-nums">1560023148218</p>
-              <p class="text-[9.5px] text-[#52525b]">Muhammad Rayyan Nufail</p>
-            </div>
+            ${bankAccounts
+              .map(
+                (b) => `<div class="p-2 bg-[#fafafa] rounded-[10px] border border-[#ececee] space-y-0.5 font-mono text-[10px]">
+              <p class="font-bold text-[#09090b]">${escapeHtml(b.bank)}</p>
+              <p class="font-extrabold text-[#09090b] tracking-wider tabular-nums">${escapeHtml(b.account_number)}</p>
+              <p class="text-[9.5px] text-[#52525b]">${escapeHtml(b.account_holder)}</p>
+            </div>`,
+              )
+              .join("")}
+            ${
+              bankAccounts.length === 0
+                ? `<div class="p-2 bg-[#fafafa] rounded-[10px] border border-dashed border-[#d4d4d8] font-mono text-[10px] text-[#52525b]">
+                    Detail rekening belum tersedia. Hubungi studio untuk informasi pembayaran.
+                  </div>`
+                : ""
+            }
           </div>
         </div>
 

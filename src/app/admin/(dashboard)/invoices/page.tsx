@@ -5,6 +5,7 @@ import {
   getRentalFormPrerequisites,
 } from "@/app/actions/invoice-actions";
 import { InvoicesHubClient } from "@/components/admin/invoices/invoices-hub-client";
+import { getStudioBankAccounts } from "@/lib/studio/payment-methods";
 
 export const metadata: Metadata = {
   title: "Faktur & Tagihan — Studio OS",
@@ -35,12 +36,17 @@ export default async function AdminInvoicesPage() {
   const initialOverview =
     overviewRes.success && overviewRes.data ? overviewRes.data : fallbackOverview;
 
+  // Payment accounts are read once on the server and passed down, so client
+  // components never embed account numbers.
+  const bankAccounts = await getStudioBankAccounts();
+
   return (
     <div className="max-w-7xl mx-auto py-2">
       <InvoicesHubClient
         initialOverview={initialOverview}
         assets={prereqRes.assets ?? []}
         projects={prereqRes.projects ?? []}
+        bankAccounts={bankAccounts}
       />
     </div>
   );
