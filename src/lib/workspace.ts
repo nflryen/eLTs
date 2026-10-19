@@ -99,8 +99,10 @@ export type WorkspacePayload = {
     photography_type: string;
     shoot_date: string | null;
     rehearsal_date: string | null;
-    contract_value: number;
-    dp_amount: number;
+    /** Null when no price has been agreed. Never a placeholder figure. */
+    contract_value: number | null;
+    /** Null when no DP has been recorded. Never derived from the contract. */
+    dp_amount: number | null;
     is_dp_paid: boolean;
     is_fully_paid: boolean;
     gallery_code: string;
@@ -149,6 +151,22 @@ export type WorkspacePayload = {
 function num(v: unknown): number {
   const n = Number(v);
   return Number.isFinite(n) ? n : 0;
+}
+
+/**
+ * A nullable numeric read for money fields.
+ *
+ * `num()` turns an unset column into 0, which is indistinguishable from a
+ * genuine zero. For contract value that difference decides whether a money
+ * split may be computed at all, so unset must stay `null`.
+ *
+ * A real 0 stored in the database is still 0 — only absent/unset/non-numeric
+ * becomes null.
+ */
+function numOrNull(v: unknown): number | null {
+  if (v === null || v === undefined || v === "") return null;
+  const n = Number(v);
+  return Number.isFinite(n) ? n : null;
 }
 
 export async function loadWorkspace(projectId: string): Promise<WorkspacePayload | null> {
@@ -323,13 +341,25 @@ export async function loadWorkspace(projectId: string): Promise<WorkspacePayload
     mapsUrl: (firstAssignment?.venue_maps_url as string) ?? null,
   };
 
+  /*
+   * FINANCIAL VALUES ARE NEVER INVENTED.
+   *
+   * This block previously guessed a contract value from the project NAME —
+   * Rp25.000.000 for anything containing "KOMDIGI", Rp15.000.000 for "UNSOED" or
+   * "Graduation" — and then derived a 50% DP from the guess. Those numbers
+   * reached the RAB panel, which posts `grossRevenue: contract_value` into an
+   * approvable money split. A project with no negotiated price could therefore
+   * produce a persisted, founder-approved revenue split built from a string
+   * match. The same guess also marked the DP as paid (`contractVal > 0 &&
+   * isWisuda`), so an unpaid project could read as settled.
+   *
+   * Unset now stays unset. `null` propagates so the UI can say "belum diisi"
+   * instead of showing a plausible, wrong figure.
+   */
   const isKomdigi = Boolean((project.name as string)?.includes("KOMDIGI"));
   const isWisuda = Boolean((project.name as string)?.includes("UNSOED")) || Boolean((project.name as string)?.includes("Graduation"));
-  const fallbackContractValue = isKomdigi ? 25000000 : isWisuda ? 15000000 : 0;
-  const rawContractVal = num(project.contract_value);
-  const contractVal = rawContractVal > 0 ? rawContractVal : fallbackContractValue;
-  const rawDp = num(project.dp_amount);
-  const dpAmount = rawDp > 0 ? rawDp : Math.round(contractVal * 0.5);
+  const contractVal = numOrNull(project.contract_value);
+  const dpAmount = numOrNull(project.dp_amount);
 
   return {
     project: {
@@ -343,8 +373,11 @@ export async function loadWorkspace(projectId: string): Promise<WorkspacePayload
       rehearsal_date: project.rehearsal_date as string | null,
       contract_value: contractVal,
       dp_amount: dpAmount,
-      is_dp_paid: Boolean(project.is_dp_paid) || (contractVal > 0 && isWisuda),
       is_fully_paid: Boolean(project.is_fully_paid),
+      // Payment state is a fact recorded in the database, never inferred from
+      // the project name. The previous `|| (contractVal > 0 && isWisuda)` marked
+      // every graduation project as having paid its DP.
+      is_dp_paid: Boolean(project.is_dp_paid),
       gallery_code: project.gallery_code as string,
       gallery_pin_hash: project.gallery_pin_hash as string,
       selection_locked_at: project.selection_locked_at as string | null,

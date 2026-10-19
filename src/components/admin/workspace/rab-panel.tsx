@@ -129,12 +129,21 @@ export function RabPanel({ data }: { data: WorkspacePayload }) {
     const pendingCrew = data.crew.filter((c) => c.acceptance_status !== "ACCEPTED").length;
     const cashTotal = cashGear + crewCost;
     const direct = cashTotal + nonCash;
-    const grossProfit = contract - direct;
-    const marginPct = contract > 0 ? (grossProfit / contract) * 100 : 0;
+    /*
+     * With no agreed contract value there is no margin to compute. Reporting a
+     * -100% margin (revenue 0 minus costs) would look like a catastrophic
+     * project rather than an unpriced one, so profit and margin stay null and
+     * the UI says the price is missing.
+     */
+    const grossProfit = contract === null ? null : contract - direct;
+    const marginPct =
+      contract === null || contract <= 0 || grossProfit === null
+        ? null
+        : (grossProfit / contract) * 100;
     return { cashGear, crewCost, cashTotal, nonCash, direct, grossProfit, marginPct, pendingCrew };
   }, [data.gear, data.crew, contract]);
 
-  const marginBelowFloor = costs.marginPct < 50;
+  const marginBelowFloor = costs.marginPct !== null && costs.marginPct < 50;
 
   const founderA = split?.founder_a_share ?? 0;
   const founderB = split?.founder_b_share ?? 0;
@@ -156,7 +165,21 @@ export function RabPanel({ data }: { data: WorkspacePayload }) {
     });
   };
 
-  const handleCompute = () =>
+  /*
+   * A money split is a persisted, founder-approved record. It may only be
+   * computed from a price the studio actually agreed, so this refuses rather
+   * than posting a placeholder. The server schema allows 0, so the guard has to
+   * live here.
+   */
+  const canComputeSplit = contract !== null && contract > 0;
+
+  const handleCompute = () => {
+    if (!canComputeSplit) {
+      setMutationError(
+        "Nilai kontrak proyek belum diisi. Isi harga yang disepakati sebelum menghitung bagi hasil.",
+      );
+      return;
+    }
     mutate("compute", () =>
       createOrUpdateSplit({
         projectId,
@@ -165,6 +188,7 @@ export function RabPanel({ data }: { data: WorkspacePayload }) {
         reservePct: RESERVE_PCT,
       }),
     );
+  };
 
   const handleApprove = (founder: "A" | "B") => {
     if (!split) return;
@@ -235,15 +259,20 @@ export function RabPanel({ data }: { data: WorkspacePayload }) {
           <Metric label="Direct Cost" value={idr(costs.direct)} />
           <Metric
             label="Gross Profit"
-            value={idr(costs.grossProfit)}
-            tone={costs.grossProfit < 0 ? "ember" : "default"}
+            value={costs.grossProfit === null ? "—" : idr(costs.grossProfit)}
+            tone={costs.grossProfit !== null && costs.grossProfit < 0 ? "ember" : "default"}
           />
           <Metric
             label="Margin %"
-            value={`${costs.marginPct.toFixed(1)}%`}
+            value={costs.marginPct === null ? "—" : `${costs.marginPct.toFixed(1)}%`}
             tone={marginBelowFloor ? "ember" : "default"}
           />
         </div>
+        {costs.marginPct === null ? (
+          <p className="mt-3 flex items-center gap-1.5 text-[11px] font-medium text-[#71717a]">
+            <AlertTriangle size={12} /> Nilai kontrak belum diisi — margin tidak dapat dihitung.
+          </p>
+        ) : null}
         {marginBelowFloor ? (
           <p className="mt-3 flex items-center gap-1.5 text-[11px] font-medium text-[#ff5a00]">
             <AlertTriangle size={12} /> Margin di bawah 50% — tinjau ulang harga atau biaya sebelum roll.
