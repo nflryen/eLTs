@@ -100,7 +100,16 @@ export async function getRoleSession(): Promise<RoleSession | null> {
    * capability set and nothing more. A missing migration can never promote
    * anyone to FOUNDER or SUPER_ADMIN.
    */
-  const { data, error } = await service.rpc("get_caller_role");
+  /*
+   * MUST run on the user-scoped client, not the service-role client.
+   *
+   * `get_caller_role()` resolves the actor from `auth.uid()`. A service-role
+   * connection carries no user JWT, so `auth.uid()` is NULL and the RPC
+   * correctly returns `role_key = null, role_rank = 0`. Calling it on the
+   * service client therefore denied every user — including a SUPER_ADMIN —
+   * with "Peran Anda (tidak ada)".
+   */
+  const { data, error } = await supabase.rpc("get_caller_role");
 
   if (error) {
     const missingRpc =
@@ -189,8 +198,19 @@ export async function requirePermission(key: string): Promise<RoleSession> {
   const session = await getRoleSession();
   if (!session) throw new UnauthorizedError();
 
-  const service = createServiceSupabase();
-  const { data, error } = await service.rpc("has_permission_for_caller", {
+  // Same reason as getRoleSession: `has_permission_for_caller()` reads
+  // `auth.uid()`, which only resolves on the user-scoped client.
+  //
+  // The generated `Database` type has a hand-written `Functions` block that
+  // does not model this RPC's argument object, so the call is typed through a
+  // narrow local signature rather than `any`. The runtime contract is the
+  // function definition in migration 0002.
+  const supabase = await createServerSupabase();
+  const rpc = supabase.rpc as unknown as (
+    fn: "has_permission_for_caller",
+    args: { p_permission_key: string },
+  ) => PromiseLike<{ data: boolean | null; error: { code?: string } | null }>;
+  const { data, error } = await rpc("has_permission_for_caller", {
     p_permission_key: key,
   });
   if (error) {

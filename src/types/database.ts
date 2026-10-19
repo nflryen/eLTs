@@ -355,6 +355,21 @@ export type Database = {
         Args: { p_invoice_number: string };
         Returns: Record<string, unknown>;
       };
+      // RBAC helpers (migration 0002). SECURITY DEFINER, resolving the actor
+      // from auth.uid(); must be called on a user-scoped client, never the
+      // service-role client (which carries no JWT and yields a null role).
+      get_caller_role: {
+        Args: Record<string, never>;
+        Returns: {
+          role_key: string | null;
+          role_rank: number | null;
+          display_name: string | null;
+        }[];
+      };
+      has_permission_for_caller: {
+        Args: { p_permission_key: string };
+        Returns: boolean;
+      };
     };
     Enums: {
       project_status: ProjectStatus;
