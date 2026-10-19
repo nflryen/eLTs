@@ -122,6 +122,12 @@ export default async function AdminLayout({ children }: { children: React.ReactN
       rank={rank}
       footer={footer}
       attentionCount={attention.summary.total}
+      userInitials={(admin.display_name ?? "?")
+        .split(/\s+/)
+        .filter(Boolean)
+        .slice(0, 2)
+        .map((part) => part[0]?.toUpperCase() ?? "")
+        .join("")}
       attentionItems={attention.items.slice(0, 12).map((i) => ({
         id: i.id,
         title: i.title,

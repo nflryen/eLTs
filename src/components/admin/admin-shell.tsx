@@ -7,7 +7,9 @@ import { Menu, X } from "lucide-react";
 import type { ReactNode } from "react";
 import { ROLE_RANK, isPreviewableRole } from "@/lib/auth/role-meta";
 import { PreviewBanner } from "./role-switcher";
+import { PanelLeft } from "lucide-react";
 import { MobileBottomNav } from "./mobile-bottom-nav";
+import { useSidebarCollapsed } from "./use-sidebar-collapsed";
 import { BottomSheet } from "./bottom-sheet";
 
 /**
@@ -159,13 +161,23 @@ function NavRail({ groups, pathname }: { groups: NavGroup[]; pathname: string })
                     href={item.href}
                     aria-current={active ? "page" : undefined}
                     aria-label={item.label}
-                    title={item.label}
-                    className={`flex min-h-12 items-center justify-center rounded-[12px] transition-colors ${
+                    className={`group/rail relative flex min-h-12 items-center justify-center rounded-[12px] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#09090b] ${
                       active ? "bg-[#09090b] text-white" : "text-[#3f3f46] hover:bg-[#fafafa]"
                     }`}
                   >
                     <span className={active ? "text-white" : "text-[#71717a]"}>{item.icon}</span>
                     <span className="sr-only">{item.label}</span>
+                    {/*
+                     * Floating tooltip: the rail has no room for labels, so the
+                     * name appears on hover AND on keyboard focus. Decorative —
+                     * `aria-label` already carries it for assistive tech.
+                     */}
+                    <span
+                      role="tooltip"
+                      className="pointer-events-none absolute left-full top-1/2 z-50 ml-2 -translate-y-1/2 whitespace-nowrap rounded-[8px] bg-[#09090b] px-2.5 py-1.5 text-[11px] font-semibold text-white opacity-0 shadow-lg transition-opacity group-hover/rail:opacity-100 group-focus-visible/rail:opacity-100 motion-reduce:transition-none"
+                    >
+                      {item.label}
+                    </span>
                   </Link>
                 </li>
               );
@@ -186,6 +198,7 @@ export function AdminShell({
   children,
   attentionCount = 0,
   attentionItems = [],
+  userInitials,
 }: {
   groups: NavGroup[];
   /** Effective role rank of the signed-in user, resolved on the server. */
@@ -196,6 +209,8 @@ export function AdminShell({
   attentionItems?: Array<{ id: string; title: string; detail: string; href: string; severity: string }>;
   brandHref?: string;
   footer: ReactNode;
+  /** One-character initials shown in the collapsed rail. */
+  userInitials?: string;
   headerSlot?: ReactNode;
   children: ReactNode;
 }) {
@@ -203,6 +218,7 @@ export function AdminShell({
   const searchParams = useSearchParams();
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const [sidebarCollapsed, toggleSidebar] = useSidebarCollapsed();
   const [lastPath, setLastPath] = useState(pathname);
 
   /*
@@ -249,15 +265,17 @@ export function AdminShell({
     };
   }, [drawerOpen]);
 
-  // Escape closes the drawer.
+  // Escape closes the drawer (and the notification sheet) on mobile.
   useEffect(() => {
-    if (!drawerOpen) return;
+    if (!drawerOpen && !notificationsOpen) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setDrawerOpen(false);
+      if (e.key !== "Escape") return;
+      setDrawerOpen(false);
+      setNotificationsOpen(false);
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [drawerOpen]);
+  }, [drawerOpen, notificationsOpen]);
 
   const brand = (
     <Link
@@ -272,41 +290,108 @@ export function AdminShell({
   );
 
   return (
-    <div className="flex min-h-svh bg-[#f4f4f5]">
-      {/* ── Desktop sidebar ─────────────────────────────────────────────── */}
-      <aside className="hidden w-64 shrink-0 flex-col border-r border-[#ececee] bg-white lg:flex">
-        <div className="flex h-16 items-center justify-between border-b border-[#ececee] px-5">
-          {brand}
+    <div className="flex min-h-svh overflow-x-hidden bg-[#f4f4f5]">
+      {/*
+       * ── Collapsible sidebar (md and up ONLY) ───────────────────────────
+       * `hidden md:flex` is the hard isolation: below 768px this element is
+       * display:none and the bottom bar owns navigation. One sidebar, two
+       * widths (256px expanded / 72px rail) instead of two separate asides,
+       * so the collapse transition is a width animation on one node rather
+       * than a swap between components.
+       */}
+      <aside
+        data-sidebar
+        data-collapsed={sidebarCollapsed ? "true" : "false"}
+        className={`hidden shrink-0 flex-col border-r border-[#ececee] bg-white transition-[width] duration-200 ease-out motion-reduce:transition-none md:flex ${
+          sidebarCollapsed ? "w-[72px]" : "w-64"
+        }`}
+      >
+        <div
+          className={`flex h-16 shrink-0 items-center border-b border-[#ececee] ${
+            sidebarCollapsed ? "justify-center px-2" : "justify-between px-5"
+          }`}
+        >
+          {sidebarCollapsed ? (
+            <Link
+              href={brandHref}
+              aria-label="Elts Studio OS"
+              className="font-serif text-lg font-bold tracking-tight text-[#09090b]"
+            >
+              E.
+            </Link>
+          ) : (
+            brand
+          )}
         </div>
-        <NavLinks groups={allowed} pathname={pathname} />
-        <div className="border-t border-[#ececee] p-3">{footer}</div>
-      </aside>
 
-      {/* ── Tablet icon rail (768–1023) ─────────────────────────────────── */}
-      <aside className="hidden w-[72px] shrink-0 flex-col border-r border-[#ececee] bg-white md:flex lg:hidden">
-        <div className="flex h-16 items-center justify-center border-b border-[#ececee]">
-          <Link
-            href={brandHref}
-            aria-label="Elts Studio OS"
-            className="font-serif text-lg font-bold tracking-tight text-[#09090b]"
-          >
-            E.
-          </Link>
+        {sidebarCollapsed ? (
+          <NavRail groups={allowed} pathname={pathname} />
+        ) : (
+          <NavLinks groups={allowed} pathname={pathname} />
+        )}
+
+        <div className={`border-t border-[#ececee] ${sidebarCollapsed ? "p-2" : "p-3"}`}>
+          {sidebarCollapsed ? (
+            <div
+              className="flex size-10 items-center justify-center rounded-full border border-[#ececee] bg-[#fafafa] text-xs font-semibold text-[#52525b]"
+              title={userInitials ? `Masuk sebagai ${userInitials}` : "Akun"}
+            >
+              {userInitials ?? "•"}
+            </div>
+          ) : (
+            footer
+          )}
         </div>
-        <NavRail groups={allowed} pathname={pathname} />
-        <div className="border-t border-[#ececee] p-2">{footer}</div>
-      </aside>
 
-      {/* ── Mobile drawer ───────────────────────────────────────────────── */}
-      {drawerOpen ? (
-        <div className="fixed inset-0 z-50 md:hidden" role="dialog" aria-modal="true">
+        {/* Collapse / expand toggle, pinned to the foot of the sidebar. */}
+        <div className={`border-t border-[#ececee] ${sidebarCollapsed ? "p-2" : "p-3"}`}>
           <button
             type="button"
-            aria-label="Tutup menu"
-            onClick={() => setDrawerOpen(false)}
-            className="absolute inset-0 h-full w-full cursor-default bg-[#09090b]/50"
-          />
-          <div className="absolute inset-y-0 left-0 flex w-[82%] max-w-xs flex-col overflow-hidden rounded-r-[36px] border-r border-[#ececee] bg-white">
+            onClick={toggleSidebar}
+            aria-pressed={sidebarCollapsed}
+            aria-label={sidebarCollapsed ? "Perluas navigasi" : "Ciutkan navigasi"}
+            title={sidebarCollapsed ? "Perluas navigasi" : "Ciutkan navigasi"}
+            className={`flex min-h-11 w-full items-center gap-3 rounded-[12px] text-sm font-medium text-[#71717a] transition-colors hover:bg-[#fafafa] hover:text-[#09090b] ${
+              sidebarCollapsed ? "justify-center px-0" : "px-3"
+            }`}
+          >
+            <PanelLeft size={18} aria-hidden="true" className={sidebarCollapsed ? "rotate-180 transition-transform" : "transition-transform"} />
+            {!sidebarCollapsed ? <span>Ciutkan</span> : null}
+          </button>
+        </div>
+      </aside>
+
+      {/*
+       * ── Off-canvas drawer ──────────────────────────────────────────────
+       * Kept MOUNTED and slid out with a transform so opening and closing are
+       * both animated. Mounting on open (the previous approach) could only ever
+       * animate the entrance; closing snapped. `md:hidden` + `inert` while
+       * closed keeps it out of the tab order and the a11y tree.
+       */}
+      <div
+        data-drawer
+        data-open={drawerOpen ? "true" : "false"}
+        className={`fixed inset-0 z-50 md:hidden ${drawerOpen ? "" : "pointer-events-none"}`}
+        aria-hidden={drawerOpen ? undefined : true}
+        inert={drawerOpen ? undefined : true}
+      >
+        <button
+          type="button"
+          aria-label="Tutup menu"
+          onClick={() => setDrawerOpen(false)}
+          tabIndex={drawerOpen ? 0 : -1}
+          className={`absolute inset-0 h-full w-full cursor-default bg-[#09090b]/50 transition-opacity duration-200 motion-reduce:transition-none ${
+            drawerOpen ? "opacity-100" : "opacity-0"
+          }`}
+        />
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-label="Menu utama"
+            className={`absolute inset-y-0 left-0 flex w-[82%] max-w-xs flex-col overflow-hidden rounded-r-[36px] border-r border-[#ececee] bg-white transition-transform duration-250 ease-out motion-reduce:transition-none ${
+              drawerOpen ? "translate-x-0" : "-translate-x-full"
+            }`}
+          >
             <div className="flex h-16 items-center justify-between border-b border-[#ececee] px-5">
               {brand}
               <button
@@ -325,8 +410,7 @@ export function AdminShell({
             />
             <div className="border-t border-[#ececee] p-3">{footer}</div>
           </div>
-        </div>
-      ) : null}
+      </div>
 
       {/* ── Main column ─────────────────────────────────────────────────── */}
       <div className="flex min-w-0 flex-1 flex-col">
@@ -342,7 +426,11 @@ export function AdminShell({
         {/* Unmissable while previewing: a simulation must never look real. */}
         <PreviewBanner rank={previewRank} />
 
-        <main className="min-w-0 flex-1 p-4 pb-[calc(72px+env(safe-area-inset-bottom))] sm:p-6 md:pb-8 md:p-8">
+        {/*
+         * `pb-24` on mobile clears the fixed bottom bar, plus the device inset on
+         * notched screens. From md the bar is gone, so normal padding resumes.
+         */}
+        <main className="min-w-0 flex-1 overflow-x-hidden p-4 pb-[calc(6rem+env(safe-area-inset-bottom))] sm:p-6 md:pb-8 md:p-8">
           {children}
         </main>
 
