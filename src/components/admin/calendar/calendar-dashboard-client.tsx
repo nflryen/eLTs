@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useTransition, useEffect, useMemo } from "react";
+import React, { useState, useTransition, useEffect, useMemo, useSyncExternalStore } from "react";
 import {
   Calendar as CalendarIcon,
   ChevronLeft,
@@ -27,6 +27,13 @@ interface CalendarDashboardClientProps {
 
 type ViewMode = "month" | "agenda";
 
+/** Shared media-query subscription for the compact-viewport default. */
+function subscribeViewport(onChange: () => void): () => void {
+  const mql = window.matchMedia("(max-width: 767px)");
+  mql.addEventListener("change", onChange);
+  return () => mql.removeEventListener("change", onChange);
+}
+
 const PILLAR_FILTERS = [
   { id: "ALL", label: "Semua Pilar" },
   { id: "Pictures / Event", label: "Pictures / Event" },
@@ -44,7 +51,28 @@ export function CalendarDashboardClient({
     () => new Date(initYear, initMonthNum - 1, 1)
   );
 
-  const [viewMode, setViewMode] = useState<ViewMode>("month");
+  /*
+   * A 7-column month grid is unreadable at 390px: day cells collapse to ~50px
+   * and every title truncates to "Call..." / "Shoo...". Mobile therefore opens
+   * on the agenda timeline, while desktop keeps the month grid it was designed
+   * for. Resolved on mount to avoid a hydration mismatch (the server cannot
+   * know the viewport).
+   */
+  const isCompactViewport = useSyncExternalStore(
+    subscribeViewport,
+    () => window.matchMedia("(max-width: 767px)").matches,
+    // Server snapshot: assume desktop so the month grid renders in the HTML.
+    () => false
+  );
+
+  /*
+   * `null` means "operator has not chosen yet", so the default follows the
+   * viewport: agenda on phones, month grid on desktop. The first explicit tap
+   * pins the choice. `useSyncExternalStore` reads the media query without a
+   * setState-in-effect cascade.
+   */
+  const [viewModeOverride, setViewMode] = useState<ViewMode | null>(null);
+  const viewMode: ViewMode = viewModeOverride ?? (isCompactViewport ? "agenda" : "month");
   const [selectedPillar, setSelectedPillar] = useState<string>("ALL");
   const [events, setEvents] = useState<CalendarEvent[]>(initialEvents);
   const [selectedEvent, setSelectedEvent] = useState<CalendarEvent | null>(null);
@@ -65,13 +93,15 @@ export function CalendarDashboardClient({
     });
   }, [currentDate]);
 
-  // Fetch events when month or pillar filter changes
+  /*
+   * Fetch only when the month or pillar actually differs from what the server
+   * already provided. The "initial state" branch does not call setState at all:
+   * `events` is seeded from `initialEvents`, so re-assigning it synchronously in
+   * an effect body would cause a cascading render for no new information.
+   */
   useEffect(() => {
-    // Avoid double fetching on initial mount if already matching initialMonth and ALL
-    if (currentMonthKey === initialMonth && selectedPillar === "ALL") {
-      setEvents(initialEvents);
-      return;
-    }
+    const isInitialState = currentMonthKey === initialMonth && selectedPillar === "ALL";
+    if (isInitialState) return;
 
     startTransition(async () => {
       try {
@@ -135,15 +165,21 @@ export function CalendarDashboardClient({
 
   return (
     <div className="space-y-6">
-      {/* Top Header & Overview */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <div className="flex items-center gap-2 mb-1">
-            <h1 className="text-2xl md:text-3xl font-bold tracking-tight text-[#09090b] font-serif">
+      {/*
+       * HEADER
+       * ------
+       * Title + sync badge on the left, telemetry on the right as a single
+       * aligned chip rail. Previously the chips were stacked in a wrap container
+       * that pushed them onto their own ragged rows on narrower widths.
+       */}
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+        <div className="min-w-0">
+          <div className="mb-1 flex flex-wrap items-center gap-2">
+            <h1 className="font-serif text-2xl font-bold tracking-tight text-[#09090b] md:text-3xl">
               Master Operations Calendar
             </h1>
-            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-[#fafafa] text-[#3f3f46] border border-[#ececee]">
-              <Sparkles size={11} className="text-[#ff5a00]" />
+            <span className="inline-flex items-center gap-1 rounded-full border border-[#ececee] bg-[#fafafa] px-2.5 py-0.5 text-xs font-semibold text-[#3f3f46]">
+              <Sparkles size={11} className="text-[#ff5a00]" aria-hidden="true" />
               Live Sync
             </span>
           </div>
@@ -153,29 +189,26 @@ export function CalendarDashboardClient({
           </p>
         </div>
 
-        {/* Quick KPI stats chips */}
-        <div className="flex flex-wrap items-center gap-2 text-xs">
-          <div className="bg-white border border-border px-3 py-1.5 rounded-lg shadow-2xs flex items-center gap-2">
-            <CalendarIcon size={14} className="text-[#71717a]" />
-            <span className="text-muted-foreground">Total:</span>
-            <span className="font-bold text-[#09090b]">{stats.total}</span>
-          </div>
-          <div className="bg-white border border-border px-3 py-1.5 rounded-lg shadow-2xs flex items-center gap-2">
-            <Video size={14} className="text-[#ff5a00]" />
-            <span className="text-muted-foreground">Broadcast:</span>
-            <span className="font-bold text-[#09090b]">{stats.liveStreaming}</span>
-          </div>
-          <div className="bg-white border border-border px-3 py-1.5 rounded-lg shadow-2xs flex items-center gap-2">
-            <Camera size={14} className="text-[#52525b]" />
-            <span className="text-muted-foreground">Foto:</span>
-            <span className="font-bold text-[#09090b]">{stats.pictures}</span>
-          </div>
-          <div className="bg-white border border-border px-3 py-1.5 rounded-lg shadow-2xs flex items-center gap-2">
-            <Users size={14} className="text-[#a1a1aa]" />
-            <span className="text-muted-foreground">Kru Aktif:</span>
-            <span className="font-bold text-[#09090b]">{stats.uniqueCrew}</span>
-          </div>
-        </div>
+        <dl
+          aria-label="Ringkasan kalender"
+          className="flex shrink-0 flex-wrap items-stretch gap-2 text-xs"
+        >
+          {[
+            { label: "Total", value: stats.total, Icon: CalendarIcon, tone: "text-[#71717a]" },
+            { label: "Broadcast", value: stats.liveStreaming, Icon: Video, tone: "text-[#ff5a00]" },
+            { label: "Foto", value: stats.pictures, Icon: Camera, tone: "text-[#52525b]" },
+            { label: "Kru Aktif", value: stats.uniqueCrew, Icon: Users, tone: "text-[#a1a1aa]" },
+          ].map(({ label, value, Icon, tone }) => (
+            <div
+              key={label}
+              className="flex min-w-[7.5rem] flex-1 items-center gap-2 rounded-[12px] border border-[#ececee] bg-white px-3 py-2 lg:flex-none"
+            >
+              <Icon size={14} className={tone} aria-hidden="true" />
+              <dt className="text-muted-foreground">{label}</dt>
+              <dd className="ml-auto font-mono font-bold tabular-nums text-[#09090b]">{value}</dd>
+            </div>
+          ))}
+        </dl>
       </div>
 
       {/* Main Control Toolbar */}
@@ -227,7 +260,7 @@ export function CalendarDashboardClient({
               <button
                 type="button"
                 onClick={() => setViewMode("month")}
-                className={`flex items-center gap-1.5 px-3 py-1.5 min-h-9 rounded-md text-xs font-semibold transition-all ${
+                className={`flex min-h-12 items-center gap-1.5 rounded-md px-3 text-xs font-semibold transition-all md:min-h-9 md:py-1.5 ${
                   viewMode === "month"
                     ? "bg-white text-[#09090b] shadow-2xs"
                     : "text-[#52525b] hover:text-[#09090b]"
@@ -239,7 +272,7 @@ export function CalendarDashboardClient({
               <button
                 type="button"
                 onClick={() => setViewMode("agenda")}
-                className={`flex items-center gap-1.5 px-3 py-1.5 min-h-9 rounded-md text-xs font-semibold transition-all ${
+                className={`flex min-h-12 items-center gap-1.5 rounded-md px-3 text-xs font-semibold transition-all md:min-h-9 md:py-1.5 ${
                   viewMode === "agenda"
                     ? "bg-white text-[#09090b] shadow-2xs"
                     : "text-[#52525b] hover:text-[#09090b]"
@@ -253,7 +286,11 @@ export function CalendarDashboardClient({
         </div>
 
         {/* Pillar Filter Pills */}
-        <div className="pt-2 border-t border-border/60 flex items-center gap-2 overflow-x-auto pb-1">
+        {/*
+         * `no-scrollbar` hides the native bar that used to slice across the
+         * pills; the row still scrolls by touch, trackpad and keyboard.
+         */}
+        <div className="no-scrollbar flex items-center gap-2 overflow-x-auto border-t border-border/60 pb-1 pt-2">
           <span className="text-xs font-medium text-muted-foreground mr-1 shrink-0">
             Filter Pilar:
           </span>
@@ -264,7 +301,7 @@ export function CalendarDashboardClient({
                 key={f.id}
                 type="button"
                 onClick={() => setSelectedPillar(f.id)}
-                className={`px-3 py-1 min-h-9 rounded-full text-xs font-medium transition-all shrink-0 cursor-pointer ${
+                className={`inline-flex min-h-12 shrink-0 cursor-pointer items-center rounded-full px-3.5 text-xs font-medium transition-all md:min-h-9 ${
                   isSelected
                     ? "bg-[#ff5a00] text-white font-semibold shadow-2xs"
                     : "bg-[#f4f4f5] text-[#52525b] hover:bg-[#ececee] hover:text-[#09090b] border border-transparent"

@@ -144,9 +144,22 @@ export function EventFlyoutDrawer({
  aria-hidden="true"
       />
 
-      {/* Flyout Panel */}
- <div className="fixed inset-y-0 right-0 max-w-full flex pl-10">
- <div className="w-screen max-w-md bg-white border-l border-border shadow-2xl flex flex-col justify-between animate-in slide-in-from-right duration-200">
+      {/*
+       * ADAPTIVE SURFACE
+       * ----------------
+       * Below md this is a bottom sheet (thumb-reachable, no side-hugging
+       * popover squeezed onto a 390px screen); at md+ it is the side flyout it
+       * was designed to be. One component, two ergonomics.
+       */}
+ <div className="fixed inset-x-0 bottom-0 flex max-h-[88vh] md:inset-y-0 md:inset-x-auto md:right-0 md:max-h-none md:pl-10">
+ <div
+          className="flex w-full flex-col justify-between overflow-y-auto rounded-t-[28px] border-t border-border bg-white shadow-2xl md:max-w-md md:rounded-none md:border-l md:border-t-0"
+          style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
+        >
+          {/* Mobile drag handle */}
+          <div className="flex shrink-0 justify-center pt-2 md:hidden" aria-hidden="true">
+            <span className="h-1 w-9 rounded-full bg-[#d4d4d8]" />
+          </div>
           {/* Header */}
  <div className="p-6 border-b border-border bg-[#fafafa]/70">
  <div className="flex items-start justify-between gap-4">

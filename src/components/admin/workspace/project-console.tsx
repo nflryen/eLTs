@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import Link from "next/link";
+import { ArrowLeft } from "lucide-react";
 import { useSearchParams } from "next/navigation";
 import { OperationalSpine } from "./operational-spine";
 import { SectorEngine } from "./sector-engine";
@@ -98,11 +100,50 @@ export function ProjectConsole({ data }: { data: WorkspacePayload }) {
   };
 
   return (
-    <div className="flex flex-col gap-5 pb-12 lg:flex-row lg:items-start lg:gap-6">
-      <OperationalSpine data={data} activeModule={active} onSelectModule={select} />
+    <div className="pb-12">
+      {/*
+       * UNIFIED COMMAND BAR
+       * -------------------
+       * Breadcrumb, identity, pillar, status and the primary CTA previously
+       * lived in three different places (rail, module header, floating card).
+       * One bar gives a single anchor: where am I, what is this, what next.
+       */}
+      <header className="mb-4 rounded-[18px] border border-[#ececee] bg-white px-4 py-3 sm:px-5">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+          <div className="min-w-0">
+            <Link
+              href="/admin/projects"
+              className="inline-flex items-center gap-1.5 text-[11px] font-medium text-[#71717a] transition-colors hover:text-[#09090b]"
+            >
+              <ArrowLeft size={12} aria-hidden="true" /> Semua Proyek
+            </Link>
+            <div className="mt-1 flex flex-wrap items-center gap-2">
+              <h1 className="min-w-0 truncate text-lg font-semibold tracking-tight text-[#09090b]">
+                {data.project.name}
+              </h1>
+              <span className="shrink-0 rounded-full border border-[#ececee] bg-[#fafafa] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-[#52525b]">
+                {pillar.config.tag}
+              </span>
+            </div>
+            {data.customer ? (
+              <p className="mt-0.5 truncate text-xs text-[#71717a]">{data.customer.name}</p>
+            ) : null}
+          </div>
 
-      <section className="min-w-0 flex-1" aria-label={MODULE_LABEL[effectiveActive]}>
-        <div className="mb-4 flex items-center gap-2">
+          <div className="shrink-0">
+            <ProjectActionBar
+              projectId={data.project.id}
+              initialStatus={(data.project.status as ProjectStatus) ?? "draft"}
+            />
+          </div>
+        </div>
+      </header>
+
+      <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:gap-6">
+        <OperationalSpine data={data} />
+
+        <section className="min-w-0 flex-1" aria-label={MODULE_LABEL[effectiveActive]}>
+          <div className="mb-4 flex items-center gap-2">
           <div className="flex flex-1 gap-2 overflow-x-auto pb-1 no-scrollbar" role="tablist" aria-label={`Modul ${pillar.config.label}`}>
             {WORKSPACE_MODULES.filter((m) => allowedModules.includes(m.id)).map((m) => (
               <button
@@ -137,22 +178,15 @@ export function ProjectConsole({ data }: { data: WorkspacePayload }) {
               }}
             />
           ) : null}
-        </div>
+          </div>
 
-        {/*
-         * The action bar stays visible at every breakpoint. Contacting the
-         * client and handing over the invoice are the two things an operator
-         * does most often here, and both were previously buried in modules.
-         */}
-        <header className="mb-4 flex flex-wrap items-center justify-between gap-3">
-          <h2 className="text-xl font-semibold tracking-tight text-[#09090b]">
-            {MODULE_LABEL[active]}
+        {/* Module identity only — the action bar lives in the command bar so the
+            primary CTA does not move when the operator switches modules. */}
+        <div className="mb-3 flex items-center gap-2">
+          <h2 className="text-sm font-semibold tracking-tight text-[#09090b]">
+            {MODULE_LABEL[effectiveActive]}
           </h2>
-          <ProjectActionBar
-            projectId={data.project.id}
-            initialStatus={(data.project.status as ProjectStatus) ?? "draft"}
-          />
-        </header>
+        </div>
 
         {effectiveActive === "callsheet" ? <ModuleCallSheet data={data} /> : null}
         {effectiveActive === "sector" ? <SectorEngine data={data} /> : null}
@@ -162,7 +196,8 @@ export function ProjectConsole({ data }: { data: WorkspacePayload }) {
         {effectiveActive === "rab" ? <ModuleRab data={data} /> : null}
         {effectiveActive === "media" ? <ModuleMedia data={data} /> : null}
         {effectiveActive === "proofing" ? <ModuleProofing data={data} /> : null}
-      </section>
+        </section>
+      </div>
     </div>
   );
 }

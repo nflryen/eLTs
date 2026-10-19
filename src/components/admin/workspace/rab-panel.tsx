@@ -106,26 +106,28 @@ export function RabPanel({ data }: { data: WorkspacePayload }) {
    * A plain effect owns the request instead, keyed by `reloadToken`.
    */
   const [splitRes, setSplitRes] = useState<Awaited<ReturnType<typeof getProjectSplit>> | null>(null);
-  const [loaded, setLoaded] = useState(false);
 
+  /*
+   * No separate `loaded` flag: it would need a synchronous `setState(false)` at
+   * the top of the effect, which triggers a cascading render (and fails the
+   * react-hooks/set-state-in-effect rule). `null` already means "not resolved",
+   * including after `reloadToken` resets it.
+   */
   useEffect(() => {
     let cancelled = false;
-    setLoaded(false);
     getProjectSplit(projectId)
       .then((res) => {
-        if (cancelled) return;
-        setSplitRes(res);
-        setLoaded(true);
+        if (!cancelled) setSplitRes(res);
       })
       .catch(() => {
-        if (cancelled) return;
-        setSplitRes({ success: false, split: null, error: "Gagal memuat data waterfall." });
-        setLoaded(true);
+        if (!cancelled) setSplitRes({ success: false, split: null, error: "Gagal memuat data waterfall." });
       });
     return () => {
       cancelled = true;
     };
   }, [projectId, reloadToken]);
+
+  const loaded = splitRes !== null;
 
   const split: MoneySplitRow | null = splitRes?.success ? splitRes.split : null;
   const loadError = splitRes && !splitRes.success

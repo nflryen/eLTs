@@ -136,16 +136,14 @@ function QuickContact({
   );
 }
 
-export function OperationalSpine({
-  data,
-  activeModule,
-  onSelectModule,
-}: {
-  data: WorkspacePayload;
-  activeModule: WorkspaceModule;
-  onSelectModule: (m: WorkspaceModule) => void;
-}) {
-  const [expanded, setExpanded] = useState(false);
+/**
+ * Contextual rail: the project's state at a glance.
+ *
+ * Module switching deliberately does NOT live here. There is exactly one module
+ * picker (the top tab bar) — two competing pickers on one screen is the clutter
+ * this rail used to cause.
+ */
+export function OperationalSpine({ data }: { data: WorkspacePayload }) {
   /*
    * `Date.now()` is impure; evaluating it during render would make the render
    * non-deterministic (and breaks React Compiler memoisation). The spine is
@@ -176,8 +174,16 @@ export function OperationalSpine({
      * `position: sticky` child no room to travel, so the spine scrolls away
      * with the content instead of pinning.
      */
-    <aside className="lg:sticky lg:top-6 lg:w-72 lg:shrink-0 lg:self-start">
-      <div className="rounded-[36px] border border-[#ececee] bg-white p-6">
+    <aside
+      className="lg:sticky lg:top-6 lg:w-64 lg:shrink-0 lg:self-start"
+      aria-label="Ringkasan proyek"
+    >
+      {/*
+       * A docked rail, not a floating card: a single hairline right border ties
+       * it to the workspace column and removes the "detached card" look. 256px
+       * (down from 288px) returns horizontal room to the module pane.
+       */}
+      <div className="rounded-[18px] border border-[#ececee] bg-white p-5 lg:rounded-none lg:rounded-l-[18px] lg:border-y-0 lg:border-l-0 lg:bg-transparent lg:py-1 lg:pl-0 lg:pr-5">
         <Link
           href="/admin/projects"
           className="inline-flex items-center gap-1.5 text-[11px] font-medium text-[#71717a] transition-colors hover:text-[#09090b]"
@@ -267,92 +273,8 @@ export function OperationalSpine({
           </div>
         ) : null}
 
-        {/*
-         * Module navigation is a horizontally scrollable strip, NOT a vertical
-         * list inside the spine. A vertical list of eight modules made the
-         * spine ~1100px tall — taller than the viewport — which leaves
-         * `position: sticky` no travel room, so the spine scrolled away with
-         * the content instead of pinning. Keeping the spine short is what makes
-         * sticky work.
-         */}
-        <div className="mt-4 border-t border-[#ececee] pt-3.5">
-          <p className="text-[10px] font-semibold uppercase tracking-wide text-[#a1a1aa]">
-            Modul Kerja
-          </p>
-          <p className="mt-1.5 text-[11px] font-medium text-[#52525b]">
-            {WORKSPACE_MODULE_LABEL[activeModule]}
-          </p>
-          <button
-            type="button"
-            onClick={() => setExpanded((v) => !v)}
-            aria-expanded={expanded}
-            className="mt-2 flex min-h-11 w-full items-center justify-between rounded-lg border border-[#ececee] px-3 text-[11px] font-semibold text-[#3f3f46] transition-colors hover:bg-[#f4f4f5]"
-          >
-            Ganti Modul
-            <ChevronDown size={14} className={expanded ? "rotate-180 transition-transform" : "transition-transform"} />
-          </button>
-          {expanded ? (
-            <nav className="mt-2 space-y-0.5">
-              {(["Operate", "Resource", "Money", "Deliver"] as const).map((group) => (
-                <ModuleGroup
-                  key={group}
-                  group={group}
-                  activeModule={activeModule}
-                  onSelect={(m) => {
-                    onSelectModule(m);
-                    setExpanded(false);
-                  }}
-                />
-              ))}
-            </nav>
-          ) : null}
-        </div>
       </div>
     </aside>
   );
 }
 
-function ModuleGroup({
-  group, activeModule, onSelect,
-}: {
-  group: "Operate" | "Resource" | "Money" | "Deliver";
-  activeModule: WorkspaceModule;
-  onSelect: (m: WorkspaceModule) => void;
-}) {
-  const MODULES: Array<{ id: WorkspaceModule; label: string; group: string }> = [
-    { id: "callsheet", label: "Call Sheet", group: "Operate" },
-    { id: "sector", label: "Sector Engine", group: "Operate" },
-    { id: "crew", label: "Kru", group: "Resource" },
-    { id: "gear", label: "Gear", group: "Resource" },
-    { id: "invoice", label: "Tagihan Klien", group: "Money" },
-    { id: "rab", label: "RAB Internal", group: "Money" },
-    { id: "media", label: "Media", group: "Deliver" },
-    { id: "proofing", label: "Proofing", group: "Deliver" },
-  ];
-  const items = MODULES.filter((m) => m.group === group);
-  return (
-    <>
-      <p className="px-1 pb-1 pt-2.5 text-[9px] font-semibold uppercase tracking-[0.14em] text-[#a1a1aa] lg:hidden">
-        {group}
-      </p>
-      {items.map((m) => {
-        const active = m.id === activeModule;
-        return (
-          <button
-            key={m.id}
-            type="button"
-            onClick={() => onSelect(m.id)}
-            aria-current={active ? "true" : undefined}
-            className={`flex min-h-11 w-full items-center rounded-lg px-2.5 text-left text-xs font-medium transition-colors cursor-pointer ${
-              active
-                ? "bg-[#09090b] text-white"
-                : "text-[#3f3f46] hover:bg-[#f4f4f5]"
-            }`}
-          >
-            {m.label}
-          </button>
-        );
-      })}
-    </>
-  );
-}

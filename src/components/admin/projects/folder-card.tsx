@@ -107,72 +107,64 @@ export function FolderCard({
 
         {/* ── Front pocket ────────────────────────────────────────────────── */}
         <div
-          className={`relative flex flex-1 flex-col rounded-[24px] rounded-t-none border-t px-4 pb-4 pt-3 ${
+          className={`relative flex flex-1 flex-col rounded-[24px] rounded-t-none border-t px-5 pb-5 pt-4 ${
             selected
               ? "border-white/25 bg-[#ff5a00]/95"
               : "border-[#f4f4f5] bg-white"
           }`}
         >
-          <div className="flex items-start justify-between gap-2">
-            <p
-              className={`line-clamp-2 text-[13px] font-semibold leading-snug ${
-                selected ? "text-white" : "text-[#09090b]"
-              }`}
-              title={project.name}
-            >
-              {project.name}
-            </p>
-          </div>
+          {/*
+           * Pillar tag only, as a quiet uppercase pill. Status is NOT here: it
+           * belongs at the foot with its micro-indicator so the eye reads the
+           * title first, then the state of the work.
+           */}
+          <span
+            className={`self-start rounded-full px-2 py-0.5 text-[9px] font-bold uppercase tracking-[0.1em] ${
+              selected
+                ? "bg-white text-[#c2410c]"
+                : "border border-[#ececee] bg-[#fafafa] text-[#71717a]"
+            }`}
+          >
+            {pillarTag(project.pillar)}
+          </span>
 
-          <div className="mt-2 flex flex-wrap items-center gap-1.5">
-            <span
-              className={`rounded-full px-2 py-0.5 text-[9px] font-bold uppercase tracking-[0.08em] ${
-                selected
-                  ? "bg-white text-[#c2410c]"
-                  : "border border-[#ececee] bg-[#fafafa] text-[#52525b]"
-              }`}
-            >
-              {pillarTag(project.pillar)}
-            </span>
-            <span
-              className={`rounded-full px-2 py-0.5 text-[9px] font-bold uppercase tracking-[0.08em] ${
-                selected
-                  ? "bg-white/20 text-white"
-                  : project.status === "ready"
-                    ? "bg-[#09090b] text-white"
-                    : "border border-[#ececee] text-[#52525b]"
-              }`}
-            >
-              {statusLabel}
-            </span>
-          </div>
+          <p
+            className={`mt-2 line-clamp-2 text-[13px] font-semibold leading-snug ${
+              selected ? "text-white" : "text-[#09090b]"
+            }`}
+            title={project.name}
+          >
+            {project.name}
+          </p>
 
-          {/* ── Live counters ───────────────────────────────────────────── */}
+          {/* ── Live counters: one tabular strip, not stacked icons ────────── */}
           <dl
-            className={`mt-3 grid grid-cols-3 gap-1 border-t pt-2.5 text-[10px] ${
+            className={`mt-3 flex items-center justify-between gap-2 border-t pt-3 font-mono text-[10px] tabular-nums ${
               selected ? "border-white/25 text-white/90" : "border-[#f4f4f5] text-[#71717a]"
             }`}
           >
             <div className="flex items-center gap-1">
               <Camera size={11} aria-hidden="true" />
-              <dt className="sr-only">Jumlah media</dt>
-              <dd className="truncate">{project.mediaCount}</dd>
+              <dt className="sr-only">Media</dt>
+              <dd>{project.mediaCount}</dd>
             </div>
+            <span aria-hidden="true" className={selected ? "text-white/30" : "text-[#e4e4e7]"}>·</span>
             <div className="flex items-center gap-1">
               <Users size={11} aria-hidden="true" />
-              <dt className="sr-only">Jumlah kru</dt>
-              <dd className="truncate">{project.crewCount}</dd>
+              <dt className="sr-only">Kru</dt>
+              <dd>{project.crewCount}</dd>
             </div>
-            <div className="flex items-center gap-1">
+            <span aria-hidden="true" className={selected ? "text-white/30" : "text-[#e4e4e7]"}>·</span>
+            <div className="flex min-w-0 items-center gap-1">
               <HardDrive size={11} aria-hidden="true" />
-              <dt className="sr-only">Ukuran penyimpanan</dt>
+              <dt className="sr-only">Penyimpanan</dt>
               <dd className="truncate">{project.storageLabel}</dd>
             </div>
           </dl>
 
-          {/* ── Status dots: production + financial ─────────────────────── */}
-          <div className="mt-2 flex items-center gap-3 text-[10px]">
-            <span className="flex items-center gap-1">
+          {/* ── Status at the foot, with its micro-indicator ──────────────── */}
+          <div className="mt-auto flex items-center gap-3 pt-3 text-[10px]">
+            <span className="flex items-center gap-1.5">
               <span
                 aria-hidden="true"
                 className={`size-1.5 rounded-full ${
@@ -183,9 +175,11 @@ export function FolderCard({
                       : "bg-[#a1a1aa]"
                 }`}
               />
-              <span className={selected ? "text-white/90" : "text-[#71717a]"}>{statusLabel}</span>
+              <span className={`font-semibold ${selected ? "text-white" : "text-[#52525b]"}`}>
+                {statusLabel}
+              </span>
             </span>
-            <span className="flex items-center gap-1">
+            <span className="flex items-center gap-1.5">
               <span
                 aria-hidden="true"
                 className={`size-1.5 rounded-full ${
@@ -204,8 +198,7 @@ export function FolderCard({
 
           {/*
            * The whole pocket is the click target. A stretched overlay keeps the
-           * hit area full-card without nesting an <a> around block content that
-           * contains its own text selection.
+           * hit area full-card without nesting an <a> around block content.
            */}
           <Link
             href={`/admin/projects/${project.id}`}

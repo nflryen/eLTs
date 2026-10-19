@@ -267,7 +267,7 @@ export function CalendarMonthView({
             <div
               key={idx}
               onClick={() => onDateClick?.(cell.date)}
-              className={`group min-h-[110px] sm:min-h-[135px] md:min-h-[155px] p-1.5 sm:p-2 flex flex-col justify-between transition-colors bg-white cursor-pointer hover:bg-[#fafafa] ${
+              className={`group min-h-[132px] sm:min-h-[156px] md:min-h-[184px] p-1.5 sm:p-2 flex flex-col justify-between transition-colors bg-white cursor-pointer hover:bg-[#fafafa] ${
                 !cell.isCurrentMonth
                   ? "bg-[#fafafa] text-[#a1a1aa] opacity-60"
                   : "text-[#09090b]"
@@ -320,11 +320,11 @@ export function CalendarMonthView({
                         e.stopPropagation();
                         onSelectEvent(evt);
                       }}
-                      className={`w-full text-left p-2 min-h-11 rounded-lg text-[11px] border transition-all shadow-2xs group/card cursor-pointer flex flex-col gap-1 ${meta.cardClass}`}
+                      className={`min-h-12 w-full cursor-pointer overflow-hidden rounded-lg border p-1.5 text-left text-[11px] transition-all group/card ${meta.cardClass}`}
                       title={`${startTime} • ${evt.title} (${meta.category})`}
                     >
                       {/* Top Row: Category Badge & Start Time */}
-                      <div className="flex items-center justify-between gap-1 w-full">
+                      <div className="flex w-full items-center justify-between gap-1">
                         <span
                           className={`inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold border tracking-wider uppercase leading-none ${meta.badgeClass}`}
                         >
@@ -335,8 +335,10 @@ export function CalendarMonthView({
                         </span>
                       </div>
 
-                      {/* Middle Row: Event Title */}
-                      <div className="font-semibold text-[#09090b] truncate leading-snug w-full text-[11px]">
+                      {/* Middle Row: Event Title — two lines before clipping, so
+                          "Call Time:" style labels stay readable rather than
+                          collapsing to "Call...". */}
+                      <div className="mt-1 line-clamp-2 w-full text-[11px] font-semibold leading-snug text-[#09090b]">
                         {evt.title}
                       </div>
 

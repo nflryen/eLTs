@@ -102,15 +102,18 @@ export function ProjectActionBar({
   const [statusOpen, setStatusOpen] = useState(false);
   const [preview, setPreview] = useState<ReminderPreview | null>(null);
   const [toast, setToast] = useState<Toast | null>(null);
-  const [status, setStatus] = useState<ProjectStatus>(initialStatus);
+  /*
+   * The server is the source of truth for status. `optimisticStatus` holds a
+   * pending change only until the server responds; when `initialStatus` changes
+   * (after router.refresh) the override is cleared on the next render rather
+   * than through a setState-in-effect sync.
+   */
+  const [optimistic, setOptimistic] = useState<{ from: ProjectStatus; to: ProjectStatus } | null>(null);
+  const status: ProjectStatus = optimistic && optimistic.from === initialStatus ? optimistic.to : initialStatus;
   const [pending, startTransition] = useTransition();
   const [statusPending, setStatusPending] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   const statusRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    setStatus(initialStatus);
-  }, [initialStatus]);
 
   useEffect(() => {
     let cancelled = false;
@@ -203,14 +206,14 @@ export function ProjectActionBar({
       setStatusOpen(false);
       setStatusPending(true);
       // Optimistic: show the new state immediately, reconcile on failure.
-      setStatus(next);
+      setOptimistic({ from: previous, to: next });
       const result = await changeProjectStatus(projectId, previous, next);
       setStatusPending(false);
       if (result.ok) {
         setToast({ kind: "success", text: `Status diubah ke ${STATUS_LABEL[result.to]}.` });
         router.refresh();
       } else {
-        setStatus(previous);
+        setOptimistic(null);
         setToast({ kind: "error", text: result.error });
       }
     },
