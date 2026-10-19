@@ -1,0 +1,402 @@
+@import "tailwindcss";
+
+/*
+ * AWESOMIC EDITORIAL ZINC GRID — light-only design system.
+ *
+ * The system is 99% achromatic. A single vivid accent (Ember #ff5a00) is
+ * reserved for high-priority badges, active production status, and critical
+ * alerts — never body text, links, or large fills.
+ *
+ * Elevation is expressed with 1px hairline borders (Cloud #ececee), NOT drop
+ * shadows. No dark theme: `prefers-color-scheme` is deliberately ignored so the
+ * canvas is always Paper (#f4f4f5) regardless of OS setting.
+ */
+:root {
+  /* ── Palette ───────────────────────────────────────────────────────── */
+  --color-obsidian: #09090b;      /* deepest permitted ink — never #000 */
+  --color-graphite: #18181b;      /* working body ink */
+  --color-slate: #27272a;         /* dark surfaces */
+  --color-iron: #3f3f46;          /* muted labels, outlined-button text */
+  --color-steel: #52525b;         /* icon strokes, metadata */
+  --color-fog: #71717a;           /* helper text */
+  --color-ash: #a1a1aa;           /* placeholder, disabled */
+  --color-mist: #d4d4d8;          /* subtle dividers */
+  --color-cloud: #ececee;         /* THE primary border colour */
+  --color-paper: #f4f4f5;         /* canvas */
+  --color-snow: #ffffff;          /* elevated card surface */
+  --color-ember: #ff5a00;         /* the ONLY accent */
+  --color-magenta-spark: #fe45e2; /* rare decorative punctuation */
+
+  /* ── Surfaces ──────────────────────────────────────────────────────── */
+  --surface-canvas: var(--color-paper);
+  --surface-card: var(--color-snow);
+  --surface-subtle-card: #fafafa;
+  --surface-dark: var(--color-graphite);
+  --surface-deep-dark: var(--color-slate);
+
+  /* ── Semantic aliases consumed by existing components ──────────────── */
+  --background: var(--color-paper);
+  --foreground: var(--color-graphite);
+  --card: var(--color-snow);
+  --card-foreground: var(--color-graphite);
+  --primary: var(--color-obsidian);
+  --primary-foreground: var(--color-snow);
+  --secondary: #fafafa;
+  --secondary-foreground: var(--color-graphite);
+  --muted: #fafafa;
+  --muted-foreground: var(--color-steel);
+  --border: var(--color-cloud);
+  --ring: var(--color-iron);
+
+  /* ── Geometry — three radii repeat everywhere, plus pill ───────────── */
+  --radius-badge: 12px;    /* tags, chips, small controls */
+  --radius-control: 14px;  /* buttons, inputs */
+  --radius-card: 36px;     /* cards, large surfaces */
+  --radius-pill: 10000px;  /* nav CTAs only */
+  --radius: var(--radius-control);
+  --app-radius: var(--radius-card);
+
+  /* ── Elevation — hairlines and inset highlights only ───────────────── */
+  --shadow-btn: inset 0 0.5px 0 0 rgba(255, 255, 255, 0.5),
+                inset 0 9px 14px -5px rgba(117, 123, 133, 0.4),
+                0 0 0 1.5px #2c2e34,
+                0 4px 6px 0 rgba(0, 0, 0, 0.14);
+  --shadow-pill: inset 0 1px 0 0 #e4e4e7;
+
+  /*
+   * ── Legacy surface shims ───────────────────────────────────────────────
+   * `.glass-panel` / `.glass-inner` predate the Awesomic grid. They are kept
+   * as opaque hairlined surfaces so any not-yet-migrated screen still renders
+   * correctly — at the SAME visual weight as `Card`/`CardInner`, and with no
+   * backdrop-blur (frosted glass was explicitly dropped). Never apply these to
+   * new code; migrate to the `Card` primitives in `components/ui/glass.tsx`.
+   */
+  --glass-panel: 255 255 255;
+  --glass-border: 236 236 238;
+  --glass-inner: 250 250 250;
+  --glass-inner-border: 236 236 238;
+  --glass-shadow: none;
+}
+@theme inline {
+  /* Palette as real utilities: bg-ember, text-obsidian, border-cloud … */
+  --color-obsidian: #09090b;
+  --color-graphite: #18181b;
+  --color-slate: #27272a;
+  --color-iron: #3f3f46;
+  --color-steel: #52525b;
+  --color-fog: #71717a;
+  --color-ash: #a1a1aa;
+  --color-mist: #d4d4d8;
+  --color-cloud: #ececee;
+  --color-paper: #f4f4f5;
+  --color-snow: #ffffff;
+  --color-ember: #ff5a00;
+  --color-magenta-spark: #fe45e2;
+
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-border: var(--border);
+  --color-ring: var(--ring);
+
+  /* Radii */
+  --radius-badge: 12px;
+  --radius-control: 14px;
+  --radius-card: 36px;
+  --radius-pill: 10000px;
+
+  /* Type scale */
+  --text-caption: 12px;
+  --text-body: 15px;
+  --text-body-lg: 18px;
+  --text-subheading: 20px;
+  --text-heading-sm: 32px;
+  --text-heading: 40px;
+  --text-heading-lg: 56px;
+  --text-display: 64px;
+
+  --font-sans: "Inter Variable", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-serif: "Inter Variable", ui-sans-serif, system-ui, sans-serif;
+}
+
+@layer base {
+  * {
+    border-color: var(--border);
+  }
+  html {
+    scroll-behavior: smooth;
+    scroll-padding-top: 110px;
+  }
+  body {
+    background: var(--background);
+    color: var(--foreground);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+  }
+  button,
+  a {
+    -webkit-tap-highlight-color: transparent;
+  }
+  button {
+    cursor: pointer;
+  }
+  a:focus-visible,
+  button:focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 5px;
+  }
+  ::selection {
+    background: #d8d2c7;
+    color: #1c1c1c;
+  }
+}
+
+/*
+ * Reusable glass surfaces + tab strip primitives.
+ * Consumed by the admin workspace so every panel shares one visual language.
+ */
+@layer components {
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+
+  .glass-panel {
+    background: rgb(var(--glass-panel));
+    border: 1px solid rgb(var(--glass-border));
+    border-radius: var(--app-radius);
+    box-shadow: var(--glass-shadow);
+    backdrop-filter: blur(16px);
+  }
+
+  .glass-inner {
+    background: rgb(var(--glass-inner));
+    border: 1px solid rgb(var(--glass-inner-border));
+    border-radius: 12px;
+  }
+
+  /* Elevated frosted pill used for the active tab. */
+  .tab-pill-active {
+    background: var(--card);
+    color: var(--foreground);
+    box-shadow:
+      0 1px 2px rgb(0 0 0 / 0.04),
+      0 4px 12px rgb(0 0 0 / 0.06);
+    border: 1px solid rgb(var(--glass-border));
+  }
+}
+
+.site-container {
+  width: min(1200px, calc(100% - 96px));
+  margin-inline: auto;
+}
+.site-header {
+  position: sticky;
+  top: 0;
+  z-index: 40;
+  background: #f7f7f5ed;
+  backdrop-filter: blur(18px);
+  border-bottom: 1px solid #deddd850;
+}
+.wordmark {
+  font-family: var(--font-serif);
+  font-weight: 600;
+  font-size: 46px;
+  line-height: 1;
+  letter-spacing: -0.06em;
+}
+.nav-link {
+  font-size: 13px;
+  color: #494842;
+  transition: color 160ms;
+}
+.nav-link:hover {
+  color: #000;
+  text-decoration: underline;
+  text-underline-offset: 5px;
+}
+.eyebrow {
+  font-size: 11px;
+  line-height: 1.6;
+  font-weight: 500;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: #67665f;
+}
+.hero {
+  height: min(720px, calc(100svh - 88px));
+  min-height: 590px;
+  background: #e4e0d7;
+}
+.hero-image {
+  left: auto !important;
+  width: 64% !important;
+  object-position: center 33%;
+}
+.hero-shade {
+  background: linear-gradient(
+    90deg,
+    #eeebe5 0%,
+    #eeebe5 28%,
+    #eeebe5cf 40%,
+    #eeebe510 61%
+  );
+}
+.hero-title {
+  font-family: var(--font-serif);
+  font-size: clamp(60px, 5.9vw, 86px);
+  line-height: 0.99;
+  font-weight: 400;
+  letter-spacing: -0.045em;
+}
+.hero-aside {
+  color: #fff;
+  text-shadow: 0 1px 12px #0009;
+}
+.section-space {
+  padding-block: 108px;
+}
+.section-heading {
+  font-family: var(--font-serif);
+  font-size: clamp(43px, 4.2vw, 61px);
+  line-height: 1.02;
+  font-weight: 400;
+  letter-spacing: -0.035em;
+}
+.portfolio-rail {
+  padding-inline: max(48px, calc((100vw - 1200px) / 2));
+  scrollbar-width: none;
+}
+.portfolio-rail::-webkit-scrollbar {
+  display: none;
+}
+.portfolio-item {
+  width: 270px;
+  height: 330px;
+  border-radius: 2px;
+}
+.portfolio-wide {
+  width: 430px;
+}
+.hero-enter {
+  animation: enter 850ms ease both;
+}
+.hero-enter:nth-child(2) {
+  animation-delay: 90ms;
+}
+.hero-enter:nth-child(3) {
+  animation-delay: 170ms;
+}
+.hero-enter:nth-child(4) {
+  animation-delay: 250ms;
+}
+@keyframes enter {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (min-width: 1600px) {
+  .hero-image {
+    object-position: center 35%;
+  }
+}
+@media (max-width: 767px) {
+  .site-container {
+    width: calc(100% - 40px);
+  }
+  .site-header .site-container {
+    height: 76px;
+  }
+  .wordmark {
+    font-size: 40px;
+  }
+  .hero {
+    height: 690px;
+    min-height: 0;
+    max-height: none;
+  }
+  .hero-image {
+    width: 100% !important;
+    object-position: 66% 33%;
+  }
+  .hero-shade {
+    background:
+      linear-gradient(90deg, #eee9e1ee, #eee9e1aa 48%, #eee9e115),
+      linear-gradient(0deg, #eee9e188, transparent 40%);
+  }
+  .hero-title {
+    font-size: clamp(48px, 10vw, 71px);
+  }
+  .hero-copy {
+    padding-block: 76px;
+  }
+  .section-space {
+    padding-block: 72px;
+  }
+  .portfolio-rail {
+    padding-inline: 20px;
+    gap: 14px;
+  }
+  .portfolio-item {
+    width: 68vw;
+    height: 310px;
+  }
+  .portfolio-wide {
+    width: 80vw;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* Contact form */
+.contact-input {
+  width: 100%;
+  border: 1px solid var(--border);
+  background: #fff;
+  padding: 11px 14px;
+  font-size: 14px;
+  color: var(--foreground);
+  outline: none;
+  transition: border-color 150ms;
+  font-family: var(--font-sans);
+  border-radius: var(--radius);
+}
+.contact-input:focus {
+  border-color: var(--ring);
+}
+.contact-input::placeholder {
+  color: var(--muted-foreground);
+}
+select.contact-input {
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23777' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  padding-right: 36px;
+}
+

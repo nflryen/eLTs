@@ -1,0 +1,50 @@
+# ── Dependencies & build output ─────────────────────────────────────────────
+node_modules/
+.pnp
+.pnp.*
+.next/
+out/
+build/
+dist/
+coverage/
+*.tsbuildinfo
+next-env.d.ts
+
+# ── Secrets ─────────────────────────────────────────────────────────────────
+# Never commit real credentials. `.env.example` documents the required keys.
+.env
+.env.*
+!.env.example
+
+# ── Deployment & runtime state ──────────────────────────────────────────────
+.vercel/
+.sites-runtime/
+supabase/.temp/
+.turbo/
+
+# ── Audit / scratch artifacts ───────────────────────────────────────────────
+# Snapshots taken before remediation, local verification scripts, and any
+# throwaway SQL dumps. None of these belong in version control.
+.artifacts/
+.archive/
+*.tmp
+*.tmp.*
+*-prechange-*.tar.gz
+audit-*/
+scratch/
+*.bak
+*.bak-*
+
+# ── Editor / OS noise ───────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+*.log
+npm-debug.log*
+.idea/
+.vscode/*
+!.vscode/extensions.json
+
+# ── Local tooling ───────────────────────────────────────────────────────────
+.playwright/
+test-results/
+playwright-report/

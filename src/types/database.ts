@@ -1,0 +1,384 @@
+export * from "./invoices";
+export * from "./sectors";
+import type { ProjectInvoiceRow, CommercialInvoiceStatus } from "./invoices";
+export * from "./operations";
+export * from "./inventory";
+import type { InventoryAssetRow } from "./inventory";
+import type {
+  CrewMemberRow,
+  ProjectCrewAssignmentRow,
+  EquipmentPresetRow,
+  ProjectExpenseRow,
+  CrewPaymentStatus,
+  EquipmentCategory,
+  EquipmentOwnershipType,
+  ExpenseCategory,
+  ExpensePaidBy,
+  CrewMemberType,
+  AssignmentAcceptanceStatus,
+} from "./operations";
+
+// Foundation types mirror SQL. Regenerate from the connected Supabase project before admin work.
+export type ProjectStatus =
+  "draft" | "editing" | "ready" | "expired" | "archived";
+export type PhotographyType =
+  "wedding" | "prewedding" | "graduation" | "couple" | "event";
+export type MediaType = "image" | "video";
+
+export type InvoiceMilestone = "DP_50" | "FINAL_BALANCE" | "ADDON";
+export type InvoiceStatus = "DRAFT" | "PENDING" | "PAID" | "CANCELLED";
+export type EditorTaskStatus = "PENDING" | "IN_PROGRESS" | "REVIEW" | "COMPLETED";
+export type InquiryStatus = "NEW" | "CONTACTED" | "QUOTED" | "CONVERTED" | "ARCHIVED";
+
+export type MoodboardCardType = "IMAGE_REF" | "COLOR_SWATCH" | "SHOT_LIST" | "TECH_NOTE";
+export type AuthorRole = "CLIENT" | "STUDIO";
+export type MoneySplitStatus = "DRAFT" | "PENDING_APPROVAL" | "APPROVED" | "REJECTED";
+export type CashLedgerType = "INFLOW" | "OUTFLOW" | "FOUNDER_ADVANCE";
+export type CashLedgerCategory =
+  | "PROJECT_SPLIT"
+  | "EQUIPMENT_MAINTENANCE"
+  | "RESERVE_INFLOW"
+  | "DIVIDEND_PAYOUT"
+  | "OPERATIONAL";
+export type StudioEventType = "DISCOVERY_CALL" | "PRE_PRODUCTION" | "FIELD_SHOOT" | "DEADLINE";
+export type StudioEventStatus = "SCHEDULED" | "COMPLETED" | "CANCELLED";
+export interface CustomerRow {
+  id: string;
+  name: string;
+  email: string | null;
+  phone: string | null;
+  archived_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+export interface ProjectRow {
+  id: string;
+  customer_id: string;
+  name: string;
+  slug: string;
+  photography_type: PhotographyType;
+  gallery_code: string;
+  gallery_pin_hash: string;
+  access_token: string;
+  shoot_date: string | null;
+  cover_media_id: string | null;
+  status: ProjectStatus;
+  allow_download: boolean;
+  watermark_enabled: boolean;
+  expires_at: string | null;
+  contract_value: number;
+  dp_amount: number;
+  is_dp_paid: boolean;
+  is_fully_paid: boolean;
+  service_pillar: string;
+  selection_quota_min: number;
+  selection_quota_max: number;
+  selection_locked_at: string | null;
+  rehearsal_date?: string | null;
+  sector_specs?: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
+}
+export interface MediaRow {
+  id: string;
+  project_id: string;
+  type: MediaType;
+  file_name: string;
+  mime_type: string;
+  storage_provider: "supabase" | "cloudinary";
+  original_key: string;
+  thumbnail_key: string | null;
+  preview_key: string | null;
+  watermarked_thumbnail_key: string | null;
+  watermarked_preview_key: string | null;
+  cloudinary_public_id: string | null;
+  cloudinary_delivery_type: "upload" | "authenticated" | null;
+  width: number | null;
+  height: number | null;
+  file_size: number;
+  duration_seconds: number | null;
+  processing_status: "pending" | "processing" | "ready" | "failed";
+  sort_order: number;
+  created_at: string;
+}
+export interface FavoriteRow {
+  id: string;
+  project_id: string;
+  media_id: string;
+  session_id: string;
+  created_at: string;
+}
+export interface AdminRow {
+  user_id: string;
+  display_name: string;
+  created_at: string;
+}
+
+export interface InvoiceRow {
+  id: string;
+  project_id: string;
+  invoice_number: string;
+  milestone: InvoiceMilestone;
+  amount: number;
+  status: InvoiceStatus;
+  due_date: string | null;
+  paid_at: string | null;
+  pdf_url: string | null;
+  created_at: string;
+}
+
+export interface CreateInvoiceInput {
+  projectId: string;
+  milestone: InvoiceMilestone;
+  amount: number;
+  dueDate?: string | null;
+  invoiceNumber?: string;
+}
+
+export interface InquiryFormValues {
+  name: string;
+  brandName?: string;
+  phone: string;
+  email?: string;
+  pillar: string;
+  budgetRange?: string;
+  message: string;
+  sourcePage?: string;
+}
+
+export interface EditorTaskRow {
+  id: string;
+  project_id: string;
+  assigned_editor_id: string | null;
+  status: EditorTaskStatus;
+  deliverable_count: number;
+  notes: string | null;
+  manifest_json: Record<string, unknown> | Array<unknown> | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface InquiryRow {
+  id: string;
+  name: string;
+  brand_name: string | null;
+  email: string | null;
+  phone: string;
+  pillar: string;
+  budget_range: string | null;
+  message: string;
+  status: InquiryStatus;
+  source_page: string | null;
+  created_at: string;
+}
+
+export interface MoodboardCardRow {
+  id: string;
+  project_id: string;
+  card_type: MoodboardCardType;
+  title: string;
+  payload: Record<string, unknown>;
+  sort_order: number;
+  created_at: string;
+}
+
+export interface MoodboardCommentRow {
+  id: string;
+  card_id: string;
+  author_role: AuthorRole;
+  author_name: string;
+  content: string;
+  created_at: string;
+}
+
+export interface MoneySplitRow {
+  id: string;
+  project_id: string;
+  gross_revenue: number;
+  direct_costs: number;
+  net_profit: number;
+  reserve_pct: number;
+  reserve_amount: number;
+  commission_pct: number;
+  commission_amount: number;
+  closer_name: string | null;
+  founder_a_share: number;
+  founder_b_share: number;
+  approved_by_a: boolean;
+  approved_by_b: boolean;
+  status: MoneySplitStatus;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CashLedgerRow {
+  id: string;
+  project_id: string | null;
+  type: CashLedgerType;
+  category: CashLedgerCategory;
+  amount: number;
+  description: string;
+  created_at: string;
+}
+
+export interface StudioEventRow {
+  id: string;
+  title: string;
+  event_type: StudioEventType;
+  client_name: string | null;
+  client_phone: string | null;
+  client_email: string | null;
+  service_interest: string | null;
+  start_time: string;
+  end_time: string;
+  project_id: string | null;
+  assigned_crew_ids: string[] | null;
+  google_event_id: string | null;
+  meet_link: string | null;
+  notes: string | null;
+  status: StudioEventStatus;
+  created_at: string;
+}
+
+type Table<Row, Required extends keyof Row> = {
+  Row: Row;
+  Insert: Pick<Row, Required> & Partial<Omit<Row, Required>>;
+  Update: Partial<Row>;
+  Relationships: [];
+};
+
+export type Database = {
+  public: {
+    Tables: {
+      admins: Table<AdminRow, "user_id" | "display_name">;
+      customers: Table<CustomerRow, "name">;
+      projects: Table<
+        ProjectRow,
+        | "customer_id"
+        | "name"
+        | "slug"
+        | "photography_type"
+        | "gallery_code"
+        | "gallery_pin_hash"
+        | "access_token"
+      >;
+      media: Table<
+        MediaRow,
+        | "project_id"
+        | "type"
+        | "file_name"
+        | "mime_type"
+        | "original_key"
+        | "file_size"
+      >;
+      favorites: Table<FavoriteRow, "project_id" | "media_id" | "session_id">;
+      invoices: Table<
+        InvoiceRow,
+        "project_id" | "invoice_number" | "milestone" | "amount"
+      >;
+      editor_tasks: Table<
+        EditorTaskRow,
+        "project_id"
+      >;
+      inquiries: Table<
+        InquiryRow,
+        "name" | "phone" | "pillar" | "message"
+      >;
+      moodboard_cards: Table<MoodboardCardRow, "project_id" | "card_type" | "title">;
+      moodboard_comments: Table<MoodboardCommentRow, "card_id" | "author_role" | "author_name" | "content">;
+      money_splits: Table<MoneySplitRow, "project_id" | "gross_revenue">;
+      cash_ledger: Table<CashLedgerRow, "type" | "category" | "amount" | "description">;
+      studio_events: Table<StudioEventRow, "title" | "event_type" | "start_time" | "end_time">;
+      crew_members: Table<CrewMemberRow, "crew_code" | "full_name" | "phone" | "bank_name" | "bank_account_number" | "bank_account_holder">;
+      project_crew_assignments: Table<ProjectCrewAssignmentRow, "project_id" | "crew_member_id" | "magic_token" | "role_title" | "call_time" | "venue_name" | "venue_address">;
+      equipment_presets: Table<EquipmentPresetRow, "name" | "category">;
+      project_expenses: Table<ProjectExpenseRow, "project_id" | "category" | "name" | "unit_cost">;
+      inventory_assets: Table<InventoryAssetRow, "asset_code" | "name" | "category">;
+      project_invoices: Table<ProjectInvoiceRow, "project_id" | "invoice_number" | "gross_contract_value">;
+    };
+    Views: Record<string, never>;
+    Functions: {
+      create_gallery_session: {
+        Args: { p_project_id: string; p_verified_pin_hash: string; p_token_hash: string; p_upgraded_pin_hash?: string | null };
+        Returns: { session_id: string; project_id: string; access_token: string; expires_at: string }[];
+      };
+      resolve_gallery_session: {
+        Args: { p_token_hash: string };
+        Returns: { session_id: string; project_id: string; access_token: string; slug: string; expires_at: string }[];
+      };
+      revoke_gallery_session: { Args: { p_token_hash: string }; Returns: undefined };
+      consume_gallery_attempt: {
+        Args: { p_bucket_key: string };
+        Returns: { allowed: boolean; retry_after_seconds: number }[];
+      };
+      submit_photo_selection: {
+        Args: { p_project_id: string; p_session_id: string };
+        Returns: { success: boolean; task_id: string; deliverable_count: number; locked_at: string };
+      };
+      approve_money_split: {
+        Args: { p_split_id: string; p_founder: string };
+        Returns: { success: boolean; status: string; approved_by_a: boolean; approved_by_b: boolean }[];
+      };
+      get_crew_hub_payload: {
+        Args: { p_magic_token: string };
+        Returns: Record<string, unknown>;
+      };
+      check_asset_scheduling_conflict: {
+        Args: { p_asset_id: string; p_project_id: string; p_event_date: string };
+        Returns: { conflict_found: boolean; conflicting_project_id: string; conflicting_project_name: string }[];
+      };
+      check_asset_scheduling_conflict_v2: {
+        Args: {
+          p_asset_id: string;
+          p_project_id: string;
+          p_target_date: string;
+          p_prep_days_before?: number;
+          p_return_days_after?: number;
+        };
+        Returns: {
+          conflict_found: boolean;
+          conflict_type: string;
+          conflicting_project_id: string;
+          conflicting_project_name: string;
+          conflicting_date: string;
+        }[];
+      };
+      respond_crew_assignment_offer: {
+        Args: { p_magic_token: string; p_accept: boolean; p_declined_reason?: string | null };
+        Returns: { success: boolean; status: string; message: string };
+      };
+      get_asset_utilization_calendar: {
+        Args: { p_asset_id: string };
+        Returns: Record<string, unknown>;
+      };
+      get_client_invoice_dto: {
+        Args: { p_invoice_number: string };
+        Returns: Record<string, unknown>;
+      };
+    };
+    Enums: {
+      project_status: ProjectStatus;
+      photography_type: PhotographyType;
+      media_type: MediaType;
+      invoice_milestone: InvoiceMilestone;
+      invoice_status: InvoiceStatus;
+      editor_task_status: EditorTaskStatus;
+      inquiry_status: InquiryStatus;
+      moodboard_card_type: MoodboardCardType;
+      author_role: AuthorRole;
+      money_split_status: MoneySplitStatus;
+      cash_ledger_type: CashLedgerType;
+      cash_ledger_category: CashLedgerCategory;
+      studio_event_type: StudioEventType;
+      studio_event_status: StudioEventStatus;
+      crew_payment_status: CrewPaymentStatus;
+      equipment_category: EquipmentCategory;
+      equipment_ownership_type: EquipmentOwnershipType;
+      expense_category: ExpenseCategory;
+      expense_paid_by: ExpensePaidBy;
+      crew_member_type: CrewMemberType;
+      assignment_acceptance_status: AssignmentAcceptanceStatus;
+      commercial_invoice_status: CommercialInvoiceStatus;
+    };
+  };
+};

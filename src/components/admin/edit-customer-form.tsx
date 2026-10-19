@@ -1,0 +1,113 @@
+"use client";
+
+import { useActionState, useTransition } from "react";
+import { ArrowLeft, Loader2, Trash2 } from "lucide-react";
+import Link from "next/link";
+import { Button } from "@/components/ui/button";
+import { updateCustomer, archiveCustomer } from "@/app/actions/admin-customers";
+import type { CustomerRow } from "@/types/database";
+
+export function EditCustomerForm({ customer }: { customer: Pick<CustomerRow, "id" | "name" | "email" | "phone"> }) {
+  const [state, action, isPending] = useActionState(updateCustomer, null);
+  const [isArchiving, startArchive] = useTransition();
+
+  const handleArchive = () => {
+    if (confirm("Are you sure you want to archive this customer? They will no longer appear in the active customers list.")) {
+      startArchive(async () => {
+        await archiveCustomer(customer.id);
+      });
+    }
+  };
+
+  return (
+    <div className="max-w-xl">
+      <Link
+        href="/admin/customers"
+        className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors mb-8"
+      >
+        <ArrowLeft size={14} /> Back to Customers
+      </Link>
+
+      <p className="eyebrow mb-2">Customers</p>
+      <h1 className="font-serif text-3xl font-bold mb-8">Edit Customer</h1>
+
+      <div className="bg-white border border-border rounded-[12px] p-8 shadow-sm">
+        <form action={action} className="space-y-5">
+          <input type="hidden" name="id" value={customer.id} />
+          <div className="space-y-1.5">
+            <label htmlFor="name" className="text-sm font-medium">
+              Full Name <span className="text-[#ff5a00]">*</span>
+            </label>
+            <input
+              id="name"
+              name="name"
+              type="text"
+              required
+              defaultValue={customer.name}
+              placeholder="e.g. John & Jane Doe"
+              className="contact-input"
+            />
+          </div>
+
+          <div className="space-y-1.5">
+            <label htmlFor="email" className="text-sm font-medium">
+              Email Address
+            </label>
+            <input
+              id="email"
+              name="email"
+              type="email"
+              defaultValue={customer.email || ""}
+              placeholder="john@example.com"
+              className="contact-input"
+            />
+          </div>
+
+          <div className="space-y-1.5">
+            <label htmlFor="phone" className="text-sm font-medium">
+              Phone / WhatsApp
+            </label>
+            <input
+              id="phone"
+              name="phone"
+              type="tel"
+              defaultValue={customer.phone || ""}
+              placeholder="+62 812 xxxx xxxx"
+              className="contact-input"
+            />
+          </div>
+
+          {state?.error && (
+            <div className="p-3 bg-[#ff5a00]/10 border border-[#ff5a00]/40 rounded-[12px]">
+              <p className="text-sm text-[#c2410c]">{state.error}</p>
+            </div>
+          )}
+
+          <div className="flex gap-3 pt-2">
+            <Button type="submit" disabled={isPending || isArchiving}>
+              {isPending ? (
+                <><Loader2 size={16} className="animate-spin" /> Saving...</>
+              ) : (
+                "Save Changes"
+              )}
+            </Button>
+            <Button variant="outline" asChild>
+              <Link href="/admin/customers">Cancel</Link>
+            </Button>
+            <div className="flex-1" />
+            <Button 
+              type="button" 
+              variant="outline" 
+              className="text-[#c2410c] hover:text-[#c2410c] hover:bg-[#ff5a00]/10 border-[#ff5a00]/40"
+              onClick={handleArchive}
+              disabled={isPending || isArchiving}
+            >
+              {isArchiving ? <Loader2 size={16} className="animate-spin mr-2" /> : <Trash2 size={16} className="mr-2" />}
+              Archive
+            </Button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
