@@ -13,8 +13,9 @@ to the hosted project.
 | `public.get_client_invoice_dto` | ✅ (still has hardcoded accounts) |
 | `public.roles`, `public.role_assignments` | ❌ |
 | `public.studio_payment_methods` | ❌ |
+| `0005` gallery RPCs | ✅ present (patch is a safety net) |
 | `get_caller_role()`, `has_permission_for_caller()` | ❌ |
-| `consume_gallery_attempt()`, `create_gallery_session()` | ❌ |
+| `consume_gallery_attempt()`, `create_gallery_session()`, `resolve_gallery_session()`, `revoke_gallery_session()` | ✅ verified callable |
 
 **Registered staff:**
 
@@ -576,14 +577,206 @@ COMMIT;
 > from `public.studio_payment_methods` on every call, and the result is `[]`
 > when nothing is configured.
 
+
+### 2.4 — `0005_gallery_session_rpcs.sql`
+
+Re-asserts the gallery access lifecycle: `consume_gallery_attempt`,
+`create_gallery_session`, `resolve_gallery_session`, `revoke_gallery_session`
+and the two `private` tables behind them.
+
+> **Verified already present on your hosted project** (2026-10-19):
+> the limiter caps at 5 attempts, anon is denied `42501`, and a mismatched PIN
+> hash returns zero rows. This step is a **deploy-order safety net** and a
+> no-op on a healthy database — it will not change behaviour, only re-assert
+> the definitions and grants.
+
+```sql
+BEGIN;
+
+create schema if not exists private;
+revoke all on schema private from public, anon, authenticated;
+grant usage on schema private to service_role;
+
+create table if not exists private.gallery_sessions (
+  id uuid primary key default gen_random_uuid(),
+  project_id uuid not null references public.projects(id) on delete cascade,
+  token_hash text not null unique check (token_hash ~ '^[a-f0-9]{64}$'),
+  gallery_access boolean not null default true,
+  expires_at timestamptz not null,
+  revoked_at timestamptz,
+  created_at timestamptz not null default now(),
+  unique (project_id, id),
+  check (expires_at > created_at)
+);
+create index if not exists gallery_sessions_project_id_idx on private.gallery_sessions (project_id);
+create index if not exists gallery_sessions_expiry_idx on private.gallery_sessions (expires_at);
+
+do $$ begin
+  alter table private.gallery_sessions
+    add constraint gallery_sessions_project_id_id_key unique (project_id, id);
+exception when duplicate_table then null; when duplicate_object then null; end $$;
+
+create table if not exists private.gallery_rate_limits (
+  bucket_key text primary key check (length(bucket_key) <= 128),
+  attempts integer not null check (attempts > 0),
+  resets_at timestamptz not null
+);
+create index if not exists gallery_rate_limits_resets_idx on private.gallery_rate_limits (resets_at);
+
+revoke all on private.gallery_sessions, private.gallery_rate_limits
+  from public, anon, authenticated;
+grant all on private.gallery_sessions, private.gallery_rate_limits to service_role;
+alter table private.gallery_sessions enable row level security;
+alter table private.gallery_rate_limits enable row level security;
+
+create or replace function public.consume_gallery_attempt(p_bucket_key text)
+returns table (allowed boolean, retry_after_seconds integer)
+language plpgsql security definer set search_path = '' as $$
+declare
+  v_now timestamptz := clock_timestamp();
+  v_attempts integer; v_resets_at timestamptz;
+  c_window constant interval := interval '10 minutes';
+  c_max constant integer := 5;
+begin
+  if p_bucket_key is null or length(p_bucket_key) not between 1 and 128 then
+    raise exception 'Invalid rate limit key';
+  end if;
+  insert into private.gallery_rate_limits as limits (bucket_key, attempts, resets_at)
+  values (p_bucket_key, 1, v_now + c_window)
+  on conflict (bucket_key) do update set
+    attempts = case when limits.resets_at <= v_now then 1
+                    else least(limits.attempts + 1, 1000000) end,
+    resets_at = case when limits.resets_at <= v_now then v_now + c_window
+                     else limits.resets_at end
+  returning limits.attempts, limits.resets_at into v_attempts, v_resets_at;
+  return query select v_attempts <= c_max,
+    greatest(0, ceil(extract(epoch from v_resets_at - v_now))::integer);
+end; $$;
+
+create or replace function public.create_gallery_session(
+  p_project_id uuid, p_verified_pin_hash text, p_token_hash text,
+  p_upgraded_pin_hash text default null
+) returns table (session_id uuid, project_id uuid, access_token text, expires_at timestamptz)
+language plpgsql security definer set search_path = '' as $$
+declare
+  v_project public.projects%rowtype; v_session_id uuid; v_expires_at timestamptz;
+begin
+  select * into v_project from public.projects where id = p_project_id for update;
+  if not found
+     or v_project.gallery_pin_hash is distinct from p_verified_pin_hash
+     or v_project.status <> 'ready'
+     or (v_project.expires_at is not null and v_project.expires_at <= clock_timestamp())
+  then return; end if;
+  if p_upgraded_pin_hash is not null then
+    if p_upgraded_pin_hash !~ '^scrypt-v2\$[A-Za-z0-9_-]{22}\$[A-Za-z0-9_-]{43}$' then
+      raise exception 'Invalid credential upgrade';
+    end if;
+    update public.projects set gallery_pin_hash = p_upgraded_pin_hash where id = p_project_id;
+  end if;
+  v_expires_at := least(clock_timestamp() + interval '12 hours',
+                        coalesce(v_project.expires_at, 'infinity'::timestamptz));
+  insert into private.gallery_sessions (project_id, token_hash, expires_at)
+  values (p_project_id, p_token_hash, v_expires_at) returning id into v_session_id;
+  return query select v_session_id, p_project_id, v_project.access_token, v_expires_at;
+end; $$;
+
+create or replace function public.resolve_gallery_session(p_token_hash text)
+returns table (session_id uuid, project_id uuid, access_token text, slug text, expires_at timestamptz)
+language sql stable security definer set search_path = '' as $$
+  select s.id, s.project_id, p.access_token, p.slug,
+         least(s.expires_at, coalesce(p.expires_at, 'infinity'::timestamptz))
+  from private.gallery_sessions s
+  join public.projects p on p.id = s.project_id
+  where s.token_hash = p_token_hash
+    and s.gallery_access and s.revoked_at is null
+    and s.expires_at > now() and p.status = 'ready'
+    and (p.expires_at is null or p.expires_at > now());
+$$;
+
+create or replace function public.revoke_gallery_session(p_token_hash text)
+returns void language sql security definer set search_path = '' as $$
+  update private.gallery_sessions set revoked_at = now()
+  where token_hash = p_token_hash and revoked_at is null;
+$$;
+
+revoke all on function public.consume_gallery_attempt(text) from public, anon, authenticated;
+revoke all on function public.create_gallery_session(uuid,text,text,text) from public, anon, authenticated;
+revoke all on function public.resolve_gallery_session(text) from public, anon, authenticated;
+revoke all on function public.revoke_gallery_session(text) from public, anon, authenticated;
+grant execute on function public.consume_gallery_attempt(text) to service_role;
+grant execute on function public.create_gallery_session(uuid,text,text,text) to service_role;
+grant execute on function public.resolve_gallery_session(text) to service_role;
+grant execute on function public.revoke_gallery_session(text) to service_role;
+
+COMMIT;
+```
+
+**Gate:**
+
+```sql
+select p.proname,
+       has_function_privilege('anon', p.oid, 'EXECUTE')          as anon_can_execute,
+       has_function_privilege('authenticated', p.oid, 'EXECUTE') as auth_can_execute,
+       has_function_privilege('service_role', p.oid, 'EXECUTE')  as service_can_execute
+from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+where n.nspname = 'public'
+  and p.proname in ('consume_gallery_attempt','create_gallery_session',
+                    'resolve_gallery_session','revoke_gallery_session')
+order by p.proname;
+```
+
+**Expected:** four rows, `anon_can_execute = false`, `auth_can_execute = false`,
+`service_can_execute = true`.
+
+Then run `supabase/verification/gallery_rpc_dryrun.sql` — it exercises the
+limiter, a mismatched hash, session issuance, resolution, revocation and
+project expiry, then `ROLLBACK`s. Expected output ends with
+`ALL GALLERY DRY-RUN CHECKS PASSED`.
+
 ---
 
 ## 3. Role seed
 
-After §2.1 the back-fill already made both admins `SUPER_ADMIN`. This step
-makes the assignment explicit and records who granted it. Run it
-**as a service/owner role** (SQL Editor) — RLS would otherwise block a
-self-grant, and the trigger blocks self-escalation by design.
+### Which account receives SUPER_ADMIN?
+
+The hosted project has exactly two admin rows, both mapping to confirmed auth
+users:
+
+| UUID | Email | Display name | Last sign-in |
+|---|---|---|---|
+| `dc905281-fe32-4bf8-af9e-aac574f11f0c` | **admin@elts.id** | Rayyan Nufail | 2026-10-05 |
+| `8a251447-8b3e-4b82-a36b-613e6cd9af33` | admin@elts.com | Admin ELTs | 2026-10-19 |
+
+**Recommended primary: `admin@elts.id`** (`dc905281…`, "Rayyan Nufail").
+
+Rationale:
+- It is the named owner account, not a generic role mailbox.
+- `admin@elts.com` reads as a shared/ops alias; giving SUPER_ADMIN to a shared
+  mailbox means the technical god-mode credential is held by whoever has that
+  inbox.
+- `admin@elts.com` signed in most recently, so it is the account you are
+  probably testing with — but "convenient" is not the criterion for rank 120.
+
+**The §2.1 back-fill gives BOTH accounts SUPER_ADMIN regardless.** This step
+therefore does not choose who gets access; it records an explicit, auditable
+assignment for the account that should *remain* SUPER_ADMIN.
+
+If you want only the owner at rank 120, demote the other explicitly:
+
+```sql
+-- Runs after the seed below. Leaves admin@elts.com with full operations access
+-- (ADMIN, rank 80) instead of god-mode.
+BEGIN;
+insert into public.role_assignments (user_id, role_key, granted_by)
+values ('8a251447-8b3e-4b82-a36b-613e6cd9af33', 'ADMIN',
+        'dc905281-fe32-4bf8-af9e-aac574f11f0c')
+on conflict (user_id) do update
+  set role_key = excluded.role_key, revoked_at = null, granted_at = now();
+COMMIT;
+```
+
+Run the seed below **as a service/owner role** (SQL Editor) — RLS would otherwise
+block a self-grant, and the trigger blocks self-escalation by design.
 
 ```sql
 BEGIN;
@@ -788,10 +981,19 @@ language sql immutable as $$ select 0::smallint $$;
 
 ## Known gaps this runbook does **not** close
 
-- `consume_gallery_attempt()` and `create_gallery_session()` are absent from the
-  hosted database, so **client gallery login will fail** at
-  `src/app/client/actions.ts`. 0001 defines them; the hosted project appears to
-  predate those objects. Apply the relevant section of
-  `0001_consolidated_studio_os.sql` before enabling the client portal.
+_(corrected 2026-10-19)_ Gallery session RPCs are **present and verified working**
+on the hosted project — an earlier note claimed they were missing. That was a
+false negative from probing `rpc()` with an empty argument object, which
+PostgREST reports as an unresolvable overload. Confirmed on the hosted database:
+
+| Call | Result |
+|---|---|
+| `consume_gallery_attempt('dryrun-…')` ×7 | `allowed` = `true`×5 then `false`×2 — 5-attempt cap enforced |
+| `create_gallery_session(project, wrong_pin_hash, hash)` | `[]` — correctly rejected, fail-closed |
+| `resolve_gallery_session(hash)` | `[]` — no session for an unknown hash |
+| `revoke_gallery_session(hash)` | `null` — no-op for an unknown hash |
+
+**No gallery patch is required.**
+
 - Apply `0002`–`0004` to a **staging** project first if one exists; the policy
   rewrite changes access for every table at once.
