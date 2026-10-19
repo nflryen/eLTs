@@ -8,20 +8,9 @@ import {
   Plus,
   Trash2,
   ExternalLink,
-  Images,
-  Palette,
-  CheckSquare,
-  FileCode2,
-  Maximize2,
   X,
-  Check,
-  Copy,
   CheckCircle2,
   Circle,
-  MapPin,
-  Camera,
-  Zap,
-  Clock,
 } from "lucide-react";
 import type {
   MoodboardCard,
@@ -49,7 +38,6 @@ interface MoodboardReviewProps {
 export function MoodboardReview({
   projectId,
   projectSlug,
-  projectName = "Project",
   directorName = "Studio Director",
   initialCards,
 }: MoodboardReviewProps) {

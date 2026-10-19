@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { requireOps } from "@/lib/auth/roles";
+import { requirePageOps } from "@/lib/auth/roles";
 import { ArrowLeft, Image as ImageIcon, Video, Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { UploadDropzone } from "@/components/admin/upload-dropzone";
@@ -26,7 +26,7 @@ type MediaWithFavorites = Pick<
 
 export default async function MediaPage({ params }: Props) {
   const { id } = await params;
-  const { supabase } = await requireOps();
+  const { supabase } = await requirePageOps();
 
   const { data: projectData } = await supabase
     .from("projects")

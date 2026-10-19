@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { requireOps } from "@/lib/auth/roles";
+import { requirePageStaff } from "@/lib/auth/roles";
 import { Plus, FolderKanban } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { ProjectStatus, ProjectRow, CustomerRow } from "@/types/database";
@@ -10,6 +10,13 @@ import { parseView } from "@/lib/projects/view";
 import { FolderCard, type FolderCardProject } from "@/components/admin/projects/folder-card";
 import { loadFolderMetrics, formatStorage } from "@/lib/workspace/folder-metrics";
 import { Suspense } from "react";
+
+/*
+ * The `Finansial` column is an ADMIN+ surface. WORKER is a legitimate member of
+ * this list (layout.tsx puts Proyek in "Operate"), but must not learn which
+ * projects are paid — that is client revenue, not production state.
+ */
+const FINANCE_RANK = 80;
 
 /*
  * Lifecycle tone (Awesomic): nominal/complete → obsidian, attention/blocked →
@@ -43,52 +50,84 @@ export default async function ProjectsPage(props: {
   searchParams: Promise<{ q?: string; status?: string; sort?: string; view?: string }>;
 }) {
   const searchParams = await props.searchParams;
-  const { supabase } = await requireOps();
+  /*
+   * Proyek is a WORKER surface (layout.tsx, "Operate"), so this gates at STAFF
+   * (60). The previous `requireOps()` (80) contradicted the nav and turned a
+   * WORKER's own menu entry into a 500.
+   *
+   * RLS lets a WORKER read `projects` but denies `customers` and
+   * `project_invoices`, so the boundary is enforced again at the data layer.
+   */
+  const { supabase, rank } = await requirePageStaff();
   const sort = parseSort(searchParams.sort);
   // Read the view server-side so the first paint is already correct.
   const view = parseView(searchParams.view);
 
-  let query = supabase
-    .from("projects")
-    .select("id, name, slug, photography_type, service_pillar, status, shoot_date, created_at, customer_id, is_dp_paid, is_fully_paid, selection_locked_at, contract_value, dp_amount")
-    .order(SORTABLE[sort.key], { ascending: sort.dir === "asc", nullsFirst: false });
+  const financeVisible = rank >= FINANCE_RANK;
+  /*
+   * Column projection, not just column hiding: a WORKER's payload must not
+   * contain `contract_value`, `dp_amount` or the paid flags at all. Filtering in
+   * JSX would still ship them in the RSC payload where the client can read them.
+   */
+  /*
+   * Two literal SELECTs, one per rank, rather than one interpolated string.
+   *
+   * Supabase infers the row type from a LITERAL select; a template literal
+   * collapses the result to `ParserError`. Keeping the branches separate keeps
+   * the types honest AND keeps `contract_value` / `dp_amount` off the wire for a
+   * WORKER — hiding the cell in JSX would still ship them in the RSC payload.
+   */
+  type ListedProject = Pick<
+    ProjectRow,
+    | "id" | "name" | "slug" | "photography_type" | "status" | "shoot_date"
+    | "created_at" | "customer_id" | "selection_locked_at"
+    | "is_dp_paid" | "is_fully_paid" | "contract_value" | "dp_amount"
+  >;
 
-  if (searchParams.status && searchParams.status !== "all") {
-    query = query.eq("status", searchParams.status);
-  }
-
-  if (searchParams.q) {
-    query = query.ilike("name", `%${searchParams.q}%`);
-  }
-
-  const { data: rawProjects, error } = await query;
-  let projectsData = rawProjects;
-
-  if (!projectsData || error) {
-    let fallbackQuery = supabase
-      .from("projects")
-      .select("id, name, slug, photography_type, service_pillar, status, shoot_date, created_at, customer_id")
-      .order(SORTABLE[sort.key], { ascending: sort.dir === "asc", nullsFirst: false });
-
+  const applyFilters = <T extends { eq: unknown; ilike: unknown }>(q: T): T => {
+    let out = q;
     if (searchParams.status && searchParams.status !== "all") {
-      fallbackQuery = fallbackQuery.eq("status", searchParams.status);
+      out = (out as { eq: (c: string, v: string) => T }).eq("status", searchParams.status) as T;
     }
     if (searchParams.q) {
-      fallbackQuery = fallbackQuery.ilike("name", `%${searchParams.q}%`);
+      out = (out as { ilike: (c: string, v: string) => T }).ilike("name", `%${searchParams.q}%`) as T;
     }
+    return out;
+  };
 
-    const { data: fallbackData } = await fallbackQuery;
-    projectsData = (fallbackData || []).map((p) => ({
-      ...p,
-      is_dp_paid: false,
-      is_fully_paid: false,
-      selection_locked_at: null,
-      contract_value: 0,
-      dp_amount: 0,
-    })) as typeof projectsData;
+  let projectsData: ListedProject[] | null = null;
+
+  if (financeVisible) {
+    const { data, error } = await applyFilters(
+      supabase
+        .from("projects")
+        .select("id, name, slug, photography_type, service_pillar, status, shoot_date, created_at, customer_id, selection_locked_at, is_dp_paid, is_fully_paid, contract_value, dp_amount")
+        .order(SORTABLE[sort.key], { ascending: sort.dir === "asc", nullsFirst: false }),
+    );
+    if (!error) projectsData = data as ListedProject[] | null;
+  } else {
+    const { data, error } = await applyFilters(
+      supabase
+        .from("projects")
+        .select("id, name, slug, photography_type, service_pillar, status, shoot_date, created_at, customer_id, selection_locked_at")
+        .order(SORTABLE[sort.key], { ascending: sort.dir === "asc", nullsFirst: false }),
+    );
+    /*
+     * Money fields are filled with inert defaults purely to satisfy the row
+     * shape; `financeVisible` is false for this branch, so nothing renders them.
+     */
+    if (!error) {
+      projectsData = (data ?? []).map((p) => ({
+        ...p,
+        is_dp_paid: false,
+        is_fully_paid: false,
+        contract_value: 0,
+        dp_amount: 0,
+      }));
+    }
   }
 
-  const projects = projectsData as Pick<ProjectRow, "id" | "name" | "slug" | "photography_type" | "status" | "shoot_date" | "created_at" | "customer_id" | "is_dp_paid" | "is_fully_paid" | "selection_locked_at" | "contract_value" | "dp_amount">[] | null;
+  const projects = projectsData;
 
   // Fetch customer names separately
   const customerIds = [...new Set(projects?.map((p) => p.customer_id) ?? [])];
@@ -120,8 +159,11 @@ export default async function ProjectsPage(props: {
       mediaCount: m?.mediaCount ?? 0,
       crewCount: m?.crewCount ?? 0,
       storageLabel: formatStorage(m?.storageBytes ?? null),
-      isDpPaid: p.is_dp_paid,
-      isFullyPaid: p.is_fully_paid,
+      // Folder cards show a payment dot; WORKER never receives the flags, so
+      // the card renders without one rather than guessing "unpaid".
+      isDpPaid: financeVisible ? p.is_dp_paid : false,
+      isFullyPaid: financeVisible ? p.is_fully_paid : false,
+      financeVisible,
     };
   });
 
@@ -218,9 +260,11 @@ export default async function ProjectsPage(props: {
                   </th>
                   <SortHeader column="shoot_date" label="Tgl Shoot" className="hidden lg:table-cell" />
                   <SortHeader column="status" label="Produksi" />
-                  <th className="px-4 py-2.5 text-left text-[11px] font-semibold uppercase tracking-[0.1em] text-[#71717a]">
-                    Finansial
-                  </th>
+                  {financeVisible ? (
+                    <th className="px-4 py-2.5 text-left text-[11px] font-semibold uppercase tracking-[0.1em] text-[#71717a]">
+                      Finansial
+                    </th>
+                  ) : null}
                   <th className="px-6 py-2.5 text-right text-[11px] font-semibold uppercase tracking-[0.1em] text-[#71717a]">
                     Aksi
                   </th>
@@ -229,11 +273,13 @@ export default async function ProjectsPage(props: {
               <tbody className="divide-y divide-[#f4f4f5]">
                 {projects.map((p) => {
                   const status = statusStyles[p.status as ProjectStatus] ?? statusStyles.draft;
-                  const finance = p.is_fully_paid
-                    ? { label: "Lunas", className: "bg-[#09090b] text-white border-[#09090b]" }
-                    : p.is_dp_paid
-                      ? { label: "DP Lunas", className: "bg-white text-[#18181b] border-[#d4d4d8]" }
-                      : { label: "Belum DP", className: "bg-white text-[#c2410c] border-[#ff5a00]/40" };
+                  const finance = financeVisible
+                    ? p.is_fully_paid
+                      ? { label: "Lunas", className: "bg-[#09090b] text-white border-[#09090b]" }
+                      : p.is_dp_paid
+                        ? { label: "DP Lunas", className: "bg-white text-[#18181b] border-[#d4d4d8]" }
+                        : { label: "Belum DP", className: "bg-white text-[#c2410c] border-[#ff5a00]/40" }
+                    : null;
                   return (
                     <tr key={p.id} className="group transition-colors hover:bg-[#fafafa]">
                       <td className="max-w-[260px] px-6 py-3">
@@ -270,13 +316,15 @@ export default async function ProjectsPage(props: {
                           {status.label}
                         </span>
                       </td>
-                      <td className="whitespace-nowrap px-4 py-3">
-                        <span
-                          className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-[11px] font-semibold ${finance.className}`}
-                        >
-                          {finance.label}
-                        </span>
-                      </td>
+                      {finance ? (
+                        <td className="whitespace-nowrap px-4 py-3">
+                          <span
+                            className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-[11px] font-semibold ${finance.className}`}
+                          >
+                            {finance.label}
+                          </span>
+                        </td>
+                      ) : null}
                       <td className="px-6 py-3">
                         {/*
                          * Labelled cluster replaces the unlabelled chevron. It

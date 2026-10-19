@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
-import { requireOps } from "@/lib/auth/roles";
+import { requirePageStaff } from "@/lib/auth/roles";
 import { loadWorkspace } from "@/lib/workspace";
 import { ProjectConsole } from "@/components/admin/workspace/project-console";
 
@@ -28,14 +28,23 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
  */
 export default async function ProjectConsolePage({ params }: Props) {
   const { id } = await params;
-  await requireOps();
+  /*
+   * STAFF (60), matching `loadWorkspace()`'s own `requireStaff()` gate and the
+   * nav, which offers Proyek to every WORKER. `requireOps()` here alone turned a
+   * WORKER's project link into a 500.
+   *
+   * The console prunes Money tabs from the rank passed below, and `loadWorkspace`
+   * selects money columns conditionally, so a WORKER's payload never contains
+   * fees or invoice totals to begin with.
+   */
+  const { rank } = await requirePageStaff();
 
   const data = await loadWorkspace(id);
   if (!data) notFound();
 
   return (
     <Suspense fallback={<div className="p-6 text-sm text-[#71717a]">Memuat workspace…</div>}>
-      <ProjectConsole data={data} />
+      <ProjectConsole data={data} rank={rank} />
     </Suspense>
   );
 }

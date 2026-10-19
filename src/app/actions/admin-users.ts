@@ -15,7 +15,6 @@ import type { CrewMemberRow } from "@/types/operations";
 import type {
   UserRole,
   UserStatus,
-  UnifiedUserProject,
   UnifiedUser,
 } from "@/types/users";
 

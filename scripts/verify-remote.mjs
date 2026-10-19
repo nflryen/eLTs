@@ -164,7 +164,7 @@ async function main() {
   // ── 3. Columns ───────────────────────────────────────────────────────────
   console.log("  [3/5] critical columns");
   for (const [table, cols] of Object.entries(REQUIRED_COLUMNS)) {
-    const { data, error } = await sb.from(table).select(cols.join(",")).limit(0);
+    const { error } = await sb.from(table).select(cols.join(",")).limit(0);
     if (error) {
       bad(`columns missing on ${table}: ${error.message.slice(0, 70)}`);
     } else {

@@ -3,7 +3,6 @@
 import React, { useMemo } from "react";
 import {
   Calendar,
-  Clock,
   MapPin,
   Users,
   Video,

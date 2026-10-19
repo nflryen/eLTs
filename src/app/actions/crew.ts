@@ -7,7 +7,6 @@ import { requireOps } from "@/lib/auth/roles";
 import { createServiceSupabase } from "@/lib/supabase/service";
 import type {
   CrewMemberRow,
-  ProjectCrewAssignmentRow,
   CrewPaymentStatus,
   AssignCrewInput,
   ProjectCrewAssignmentWithCrew,
@@ -269,43 +268,69 @@ export async function updateCrewPaymentStatus(
 }
 
 /**
- * Public field check-in: allows assigned crew member to confirm arrival at venue.
- * Bypasses admin auth using service client.
+ * Public field check-in.
+ *
+ * SECURITY (audit finding B6): this previously accepted a bare `assignmentId`
+ * and wrote through the service-role client. A UUID is not a credential — it
+ * appears in admin URLs and attention-queue deep links — so anyone who had seen
+ * one could mark that crew member present, or move a colleague's arrival time.
+ * The magic token is the only secret a crew member holds, so it is the only
+ * thing that authorises the write.
+ *
+ * The write happens inside `public.crew_check_in()`, which validates the token,
+ * requires an ACCEPTED offer, and is idempotent so a re-tap on flaky mobile
+ * signal returns the original timestamp instead of overwriting it.
  */
 export async function checkInCrewMember(
-  assignmentId: string
-): Promise<{ success: boolean; error?: string; checkInAt?: string }> {
-  const idParsed = uuidSchema.safeParse(assignmentId);
-  if (!idParsed.success) {
-    return { success: false, error: "Invalid assignment ID" };
+  magicToken: string
+): Promise<{ success: boolean; error?: string; message?: string; checkInAt?: string }> {
+  /*
+   * Shape check before any database work. The token column is constrained to
+   * `[A-Za-z0-9_-]{32,64}`, so anything else cannot be a real token and must
+   * not reach the RPC.
+   */
+  if (typeof magicToken !== "string" || !/^[A-Za-z0-9_-]{32,64}$/.test(magicToken)) {
+    return { success: false, error: "Tautan penugasan tidak valid." };
   }
 
   const supabase = createServiceSupabase();
-  const now = new Date().toISOString();
-
-  const { data, error } = await supabase
-    .from("project_crew_assignments")
-    .update({
-      check_in_at: now,
-      updated_at: now,
-    })
-    .eq("id", assignmentId)
-    .select("id, project_id, magic_token")
-    .single();
+  const { data, error } = await supabase.rpc("crew_check_in", {
+    p_magic_token: magicToken,
+  });
 
   if (error) {
     console.error("Error recording crew check-in:", error);
-    return { success: false, error: error.message };
+    return { success: false, error: "Gagal melakukan check-in. Silakan coba lagi." };
   }
 
-  if (data?.magic_token) {
-    revalidatePath(`/crew/${data.magic_token}`);
-  }
-  if (data?.project_id) {
-    revalidatePath(`/admin/projects/${data.project_id}`);
+  const payload = (data ?? {}) as {
+    success?: boolean;
+    error?: string;
+    message?: string;
+    check_in_at?: string;
+  };
+
+  if (!payload.success) {
+    return { success: false, error: payload.message ?? "Check-in ditolak." };
   }
 
-  return { success: true, checkInAt: now };
+  /*
+   * Revalidate both sides: the crew portal shows the arrival, and the admin
+   * project console reads `check_in_at` to reconcile the call sheet.
+   */
+  revalidatePath(`/crew/${magicToken}`);
+  const { data: row } = await supabase
+    .from("project_crew_assignments")
+    .select("project_id")
+    .eq("magic_token", magicToken)
+    .maybeSingle();
+  if (row?.project_id) revalidatePath(`/admin/projects/${row.project_id}`);
+
+  return {
+    success: true,
+    message: payload.message,
+    checkInAt: payload.check_in_at,
+  };
 }
 
 /**

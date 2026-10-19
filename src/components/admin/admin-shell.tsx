@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
-import { Menu, X } from "lucide-react";
+import { X } from "lucide-react";
 import type { ReactNode } from "react";
 import { ROLE_RANK, isPreviewableRole } from "@/lib/auth/role-meta";
 import { PreviewBanner } from "./role-switcher";

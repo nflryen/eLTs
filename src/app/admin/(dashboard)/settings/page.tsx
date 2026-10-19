@@ -1,4 +1,4 @@
-import { requireOps } from "@/lib/auth/roles";
+import { requirePageOps } from "@/lib/auth/roles";
 import { Shield, User, Globe } from "lucide-react";
 
 /**
@@ -16,7 +16,7 @@ import { Shield, User, Globe } from "lucide-react";
  *     that is actually enforced, and points at the code that enforces it.
  */
 export default async function SettingsPage() {
-  const { admin, role, rank } = await requireOps();
+  const { admin, role, rank } = await requirePageOps();
 
   const security = [
     {

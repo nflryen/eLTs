@@ -162,8 +162,13 @@ test("PostgreSQL foundation constraints, RLS and access lifecycle", async (t) =>
                     `select * from public.${table} order by id`,
                   )
                 ).rows.map((row) => {
-                  // Intentionally excluded: columns 0001 may backfill on a
-                  // re-run (see the comment above).
+                  /*
+                   * Intentionally excluded: columns 0001 may backfill on a
+                   * re-run (see the comment above). The rest pattern derives the
+                   * exclusion from the column list rather than repeating it, so
+                   * a renamed column cannot drift out of sync. The `_` prefix is
+                   * exempted by `varsIgnorePattern` in eslint.config.mjs.
+                   */
                   const { sector_specs: _specs, updated_at: _updated, ...rest } = row;
                   return rest;
                 }),

@@ -7,14 +7,7 @@ import {
   Trash2,
   AlertTriangle,
   Receipt,
-  FileText,
-  Filter,
-  CheckCircle2,
   Loader2,
-  Info,
-  DollarSign,
-  Layers,
-  ChevronRight,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { deleteProjectExpense } from "@/app/actions/admin-expenses";

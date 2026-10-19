@@ -1,6 +1,6 @@
 import Link from "next/link";
-import { requireOps } from "@/lib/auth/roles";
-import { Clock, CheckCircle2, ChevronRight, FolderKanban } from "lucide-react";
+import { requirePageStaff } from "@/lib/auth/roles";
+import { Clock, ChevronRight, FolderKanban } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import type {
@@ -41,7 +41,15 @@ const editorStatusStyles: Record<
 };
 
 export default async function EditorQueuePage() {
-  const { supabase } = await requireOps();
+  /*
+   * Post-production is a WORKER surface (layout.tsx, "Operate"), so it gates at
+   * STAFF (60), not OPS (80). The previous `requireOps()` contradicted the nav,
+   * which offered this link to every WORKER and then answered with a 500.
+   *
+   * Nothing financial is projected: `editor_tasks` is read through RLS, whose
+   * `editor_tasks_worker_self` policy scopes a WORKER to their own assigned row.
+   */
+  const { supabase } = await requirePageStaff();
 
   // 1. Fetch editor tasks
   const { data: editorTasksData } = await supabase

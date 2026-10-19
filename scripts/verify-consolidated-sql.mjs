@@ -89,18 +89,22 @@ async function assertSchema(db, label) {
   );
   const present = new Set(tbl.map((r) => r.table_name));
   const missing = REQUIRED_TABLES.filter((t) => !present.has(t));
-  missing.length === 0
-    ? pass(`all ${REQUIRED_TABLES.length} required tables present`)
-    : fail(`missing tables: ${missing.join(", ")}`);
+  if (missing.length === 0) {
+    pass(`all ${REQUIRED_TABLES.length} required tables present`);
+  } else {
+    fail(`missing tables: ${missing.join(", ")}`);
+  }
 
   const { rows: fns } = await db.query(
     `SELECT p.proname FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname='public'`,
   );
   const fnSet = new Set(fns.map((r) => r.proname));
   const missingFns = REQUIRED_RPCS.filter((f) => !fnSet.has(f));
-  missingFns.length === 0
-    ? pass(`all ${REQUIRED_RPCS.length} required RPCs present`)
-    : fail(`missing RPCs: ${missingFns.join(", ")}`);
+  if (missingFns.length === 0) {
+    pass(`all ${REQUIRED_RPCS.length} required RPCs present`);
+  } else {
+    fail(`missing RPCs: ${missingFns.join(", ")}`);
+  }
 
   for (const [q, want, label2] of [
     [`SELECT count(*)::int n FROM public.crew_members`, 5, "5 crew members seeded"],
@@ -108,14 +112,22 @@ async function assertSchema(db, label) {
     [`SELECT count(*)::int n FROM public.equipment_presets`, 13, "13 equipment presets seeded"],
   ]) {
     const { rows } = await db.query(q);
-    rows[0].n === want ? pass(label2) : fail(`${label2} — found ${rows[0].n}`);
+    if (rows[0].n === want) {
+      pass(label2);
+    } else {
+      fail(`${label2} — found ${rows[0].n}`);
+    }
   }
 
   const { rows: v } = await db.query(
     `SELECT count(*)::int n FROM information_schema.views
      WHERE table_schema='public' AND table_name='v_invoice_financial_position'`,
   );
-  v[0].n === 1 ? pass("derived view v_invoice_financial_position") : fail("derived view missing");
+  if (v[0].n === 1) {
+    pass("derived view v_invoice_financial_position");
+  } else {
+    fail("derived view missing");
+  }
 }
 
 async function runPass({ legacy }) {
@@ -152,12 +164,26 @@ async function runPass({ legacy }) {
                 WHERE id='b575ecdc-385b-47fe-b044-6fcaca6ac141') sp`,
     );
     const r = rows[0];
-    r.c === 1 ? pass("existing customer preserved") : fail(`customers lost (${r.c})`);
-    r.p === 1 ? pass("existing project preserved") : fail(`projects lost (${r.p})`);
-    r.cv === 25000000 ? pass("contract_value preserved (Rp 25,000,000)") : fail(`contract_value = ${r.cv}`);
-    r.sp === "BROADCAST_LIVE_STREAMING"
-      ? pass("drifted pillar normalised (TECH_SOLUTION → BROADCAST_LIVE_STREAMING)")
-      : fail(`pillar not normalised: ${r.sp}`);
+    if (r.c === 1) {
+      pass("existing customer preserved");
+    } else {
+      fail(`customers lost (${r.c})`);
+    }
+    if (r.p === 1) {
+      pass("existing project preserved");
+    } else {
+      fail(`projects lost (${r.p})`);
+    }
+    if (r.cv === 25000000) {
+      pass("contract_value preserved (Rp 25,000,000)");
+    } else {
+      fail(`contract_value = ${r.cv}`);
+    }
+    if (r.sp === "BROADCAST_LIVE_STREAMING") {
+      pass("drifted pillar normalised (TECH_SOLUTION → BROADCAST_LIVE_STREAMING)");
+    } else {
+      fail(`pillar not normalised: ${r.sp}`);
+    }
   }
 
   console.log(`\n  ── idempotency: re-applying the same file ──`);

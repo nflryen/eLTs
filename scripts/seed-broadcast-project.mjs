@@ -44,7 +44,6 @@ const CREW = {
 };
 
 const CONTACT_PHONE = "081234567890";
-const KTP_OPTOUT = null; // not applicable to this seed
 
 async function loadEnv() {
   const raw = await readFile(".env.local", "utf8");

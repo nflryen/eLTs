@@ -5,19 +5,13 @@ import { useRouter } from "next/navigation";
 import {
   Plus,
   Trash2,
-  Calendar,
   Clock,
   CheckCircle2,
   AlertCircle,
   Building2,
   Package,
-  Sparkles,
   FileText,
   User,
-  Phone,
-  MapPin,
-  HelpCircle,
-  Coins,
 } from "lucide-react";
 import {
   Dialog,
@@ -89,12 +83,6 @@ export function CreateRentalInvoiceModal({
   const [address, setAddress] = useState("");
 
   const todayStr = useMemo(() => toLocalDateString(new Date()), []);
-  const tomorrowStr = useMemo(() => {
-    const d = new Date();
-    d.setDate(d.getDate() + 1);
-    return toLocalDateString(d);
-  }, []);
-
   const [rentalStartDate, setRentalStartDate] = useState(todayStr);
   const [rentalEndDate, setRentalEndDate] = useState(todayStr);
 
@@ -234,10 +222,6 @@ export function CreateRentalInvoiceModal({
   const dpAmount = useMemo(() => {
     return Math.round((grossTotal * dpPct) / 100);
   }, [grossTotal, dpPct]);
-
-  const balanceDue = useMemo(() => {
-    return Math.max(0, grossTotal - dpAmount);
-  }, [grossTotal, dpAmount]);
 
   // Handle Project Selection for Mode A
   const handleSelectProject = (projId: string) => {

@@ -5,22 +5,16 @@ import {
   Users,
   Briefcase,
   Clock,
-  MapPin,
   CheckCircle2,
   AlertCircle,
   Copy,
   Check,
   Send,
   Trash2,
-  Plus,
   Search,
-  Filter,
   ArrowRight,
-  ShieldCheck,
   Loader2,
-  DollarSign,
   AlertTriangle,
-  RotateCcw,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type {
@@ -28,7 +22,7 @@ import type {
   ProjectCrewAssignmentWithCrew,
 } from "@/types/operations";
 import { DispatchMicroModal } from "./dispatch-micro-modal";
-import { deleteCrewAssignment, updateCrewPaymentStatus } from "@/app/actions/crew";
+import { deleteCrewAssignment } from "@/app/actions/crew";
 
 interface CrewDispatchKanbanProps {
   projectId: string;
@@ -46,7 +40,6 @@ export function CrewDispatchKanban({
   projectId,
  projectName = "Proyek",
   shootDate,
-  rehearsalDate,
  venueName = "Graha Widyatama UNSOED",
  venueAddress = "Purwokerto Utara",
  venueMapsUrl = "",

@@ -12,8 +12,8 @@ interface Props {
   params: Promise<{ slug: string }>;
 }
 
-export async function generateMetadata({ params }: Props): Promise<Metadata> {
-  const { slug } = await params;
+/* Static metadata: the route parameter is not used in the <head>. */
+export async function generateMetadata(): Promise<Metadata> {
   return {
     title: "Visual Brief & Moodboard — Elts.",
     description: "Collaborative visual direction, shot lists, and color palettes for production.",

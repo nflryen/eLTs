@@ -8,8 +8,6 @@ import {
   Printer,
   MessageCircle,
   Check,
-  Copy,
-  Plus,
   Search,
   CheckCircle2,
   Clock,
@@ -21,9 +19,8 @@ import {
   ExternalLink,
   CreditCard,
   ChevronDown,
-  X,
 } from "lucide-react";
-import { Card, CardHeader, CardInner, Badge } from "@/components/ui/glass";
+import { Card } from "@/components/ui/glass";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Button } from "@/components/ui/button";
 import type { StudioBankAccount } from "@/lib/studio/payment-methods";

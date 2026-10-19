@@ -347,6 +347,16 @@ export type Database = {
         Args: { p_magic_token: string; p_accept: boolean; p_declined_reason?: string | null };
         Returns: { success: boolean; status: string; message: string };
       };
+      crew_check_in: {
+        Args: { p_magic_token: string };
+        Returns: {
+          success: boolean;
+          error?: string;
+          message?: string;
+          already_checked_in?: boolean;
+          check_in_at?: string;
+        };
+      };
       get_asset_utilization_calendar: {
         Args: { p_asset_id: string };
         Returns: Record<string, unknown>;

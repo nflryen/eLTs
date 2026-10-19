@@ -21,19 +21,13 @@ import {
   CheckCircle2,
   Sparkles,
   CreditCard,
-  Building2,
-  Calendar,
-  Lock,
   RefreshCw,
-  Clock,
-  ShieldCheck,
   SlidersHorizontal,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import type {
   UnifiedUser,
-  UserRole,
   UserStatus,
   UnifiedUserProject,
 } from "@/types/users";
@@ -54,7 +48,7 @@ export function UserDirectoryClient({ initialUsers }: UserDirectoryClientProps) 
   const [activeTab, setActiveTab] = useState<TabType>("ALL");
   const [statusFilter, setStatusFilter] = useState<"ALL" | UserStatus>("ALL");
   const [searchQuery, setSearchQuery] = useState("");
-  const [isPending, startTransition] = useTransition();
+  const [, startTransition] = useTransition();
 
   // Dialog states
   const [detailUser, setDetailUser] = useState<UnifiedUser | null>(null);
@@ -218,7 +212,7 @@ export function UserDirectoryClient({ initialUsers }: UserDirectoryClientProps) 
             text: res.error || "Gagal memperbarui status pengguna.",
           });
         }
-      } catch (err) {
+      } catch {
         setBannerNotice({
           type: "error",
           text: "Terjadi kesalahan saat menghubungi server.",

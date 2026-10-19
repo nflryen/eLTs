@@ -4,7 +4,6 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { randomBytes } from "node:crypto";
 import { requirePermission } from "@/lib/auth/roles";
-import { createServiceSupabase } from "@/lib/supabase/service";
 import { generateGalleryCredentials, hashGalleryPin } from "@/lib/security/credentials";
 import { getPinPepper } from "@/lib/env";
 
@@ -355,8 +354,10 @@ export async function createRentalInvoiceAction(input: CreateRentalInvoiceInput)
   error?: string;
 }> {
   try {
-    await requirePermission("invoice.issue");
-    const supabase = createServiceSupabase();
+    // User-scoped client: `requirePermission("invoice.issue")` authorises the
+    // action, and RLS now independently confirms the caller may write invoices.
+    // Previously service_role made the permission check the only barrier (B3).
+    const { supabase } = await requirePermission("invoice.issue");
     const parsed = createRentalInvoiceSchema.safeParse(input);
     if (!parsed.success) {
       return {

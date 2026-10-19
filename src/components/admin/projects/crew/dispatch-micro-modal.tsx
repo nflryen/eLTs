@@ -3,11 +3,9 @@
 import { useState, useTransition } from "react";
 import {
   X,
-  User,
   DollarSign,
   Briefcase,
   Loader2,
-  Check,
   Send,
   AlertCircle,
 } from "lucide-react";
@@ -40,7 +38,6 @@ const QUICK_ROLES = [
 
 export function DispatchMicroModal({
   projectId,
- projectName = "Proyek",
   shootDate,
  venueName = "Graha Widyatama UNSOED",
  venueAddress = "Purwokerto Utara",

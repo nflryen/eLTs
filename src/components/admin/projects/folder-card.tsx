@@ -38,6 +38,13 @@ export type FolderCardProject = {
   storageLabel: string;
   isDpPaid: boolean;
   isFullyPaid: boolean;
+  /**
+   * Whether the caller may see payment state. A WORKER never receives the paid
+   * flags (the server omits the columns), so the card must render no finance
+   * chip at all rather than defaulting to "Belum DP" — which would state a
+   * payment fact the payload never contained.
+   */
+  financeVisible?: boolean;
 };
 
 const STATUS_LABEL: Record<string, string> = {
@@ -61,11 +68,14 @@ export function FolderCard({
   selected?: boolean;
   onOpen?: (id: string) => void;
 }) {
-  const finance = project.isFullyPaid
-    ? { label: "Lunas", tone: "paid" as const }
-    : project.isDpPaid
-      ? { label: "DP Lunas", tone: "partial" as const }
-      : { label: "Belum DP", tone: "due" as const };
+  const finance =
+    project.financeVisible === false
+      ? null
+      : project.isFullyPaid
+        ? { label: "Lunas", tone: "paid" as const }
+        : project.isDpPaid
+          ? { label: "DP Lunas", tone: "partial" as const }
+          : { label: "Belum DP", tone: "due" as const };
 
   const statusLabel = STATUS_LABEL[project.status] ?? project.status;
 
@@ -179,21 +189,23 @@ export function FolderCard({
                 {statusLabel}
               </span>
             </span>
-            <span className="flex items-center gap-1.5">
-              <span
-                aria-hidden="true"
-                className={`size-1.5 rounded-full ${
-                  selected
-                    ? "bg-white"
-                    : finance.tone === "paid"
-                      ? "bg-[#09090b]"
-                      : finance.tone === "due"
-                        ? "bg-[#ff5a00]"
-                        : "bg-[#a1a1aa]"
-                }`}
-              />
-              <span className={selected ? "text-white/90" : "text-[#71717a]"}>{finance.label}</span>
-            </span>
+            {finance ? (
+              <span className="flex items-center gap-1.5">
+                <span
+                  aria-hidden="true"
+                  className={`size-1.5 rounded-full ${
+                    selected
+                      ? "bg-white"
+                      : finance.tone === "paid"
+                        ? "bg-[#09090b]"
+                        : finance.tone === "due"
+                          ? "bg-[#ff5a00]"
+                          : "bg-[#a1a1aa]"
+                  }`}
+                />
+                <span className={selected ? "text-white/90" : "text-[#71717a]"}>{finance.label}</span>
+              </span>
+            ) : null}
           </div>
 
           {/*

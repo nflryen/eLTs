@@ -1,8 +1,8 @@
-import { requireOps } from "@/lib/auth/roles";
+import { requirePageOps } from "@/lib/auth/roles";
 import { ProjectCreationWizard } from "@/components/admin/projects/wizard/project-creation-wizard";
 
 export default async function NewProjectPage() {
-  const { supabase } = await requireOps();
+  const { supabase } = await requirePageOps();
 
   const { data: customers } = await supabase
     .from("customers")

@@ -2,7 +2,6 @@ import Image from "next/image";
 import type { Metadata } from "next";
 import { ArrowUpRight, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { SectionTitle } from "@/components/shared/section-title";
 import { BookingCta } from "@/components/home/booking-cta";
 import { servicesDetail } from "@/content/photography";
 import { bookingUrl } from "@/config/site";

@@ -14,7 +14,8 @@ import {
 import { checkInCrewMember } from "@/app/actions/crew";
 
 interface CallSheetViewProps {
-  assignmentId: string;
+  /** The crew member's magic token — the only credential this portal holds. */
+  magicToken: string;
   shootDate: string | null;
   callTime: string;
   rollTime: string | null;
@@ -26,7 +27,7 @@ interface CallSheetViewProps {
 }
 
 export function CallSheetView({
-  assignmentId,
+  magicToken,
   shootDate,
   callTime,
   rollTime,
@@ -77,7 +78,7 @@ export function CallSheetView({
   const handleCheckIn = () => {
     setCheckInError(null);
     startTransition(async () => {
-      const res = await checkInCrewMember(assignmentId);
+      const res = await checkInCrewMember(magicToken);
       if (res.success && res.checkInAt) {
         setCheckInAt(res.checkInAt);
       } else {

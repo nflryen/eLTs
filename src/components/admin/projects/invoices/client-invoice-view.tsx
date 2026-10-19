@@ -5,14 +5,6 @@ import {
   Printer,
   Copy,
   Check,
-  Send,
-  Building2,
-  Calendar,
-  CheckCircle2,
-  Clock,
-  AlertCircle,
-  ShieldCheck,
-  Download,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { StudioLogo } from "@/components/ui/studio-logo";
@@ -86,9 +78,6 @@ export function ClientInvoiceView({ invoice }: ClientInvoiceViewProps) {
       : "Rekening pembayaran belum tersedia. Silakan hubungi studio untuk detail pembayaran.";
 
   // Formatted WhatsApp copy message
-  const waPhone = invoice.customer?.phone
-    ? invoice.customer.phone.replace(/[^0-9]/g, "").replace(/^0/, "62")
-    : "";
   const handleCopyWhatsApp = async () => {
     const origin = typeof window !== "undefined" ? window.location.origin : "https://elts.id";
     const invoiceUrl = `${origin}/invoice/${encodeURIComponent(invoice.invoice_number)}`;

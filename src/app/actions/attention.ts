@@ -1,6 +1,5 @@
 "use server";
 
-import { createServiceSupabase } from "@/lib/supabase/service";
 import { requireOps } from "@/lib/auth/roles";
 import type {
   AttentionAction,
@@ -48,13 +47,17 @@ function waLink(phone: string | null, text: string): string {
 }
 
 export async function getAttentionQueue(): Promise<AttentionQueue> {
-  await requireOps();
-  const supabase = createServiceSupabase();
+  /*
+   * User-scoped client (audit finding B3). This read previously bypassed RLS
+   * via service_role, so a WORKER's attention queue was assembled from rows
+   * RLS would have denied them — expenses, pending splits and invoice totals.
+   * The caller's JWT now applies the same policy as every other read.
+   */
+  const { supabase } = await requireOps();
   const lens = await readSectorLens();
   const pillar = sectorToPillar(lens);
 
   const now = Date.now();
-  const in24h = new Date(now + DAY).toISOString();
   const in7d = new Date(now + 7 * DAY).toISOString();
   const items: AttentionItem[] = [];
 

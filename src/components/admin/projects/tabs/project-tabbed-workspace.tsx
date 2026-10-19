@@ -10,15 +10,10 @@ import {
   Package,
   Receipt,
   ArrowLeft,
-  Upload,
-  CalendarDays,
-  ShieldCheck,
   CheckCircle2,
   AlertCircle,
-  ExternalLink,
   Printer,
   Send,
-  Copy,
   Lock,
   Check,
 } from "lucide-react";
@@ -76,7 +71,6 @@ export function ProjectTabbedWorkspace({
   crewAssignments,
   availableCrewMembers,
   initialExpenses,
-  presets,
   initialSplit,
   inventoryAssets,
   bankAccounts,
@@ -90,7 +84,7 @@ export function ProjectTabbedWorkspace({
  rawTab && validTabs.includes(rawTab) ? rawTab : "overview";
 
   const [expenses, setExpenses] = useState<ProjectExpenseRow[]>(initialExpenses);
-  const [split, setSplit] = useState<MoneySplitRow | null>(initialSplit);
+  const [, setSplit] = useState<MoneySplitRow | null>(initialSplit);
   const [isSyncing, startSyncTransition] = useTransition();
  const [syncNotice, setSyncNotice] = useState<{ type: "success" | "error"; message: string } | null>(null);
 

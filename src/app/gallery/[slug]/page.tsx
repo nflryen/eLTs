@@ -13,7 +13,12 @@ interface Props {
   params: Promise<{ slug: string }>;
 }
 
-export async function generateMetadata({ params }: Props): Promise<Metadata> {
+export async function generateMetadata(): Promise<Metadata> {
+  /*
+   * Deliberately slug-independent: no project name reaches the <head>, so a
+   * guessed URL leaks nothing. Next.js does not require the `{ params }`
+   * argument, so it is omitted rather than accepted-and-discarded.
+   */
   return {
     title: "Your Gallery — Elts.",
     robots: { index: false, follow: false },
@@ -37,13 +42,22 @@ export default async function GalleryPage({ params }: Props) {
       .maybeSingle();
 
     if (directProject && (!directProject.expires_at || new Date(directProject.expires_at) > new Date())) {
-      // Direct token access / development session bypass without calling cookie.set in Server Component
+      /*
+       * Direct token access: the slug itself is the access token.
+       *
+       * `expires_at` is copied verbatim and NOT defaulted. The previous
+       * `?? new Date(Date.now() + 86400000)` invented a 24-hour expiry that the
+       * database never set — on top of calling `Date.now()` during render, which
+       * makes the component non-idempotent (React 19 flags it). Nothing reads
+       * this field: the project row at line 109 is what decides expiry, so
+       * `null` here means "no session deadline", which is the truth.
+       */
       gallerySession = {
         session_id: "direct-session",
         project_id: directProject.id,
         access_token: directProject.access_token,
         slug: directProject.slug,
-        expires_at: directProject.expires_at ?? new Date(Date.now() + 86400000).toISOString(),
+        expires_at: directProject.expires_at,
       };
     }
   }
@@ -117,9 +131,9 @@ export default async function GalleryPage({ params }: Props) {
   // Watermark selection is NOT decided here. The gateway resolves the correct
   // variant from the project flag at request time, so a watermarked project can
   // never be served a plain preview by a stale client decision.
-  const { data: mediaData, count } = await supabase
+  const { data: mediaData } = await supabase
     .from("media")
-    .select("id, type, file_name, width, height", { count: "exact" })
+    .select("id, type, file_name, width, height")
     .eq("project_id", project.id)
     .eq("processing_status", "ready")
     .order("sort_order", { ascending: true })
@@ -138,7 +152,6 @@ export default async function GalleryPage({ params }: Props) {
     preview_key: mediaGatewayUrl(m.id as string, "preview"),
   }));
 
-  const totalCount = count ?? 0;
   const photoCount = media.filter((m) => m.type === "image").length;
   const videoCount = media.filter((m) => m.type === "video").length;
 

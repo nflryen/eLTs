@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import {
-  Users, Receipt, HardDrive, Image as ImageIcon,
+  Users, HardDrive, Image as ImageIcon,
   CheckCircle2, Clock, XCircle, AlertTriangle,
 } from "lucide-react";
 import { Card, CardInner, CardHeader, Badge } from "@/components/ui/glass";

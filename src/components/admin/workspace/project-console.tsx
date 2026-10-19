@@ -50,7 +50,30 @@ const VALID: WorkspaceModule[] = [
   "callsheet", "sector", "crew", "gear", "invoice", "rab", "media", "proofing",
 ];
 
-export function ProjectConsole({ data }: { data: WorkspacePayload }) {
+/**
+ * Minimum rank required to see a Money-surface module in the console.
+ *
+ *   invoice  80  ADMIN+  operational invoicing; WORKER has no client money view.
+ *   rab      80  ADMIN+  read-only cost breakdown. Settlement stays FOUNDER —
+ *                the RAB panel's write actions call `requireFounder()`.
+ *
+ * This is a *visibility* rule layered on top of the pillar config. It is not the
+ * authorisation boundary: `loadWorkspace` decides which columns exist in the
+ * payload at all, so a WORKER never receives the money fields regardless of
+ * what this component chooses to render.
+ */
+const MODULE_MIN_RANK: Partial<Record<WorkspaceModule, number>> = {
+  invoice: 80,
+  rab: 80,
+};
+
+export function ProjectConsole({
+  data,
+  rank,
+}: {
+  data: WorkspacePayload;
+  rank: number;
+}) {
   const searchParams = useSearchParams();
 
   /*
@@ -63,7 +86,14 @@ export function ProjectConsole({ data }: { data: WorkspacePayload }) {
    */
   const pillar = resolvePillarConfig(data.project.service_pillar);
   const [forceEnabled, setForceEnabled] = useState<FeatureId[]>([]);
-  const allowedModules = visibleModules(pillar.config, forceEnabled);
+  /*
+   * Pillar eligibility AND capability eligibility. Filtering here means a
+   * deep link (`?module=rab`) also resolves away from a module the role cannot
+   * open, because `effectiveActive` below falls back to `allowedModules[0]`.
+   */
+  const allowedModules = visibleModules(pillar.config, forceEnabled).filter(
+    (id) => rank >= (MODULE_MIN_RANK[id] ?? 0),
+  );
   const hiddenModules = excludedModules(pillar.config, forceEnabled);
 
   // Initial module can arrive via ?module= or legacy ?tab= so an attention-queue deep link lands

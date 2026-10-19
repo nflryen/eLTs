@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
-import { requireOps } from "@/lib/auth/roles";
+import { requirePageFounder } from "@/lib/auth/roles";
 import { getUnifiedUsersList } from "@/app/actions/admin-users";
 import { UserDirectoryClient } from "@/components/admin/users/user-directory-client";
-import { Users, Crown, Briefcase, Scissors, UserCheck } from "lucide-react";
+import { Users, Crown, Briefcase, UserCheck } from "lucide-react";
 
 export const metadata: Metadata = {
   title: "Users & Access - Admin Dashboard",
@@ -10,7 +10,8 @@ export const metadata: Metadata = {
 };
 
 export default async function AdminUsersPage() {
-  await requireOps();
+  /* RBAC administration is FOUNDER-only, matching the middleware map. */
+  await requirePageFounder();
   const users = await getUnifiedUsersList();
 
   // Compute Stats for the Header Stats Bar

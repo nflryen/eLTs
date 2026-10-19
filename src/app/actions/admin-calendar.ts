@@ -1,6 +1,5 @@
 "use server";
 
-import { createServiceSupabase } from "@/lib/supabase/service";
 import { requireOps } from "@/lib/auth/roles";
 import type { AssignedCrewMember, CalendarEvent } from "@/types/calendar";
 
@@ -55,14 +54,17 @@ export async function getCalendarEvents(
   month?: string,
   filterPillar?: string
 ): Promise<CalendarEvent[]> {
-  // Ensure admin credentials
-  try {
-    await requireOps();
-  } catch {
-    // If running in development without auth session or server context, proceed with service client
-  }
-
-  const supabase = createServiceSupabase();
+  /*
+   * Fail CLOSED. This previously caught the `requireOps()` rejection and fell
+   * through to the service-role client "for development without a session" —
+   * so an unauthenticated caller in production received the calendar through a
+   * client that bypasses RLS. A guard whose denial is swallowed is not a guard
+   * (audit finding B3a).
+   *
+   * The user-scoped client carries the caller's JWT, so RLS applies even if
+   * this function is later reached from a path that forgot to check a role.
+   */
+  const { supabase } = await requireOps();
 
   // Resolve target month window (default: current month)
   const now = new Date();

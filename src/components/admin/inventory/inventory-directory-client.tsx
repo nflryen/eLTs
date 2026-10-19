@@ -10,7 +10,6 @@ import {
   Store,
   Plus,
   Search,
-  Filter,
   CheckCircle2,
   AlertCircle,
   Loader2,
@@ -23,8 +22,6 @@ import {
   Sun,
   Cable,
   Wrench,
-  Check,
-  RotateCcw,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { AssetUtilizationDrawer } from "@/components/admin/inventory/asset-utilization-drawer";

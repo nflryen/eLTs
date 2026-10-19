@@ -7,15 +7,6 @@ import {
   ArrowLeft,
   ArrowRight,
   Check,
-  Radio,
-  Video,
-  Camera,
-  Calendar,
-  Clock,
-  MapPin,
-  Building2,
-  DollarSign,
-  FileText,
   Loader2,
   AlertCircle,
   Sparkles,
@@ -67,7 +58,6 @@ export function ProjectCreationWizard({ customers }: ProjectCreationWizardProps)
   // Step 3 State: Commercial Baseline
   const [contractValue, setContractValue] = useState("1500000");
   const [dpPercentage, setDpPercentage] = useState(50);
-  const [billingTerm, setBillingTerm] = useState<"50_50" | "3_PHASE">("50_50");
 
   // Handle Project Name changes with live slug preview
   const handleNameChange = (val: string) => {

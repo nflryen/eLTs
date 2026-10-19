@@ -1,6 +1,5 @@
 import { createClient } from "@supabase/supabase-js";
 import { hashGalleryPin } from "../src/lib/security/credentials";
-import { randomBytes } from "node:crypto";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL ?? "";
 const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY ?? "";
@@ -213,7 +212,15 @@ export async function runSeed() {
   }
   console.log("\n6. Seeding Crew Member, Assignment & Equipment Presets...");
   const crewId = "e0000000-0000-0000-0000-000000000001";
-  const magicToken = "crw-token-fajar-sidik-broadcast-2026-xyz";
+  /*
+   * Must satisfy `magic_token ~ '^[A-Za-z0-9_-]{32,64}$'` (0001). The previous
+   * value, "crw-token-fajar-sidik-broadcast-2026-xyz", matched neither the
+   * constraint nor a real row: the insert silently failed, and the crew portal
+   * only appeared to work because it had a hardcoded `crw-token-` fixture
+   * fallback. That fallback is gone (finding B5), so the seed must write a
+   * token the database actually accepts.
+   */
+  const magicToken = "crwseedfajar2026broadcastvalidationtokenxyz12345";
   try {
     await supabase.from("crew_members").upsert({
       id: crewId,
@@ -247,7 +254,7 @@ export async function runSeed() {
     });
     console.log("   Crew Member: Fajar Sidik (CRW-01) assigned to project");
     console.log(`   Magic Token : ${magicToken}`);
-  } catch (err: unknown) {
+  } catch {
     console.log("   Operations dispatch tables pending remote SQL execution (handled gracefully).");
   }
 

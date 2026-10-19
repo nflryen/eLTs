@@ -29,7 +29,7 @@ export async function createCustomer(state: unknown, formData: FormData) {
     name,
     email: email || null,
     phone: phone || null,
-  } as any);
+  });
 
   if (error) {
     return { error: `Failed to create customer: ${error.message}` };
@@ -62,7 +62,7 @@ export async function updateCustomer(state: unknown, formData: FormData) {
       name,
       email: email || null,
       phone: phone || null,
-    } as any)
+    })
     .eq("id", id);
 
   if (error) {
@@ -76,7 +76,7 @@ export async function archiveCustomer(id: string) {
   const { supabase } = await requireOps();
   const { error } = await supabase
     .from("customers")
-    .update({ archived_at: new Date().toISOString() } as any)
+    .update({ archived_at: new Date().toISOString() })
     .eq("id", id);
 
   if (error) {

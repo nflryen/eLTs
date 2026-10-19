@@ -1,5 +1,5 @@
 import { notFound } from "next/navigation";
-import { requireOps } from "@/lib/auth/roles";
+import { requirePageOps } from "@/lib/auth/roles";
 import { EditCustomerForm } from "@/components/admin/edit-customer-form";
 
 interface Props {
@@ -8,7 +8,7 @@ interface Props {
 
 export default async function EditCustomerPage({ params }: Props) {
   const { id } = await params;
-  const { supabase } = await requireOps();
+  const { supabase } = await requirePageOps();
 
   const { data: customer } = await supabase
     .from("customers")

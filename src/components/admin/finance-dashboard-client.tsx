@@ -13,10 +13,7 @@ import {
   ArrowUpRight,
   ArrowDownRight,
   Calculator,
-  Building2,
   ExternalLink,
-  DollarSign,
-  UserCheck,
   History,
   X,
   FileSpreadsheet,
@@ -504,7 +501,6 @@ export function FinanceDashboardClient({ initialData }: FinanceDashboardClientPr
                 </thead>
                 <tbody className="divide-y divide-[#ececee]">
                   {data.splits.map((split) => {
-                    const isFullyApproved = split.status === "APPROVED";
                     const isApprovingThis = approvingState[split.id];
 
                     return (

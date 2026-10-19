@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { requireOps } from "@/lib/auth/roles";
+import { requirePageFounder } from "@/lib/auth/roles";
 import { getFinanceOverview } from "@/app/actions/admin-finance";
 import { FinanceDashboardClient } from "@/components/admin/finance-dashboard-client";
 
@@ -9,7 +9,8 @@ export const metadata: Metadata = {
 };
 
 export default async function AdminFinancePage() {
-  await requireOps();
+  /* Treasury is FOUNDER-only. Middleware already enforces this at rank 100; the page now agrees, so a direct render can never disagree with the route guard. */
+  await requirePageFounder();
 
   const overviewResult = await getFinanceOverview();
 

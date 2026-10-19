@@ -16,15 +16,21 @@ import { Package, Plus, Receipt, Users } from "lucide-react";
 
 const ACTIONS = [
   { href: "/admin/projects/new", label: "Proyek Baru", icon: Plus, primary: true },
-  { href: "/admin/projects?module=crew", label: "Dispatch Kru", icon: Users, primary: false },
-  { href: "/admin/finance", label: "Buat Invoice", icon: Receipt, primary: false },
+  { href: "/admin/projects?module=crew", label: "Dispatch Kru", icon: Users, primary: false, minRank: 80 },
+  /*
+   * Treasury is FOUNDER+ (nav config). Billing is initiated from Tagihan, which
+   * ADMIN can open; this shortcut previously sent an ADMIN to a route the
+   * middleware now redirects away from.
+   */
+  { href: "/admin/invoices", label: "Buat Invoice", icon: Receipt, primary: false, minRank: 80 },
   { href: "/admin/inventory", label: "Tambah Gear", icon: Package, primary: false },
 ] as const;
 
-export function QuickActions() {
+export function QuickActions({ rank }: { rank: number }) {
+  const actions = ACTIONS.filter((a) => rank >= ("minRank" in a ? a.minRank : 0));
   return (
     <nav aria-label="Aksi cepat" className="flex flex-wrap items-center gap-2">
-      {ACTIONS.map(({ href, label, icon: Icon, primary }) => (
+      {actions.map(({ href, label, icon: Icon, primary }) => (
         <Link
           key={href}
           href={href}

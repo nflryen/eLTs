@@ -4,10 +4,9 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import {
   ArrowLeft, MapPin, Navigation, PhoneCall, MessageCircle,
-  CalendarClock, Radio, Video, Camera, ChevronDown,
+  CalendarClock, Radio, Video, Camera,
 } from "lucide-react";
 import { Badge } from "@/components/ui/glass";
-import { WORKSPACE_MODULE_LABEL, type WorkspaceModule } from "@/lib/workspace-contract";
 import type { WorkspacePayload } from "@/lib/workspace";
 import { jakartaInstant, jakartaShortDate } from "@/lib/datetime";
 

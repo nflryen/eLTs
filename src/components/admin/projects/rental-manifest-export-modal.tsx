@@ -12,7 +12,6 @@ import {
   Calendar,
   MessageCircle,
   Loader2,
-  Package,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { getVendorRentalManifest } from "@/app/actions/admin-inventory";
@@ -37,8 +36,6 @@ function formatIDR(amount: number): string {
 
 export function RentalManifestExportModal({
   projectId,
-  projectName,
-  shootDate,
   expenses,
   triggerClassName,
 }: RentalManifestExportModalProps) {

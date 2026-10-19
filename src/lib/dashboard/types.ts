@@ -2,7 +2,14 @@ import "server-only";
 
 import type { Metric } from "@/lib/dashboard/metric";
 import type { AttentionQueue } from "@/types/attention";
-import { ROLE_RANK } from "@/lib/auth/roles";
+/*
+ * `role-meta` rather than `@/lib/auth/roles`: the latter carries the server
+ * guard chain (including `next/navigation`), so importing it here made every
+ * consumer of this contract — and any unit test touching it — load Next's
+ * client router. `role-meta` exists precisely to be the dependency-free source
+ * of rank truth for both server and client code.
+ */
+import { ROLE_RANK } from "@/lib/auth/role-meta";
 
 /**
  * Dashboard telemetry contract.

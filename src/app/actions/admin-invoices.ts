@@ -396,6 +396,15 @@ export async function getClientInvoiceDataAction(
       return { status: "not_found" };
     }
 
+    /*
+     * INTENTIONALLY elevated, and the only such read in this file.
+     *
+     * This is the unauthenticated client-facing invoice lookup (`/invoice/...`).
+     * The client has no account, so there is no JWT to scope RLS to; the
+     * security boundary is the unguessable canonical number, resolved through
+     * the audited RPC, returning a curated DTO rather than invoices. It must not
+     * be swapped to a user-scoped client — that would simply break the page.
+     */
     const supabase = createServiceSupabase();
     let invoiceNumber = raw;
 

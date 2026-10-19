@@ -7,7 +7,6 @@ import { site } from "@/config/site";
 import type {
   BookingConfirmationDetails,
   BookingSlot,
-  PublicBookingType,
 } from "@/types/calendar";
 
 const bookingFormSchema = z.object({

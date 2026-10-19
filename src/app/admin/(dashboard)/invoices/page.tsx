@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { requireOps } from "@/lib/auth/roles";
+import { requirePageOps } from "@/lib/auth/roles";
 import {
   getGlobalInvoicesList,
   getRentalFormPrerequisites,
@@ -13,7 +13,7 @@ export const metadata: Metadata = {
 };
 
 export default async function AdminInvoicesPage() {
-  await requireOps();
+  await requirePageOps();
 
   const [overviewRes, prereqRes] = await Promise.all([
     getGlobalInvoicesList(),

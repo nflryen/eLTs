@@ -31,7 +31,12 @@ function money(metric: Metric<number>): Metric<string> {
     : metric;
 }
 
-export function AdminDashboard({ data }: { data: DashboardTelemetry }) {
+/**
+ * `rank` is resolved on the server and passed down so the shortcut bar can drop
+ * actions this role cannot complete. It is a usability filter only — every
+ * target re-checks on the server (middleware + `requireRole`).
+ */
+export function AdminDashboard({ data, rank }: { data: DashboardTelemetry; rank: number }) {
   const gearOut = numericOrNull(data.gearOut);
   const gearIn = numericOrNull(data.gearInCustody);
   const gearTotal = gearOut !== null && gearIn !== null ? gearOut + gearIn : null;
@@ -51,7 +56,7 @@ export function AdminDashboard({ data }: { data: DashboardTelemetry }) {
             Selamat datang, {data.displayName}
           </h1>
         </div>
-        <QuickActions />
+        <QuickActions rank={rank} />
       </header>
 
       {/* ── Financial + operating tiles ─────────────────────────────────── */}

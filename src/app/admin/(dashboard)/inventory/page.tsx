@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { requireOps } from "@/lib/auth/roles";
+import { requirePageStaff } from "@/lib/auth/roles";
 import { getInventoryAssets } from "@/app/actions/admin-inventory";
 import { InventoryDirectoryClient } from "@/components/admin/inventory/inventory-directory-client";
 
@@ -10,7 +10,9 @@ export const metadata: Metadata = {
 };
 
 export default async function InventoryPage() {
-  await requireOps();
+  /* Gear is a WORKER surface (nav, "Resource"). Valuation is withheld by the
+     view this page reads, not by the guard. */
+  await requirePageStaff();
 
   const assetsResult = await getInventoryAssets();
   const initialAssets = assetsResult.assets || [];

@@ -12,8 +12,8 @@ import {
   XCircle,
   CheckCircle2,
 } from "lucide-react";
-import { createServiceSupabase } from "@/lib/supabase/service";
-import type { CrewHubPayload, AssignmentAcceptanceStatus } from "@/types/operations";
+import { createServerSupabase } from "@/lib/supabase/server";
+import type { CrewHubPayload } from "@/types/operations";
 import { CallSheetView } from "@/components/crew/call-sheet-view";
 import { EquipmentChecklist } from "@/components/crew/equipment-checklist";
 import { FeeSlipCard } from "@/components/crew/fee-slip-card";
@@ -23,8 +23,8 @@ interface Props {
   params: Promise<{ magicToken: string }>;
 }
 
-export async function generateMetadata({ params }: Props): Promise<Metadata> {
-  const { magicToken } = await params;
+/* Static metadata: the route parameter is not used in the <head>. */
+export async function generateMetadata(): Promise<Metadata> {
   return {
  title: "Field Crew Dispatch & Call Sheet | ELTS. Operations",
  description: "Portal penugasan kru lapangan produksi studio ELTS.",
@@ -37,164 +37,47 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 
 export default async function CrewHubPage({ params }: Props) {
   const { magicToken } = await params;
-  const supabase = createServiceSupabase();
 
+  /*
+   * FAIL CLOSED — one reader, one DTO.
+   *
+   * This page previously carried a raw `from("project_crew_assignments")`
+   * fallback that rebuilt the payload by hand, plus a second fallback that
+   * returned a hardcoded fixture (complete with a bank name and account number)
+   * for any token starting with `crw-token-`. Both are gone:
+   *
+   *   • the raw query bypassed `get_crew_hub_payload()`, which is the audited
+   *     zero-leakage contract — a column added to the table would have appeared
+   *     here with no review (finding B5);
+   *   • the fixture rendered plausible financial data to anonymous visitors in
+   *     production, because the `crw-token-` prefix is public in older links.
+   *
+   * If the RPC fails, the crew member sees the invalid-token screen. That is the
+   * correct degradation: a portal that invents a call sheet is worse than one
+   * that admits it cannot read it.
+   *
+   * The token is the only credential here, so the anon-key client is scoped to
+   * the SECURITY DEFINER function rather than the service role.
+   */
+  const supabase = await createServerSupabase();
   let payload: CrewHubPayload | null = null;
 
-  // 1. Try zero-leakage RPC
   try {
-    const { data: rpcData, error: rpcError } = await supabase.rpc(
- "get_crew_hub_payload",
-      { p_magic_token: magicToken }
+    /*
+     * The generated `Database` type declares this RPC's Args as an empty
+     * object, so the typed client reports zero parameters. The function really
+     * takes `p_magic_token`; casting the argument bag keeps the call honest
+     * without regenerating the whole type file for one function.
+     */
+    const { data, error } = await supabase.rpc(
+      "get_crew_hub_payload",
+      { p_magic_token: magicToken } as never,
     );
-
-    if (!rpcError && rpcData && !rpcData.error) {
-      payload = rpcData as CrewHubPayload;
+    if (!error && data && !(data as { error?: string }).error) {
+      payload = data as CrewHubPayload;
     }
   } catch {
-    // Continue to fallback
-  }
-
-  // 2. Resilient fallback query if RPC is not cached in DB schema
-  if (!payload) {
-    const { data: assignment } = await supabase
- .from("project_crew_assignments")
- .select(`
-        id,
-        role_title,
-        call_time,
-        roll_time,
-        venue_name,
-        venue_address,
-        venue_maps_url,
-        dress_code,
-        technical_notes,
-        allocated_equipment,
-        raw_drop_url,
-        fee_agreed,
-        payment_status,
-        paid_at,
-        payment_receipt_url,
-        check_in_at,
-        acceptance_status,
-        accepted_at,
-        declined_at,
-        declined_reason,
-        crew_member:crew_members (
-          full_name,
-          crew_code,
-          bank_name,
-          bank_account_number,
-          bank_account_holder
-        ),
-        project:projects (
-          name,
-          service_pillar,
-          shoot_date
-        )
- `)
- .eq("magic_token", magicToken)
-      .single();
-
-    if (assignment && assignment.crew_member && assignment.project) {
-      const rawMember = Array.isArray(assignment.crew_member)
-        ? assignment.crew_member[0]
-        : assignment.crew_member;
-      const rawProject = Array.isArray(assignment.project)
-        ? assignment.project[0]
-        : assignment.project;
-
- const cm = (rawMember && typeof rawMember === "object" ? rawMember : {}) as Record<string, unknown>;
- const prj = (rawProject && typeof rawProject === "object" ? rawProject : {}) as Record<string, unknown>;
-
-      const rawStatus = String(assignment.payment_status);
- const paymentStatus = (rawStatus === "PAID" || rawStatus === "PARTIAL" || rawStatus === "UNPAID")
-        ? rawStatus
- : "UNPAID";
-
- const rawAcceptance = String(assignment.acceptance_status || "PENDING_OFFER") as AssignmentAcceptanceStatus;
- const validStatuses: AssignmentAcceptanceStatus[] = ["PENDING_OFFER", "ACCEPTED", "DECLINED", "EXPIRED"];
- const acceptanceStatus = validStatuses.includes(rawAcceptance) ? rawAcceptance : "PENDING_OFFER";
-
-      payload = {
-        assignment_id: assignment.id,
-        role_title: assignment.role_title,
-        acceptance_status: acceptanceStatus,
-        accepted_at: assignment.accepted_at,
-        declined_at: assignment.declined_at,
-        declined_reason: assignment.declined_reason,
-        call_time: assignment.call_time,
-        roll_time: assignment.roll_time,
-        venue_name: assignment.venue_name,
-        venue_address: assignment.venue_address,
-        venue_maps_url: assignment.venue_maps_url,
-        dress_code: assignment.dress_code,
-        technical_notes: assignment.technical_notes,
-        allocated_equipment: assignment.allocated_equipment || [],
-        raw_drop_url: assignment.raw_drop_url,
-        fee_agreed: Number(assignment.fee_agreed) || 0,
-        payment_status: paymentStatus,
-        paid_at: assignment.paid_at,
-        payment_receipt_url: assignment.payment_receipt_url,
-        check_in_at: assignment.check_in_at,
-        crew_member: {
- full_name: typeof cm.full_name === "string" ? cm.full_name : "Kru Lapangan",
- crew_code: typeof cm.crew_code === "string" ? cm.crew_code : "CRW",
- bank_name: typeof cm.bank_name === "string" ? cm.bank_name : undefined,
- bank_account_number: typeof cm.bank_account_number === "string" ? cm.bank_account_number : undefined,
- bank_account_holder: typeof cm.bank_account_holder === "string" ? cm.bank_account_holder : undefined,
-        },
-        project: {
- name: typeof prj.name === "string" ? prj.name : "Produksi Studio",
- service_pillar: typeof prj.service_pillar === "string" ? prj.service_pillar : "PRODUCTION",
- shoot_date: typeof prj.shoot_date === "string" ? prj.shoot_date : null,
-        },
-      };
-    }
-  }
-
-  // 3. Development fixture fallback for sample/dev tokens
- if (!payload && magicToken.startsWith("crw-token-")) {
- const fixtureAcceptanceStatus: AssignmentAcceptanceStatus = magicToken.includes("pending")
- ? "PENDING_OFFER"
- : magicToken.includes("declined")
- ? "DECLINED"
- : "ACCEPTED";
-
-    payload = {
- assignment_id: "e1000000-0000-0000-0000-000000000001",
- role_title: "Lead Switcher & Multi-Cam Director",
-      acceptance_status: fixtureAcceptanceStatus,
- accepted_at: fixtureAcceptanceStatus === "ACCEPTED" ? "2026-09-24T10:00:00+07:00" : null,
- declined_at: fixtureAcceptanceStatus === "DECLINED" ? "2026-09-24T11:00:00+07:00" : null,
- declined_reason: fixtureAcceptanceStatus === "DECLINED" ? "Bentrok jadwal produksi lain" : null,
- call_time: "2026-09-28T06:30:00+07:00",
- roll_time: "2026-09-28T07:30:00+07:00",
- venue_name: "Auditorium Graha Widyatama UNSOED",
- venue_address: "Jl. Profesor DR. HR Boenyamin No.708, Grendeng, Purwokerto Utara",
- venue_maps_url: "https://maps.google.com/?q=-7.402482,109.248381",
- dress_code: "Polo Hitam Studio / Kaos Kerah Gelap",
- technical_notes: "Pairing wireless Hollyland Cosmo C1 ke SDI 2 sebelum prosesi senat dimulai.",
- allocated_equipment: ["vMix Broadcast Rig 4K", "Sony FX3 Body", "Hollyland Cosmo C1", "Intercom Solidcom C1"],
- raw_drop_url: "https://drive.google.com",
-      fee_agreed: 450000,
- payment_status: "PAID",
- paid_at: "2026-09-28T14:00:00+07:00",
-      payment_receipt_url: null,
-      check_in_at: null,
-      crew_member: {
- full_name: "Fajar Sidik (CRW-01)",
- crew_code: "CRW-01",
- bank_name: "BCA",
- bank_account_number: "0000000000",
- bank_account_holder: "Fajar Sidik",
-      },
-      project: {
- name: "Graduation Session — Budi & Siti (UNSOED 2026)",
- service_pillar: "BROADCAST_LIVE_STREAMING",
- shoot_date: "2026-09-28",
-      },
-    };
+    // Fall through to the invalid-token screen.
   }
 
   // Error / Invalid Token View
@@ -382,7 +265,7 @@ export default async function CrewHubPage({ params }: Props) {
 
  <div className="filter blur-[5px] opacity-35 select-none pointer-events-none space-y-6 p-4 mt-[-130px]">
                 <CallSheetView
-                  assignmentId={payload.assignment_id}
+                  magicToken={magicToken}
                   shootDate={payload.project.shoot_date}
                   callTime={payload.call_time}
                   rollTime={payload.roll_time}
@@ -418,7 +301,7 @@ export default async function CrewHubPage({ params }: Props) {
           <>
             {/* 1. Call Sheet Card */}
             <CallSheetView
-              assignmentId={payload.assignment_id}
+              magicToken={magicToken}
               shootDate={payload.project.shoot_date}
               callTime={payload.call_time}
               rollTime={payload.roll_time}

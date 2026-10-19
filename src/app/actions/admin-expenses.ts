@@ -12,7 +12,7 @@ import type {
   AddProjectExpenseInput,
   ProjectExpensesResult,
 } from "@/types/operations";
-import type { MoneySplitRow, ProjectRow } from "@/types/database";
+import type { MoneySplitRow } from "@/types/database";
 
 const uuidSchema = z.string().uuid();
 
@@ -474,13 +474,16 @@ export async function syncExpensesToWaterfallSplit(
     }
 
     let totalDirectCashCosts = 0;
-    let nonCashDepreciation = 0;
 
     for (const exp of expenses ?? []) {
+      /*
+       * Only cash outflows enter the direct-cost total. Depreciation is an
+       * accrual, not money leaving the account, so it is excluded here — the
+       * `nonCashDepreciation` accumulator that used to sit in the other branch
+       * was never read by any consumer.
+       */
       const cost = Number(exp.total_cost ?? exp.unit_cost * exp.quantity);
-      if (exp.is_cash_outflow === false || exp.category === "EQUIPMENT_DEPRECIATION") {
-        nonCashDepreciation += cost;
-      } else {
+      if (exp.is_cash_outflow !== false && exp.category !== "EQUIPMENT_DEPRECIATION") {
         totalDirectCashCosts += cost;
       }
     }

@@ -2,11 +2,10 @@
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import { requireOps } from "@/lib/auth/roles";
+import { requireOps, requireStaff } from "@/lib/auth/roles";
 import type {
   AssetCategory,
   AssetSourceType,
-  ConditionStatus,
   InventoryAssetRow,
   AssetConflictResult,
   CreateInventoryAssetInput,
@@ -65,9 +64,16 @@ export async function getInventoryAssets(
   error?: string;
 }> {
   try {
-    const { supabase } = await requireOps();
+    /*
+     * STAFF (60), not OPS (80): Gear is a WORKER surface. The read goes through
+     * `v_inventory_assets_for_caller`, which NULLs the valuation columns below
+     * ADMIN, so a WORKER gets the catalogue without the studio's asset worth
+     * (migration 0009). Reading the table directly would hand them
+     * `replacement_value` and `daily_rental_rate`.
+     */
+    const { supabase } = await requireStaff();
 
-    let query = supabase.from("inventory_assets").select("*");
+    let query = supabase.from("v_inventory_assets_for_caller").select("*");
 
     if (category) {
       query = query.eq("category", category);

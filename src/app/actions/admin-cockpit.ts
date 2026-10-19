@@ -1,10 +1,8 @@
 "use server";
 
-import { createServiceSupabase } from "@/lib/supabase/service";
 import { requireOps } from "@/lib/auth/roles";
 import type {
   UpcomingAgendaItem,
-  FinancialHealthSnapshot,
   ActionRequiredItem,
   ExecutiveCockpitData,
 } from "@/types/cockpit";
@@ -77,13 +75,14 @@ function formatTimeLabel(dateIso: string): string {
  * 4. Quick counts (active projects, active clients, pending invoices)
  */
 export async function getExecutiveCockpitData(selectedSector?: string): Promise<ExecutiveCockpitData> {
-  try {
-    await requireOps();
-  } catch {
-    // If called outside authenticated session context, proceed with service client
-  }
-
-  const supabase = createServiceSupabase();
+  /*
+   * Fail CLOSED (audit finding B3a). The previous shape caught the
+   * `requireOps()` rejection and continued with the service-role client, which
+   * bypasses RLS — so the executive cockpit, including its financial health
+   * snapshot, was reachable without a session. `requireOps()` now throws and
+   * the caller's error boundary turns that into a 403.
+   */
+  const { supabase } = await requireOps();
 
   const now = new Date();
   // Today 00:00:00 WIB

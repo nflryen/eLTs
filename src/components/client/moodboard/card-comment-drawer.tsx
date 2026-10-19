@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useMemo, useRef } from "react";
 import { X, Send, MessageSquare, ShieldCheck, User } from "lucide-react";
 import type {
   MoodboardCard,
@@ -26,30 +26,50 @@ export function CardCommentDrawer({
   defaultAuthorRole = "CLIENT",
   defaultAuthorName = "",
 }: CardCommentDrawerProps) {
-  const [comments, setComments] = useState<MoodboardComment[]>([]);
+  /*
+   * The thread shown is "the card's comments, plus anything added in this
+   * session". Keeping the source of truth in props and appending locally means
+   * there is nothing to synchronise on open, so no `setState` runs inside an
+   * effect (which React 19 flags as a cascading render).
+   */
+  const [localComments, setLocalComments] = useState<MoodboardComment[]>([]);
+  const [syncedCardId, setSyncedCardId] = useState<string | null>(null);
+
+  /*
+   * Reset the local additions when the drawer switches cards — derived during
+   * render, the pattern React documents for "adjust state when a prop changes".
+   * A WORKER-visible comment on card A must not appear on card B.
+   */
+  const currentCardId = card?.id ?? null;
+  if (currentCardId !== syncedCardId) {
+    setSyncedCardId(currentCardId);
+    setLocalComments([]);
+  }
+
+  const comments = useMemo<MoodboardComment[]>(() => {
+    const serverComments = card?.comments ?? [];
+    if (localComments.length === 0) return serverComments;
+    // Local entries win on id: an optimistic item is replaced, not duplicated.
+    const localIds = new Set(localComments.map((c) => c.id));
+    return [...serverComments.filter((c) => !localIds.has(c.id)), ...localComments];
+  }, [card?.comments, localComments]);
+
   const [text, setText] = useState("");
-  const [authorName, setAuthorName] = useState(defaultAuthorName);
+  /*
+   * The author field starts from the prop and is then user-owned. Initialising
+   * `useState(defaultAuthorName)` already covers the first mount, so the old
+   * "seed it if empty" effect only ever fired on a later prop change — and wrote
+   * state during render's commit phase. Deriving the fallback at the point of
+   * use is equivalent and has no effect.
+   */
+  const [authorNameDraft, setAuthorNameDraft] = useState<string | null>(null);
+  const authorName = authorNameDraft ?? defaultAuthorName;
   const [authorRole, setAuthorRole] = useState<AuthorRole>(defaultAuthorRole);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   const threadEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-
-  // Sync internal comments when opened or card changes
-  useEffect(() => {
-    if (card) {
-      setComments(card.comments || []);
-      setErrorMsg(null);
-    }
-  }, [card]);
-
-  // Set default author name if supplied
-  useEffect(() => {
-    if (defaultAuthorName && !authorName) {
-      setAuthorName(defaultAuthorName);
-    }
-  }, [defaultAuthorName, authorName]);
 
   // Auto-scroll to bottom of thread when new comments arrive
   useEffect(() => {
@@ -93,7 +113,7 @@ export function CardCommentDrawer({
       created_at: new Date().toISOString(),
     };
 
-    setComments((prev) => [...prev, optimisticComment]);
+    setLocalComments((prev) => [...prev, optimisticComment]);
     setText("");
     setErrorMsg(null);
     setIsSubmitting(true);
@@ -112,7 +132,7 @@ export function CardCommentDrawer({
 
       // Replace optimistic comment with confirmed server comment
       const serverComment = res.comment;
-      setComments((prev) =>
+      setLocalComments((prev) =>
         prev.map((c) => (c.id === tempId ? serverComment : c))
       );
       if (onCommentAdded) {
@@ -123,7 +143,7 @@ export function CardCommentDrawer({
         err instanceof Error ? err.message : "Could not post comment.";
       setErrorMsg(message);
       // Rollback optimistic comment
-      setComments((prev) => prev.filter((c) => c.id !== tempId));
+      setLocalComments((prev) => prev.filter((c) => c.id !== tempId));
       setText(trimmed); // restore user's text
     } finally {
       setIsSubmitting(false);
@@ -280,7 +300,7 @@ export function CardCommentDrawer({
               <input
                 type="text"
                 value={authorName}
-                onChange={(e) => setAuthorName(e.target.value)}
+                onChange={(e) => setAuthorNameDraft(e.target.value)}
                 placeholder={
                   authorRole === "STUDIO"
                     ? "Your Name (Studio Director)"

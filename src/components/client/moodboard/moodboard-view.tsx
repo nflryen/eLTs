@@ -13,7 +13,6 @@ import {
   ArrowLeft,
   Maximize2,
   X,
-  PlusCircle,
   Sparkles,
   SlidersHorizontal,
   Search,
@@ -521,7 +520,7 @@ export function MoodboardView({
 
                       {card.payload.caption && (
                         <p className="text-xs text-zinc-300 leading-relaxed italic">
-                          "{card.payload.caption}"
+                          {`\u201C${card.payload.caption}\u201D`}
                         </p>
                       )}
 

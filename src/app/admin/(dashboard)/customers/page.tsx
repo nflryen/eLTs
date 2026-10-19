@@ -1,11 +1,11 @@
 import Link from "next/link";
-import { requireOps } from "@/lib/auth/roles";
+import { requirePageOps } from "@/lib/auth/roles";
 import { Plus, Users, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { CustomerRow } from "@/types/database";
 
 export default async function CustomersPage() {
-  const { supabase } = await requireOps();
+  const { supabase } = await requirePageOps();
 
   const { data: customersData } = await supabase
     .from("customers")

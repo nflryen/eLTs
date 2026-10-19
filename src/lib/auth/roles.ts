@@ -1,4 +1,11 @@
 import "server-only";
+
+/*
+ * `redirect` throws a control-flow signal that Next.js maps to a 307. It is
+ * imported here — not re-exported — because this module is `server-only`, so a
+ * Client Component cannot pull it in by accident.
+ */
+import { redirect } from "next/navigation";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { createServiceSupabase, type ServiceSupabaseClient } from "@/lib/supabase/service";
 import { ForbiddenError, UnauthorizedError } from "@/lib/auth/admin";
@@ -32,23 +39,18 @@ import type { User } from "@supabase/supabase-js";
  * server decides. Role checks in a `"use client"` file are a bug.
  */
 
-export type RoleKey =
-  | "SUPER_ADMIN"
-  | "FOUNDER"
-  | "ADMIN"
-  | "WORKER"
-  | "FREELANCER"
-  | "CLIENT";
+/*
+ * Re-exported, not redeclared. `role-meta` is the single source of rank truth
+ * (it is dependency-free so Client Components can use it); this module used to
+ * keep a second copy, which meant two tables to keep in step with
+ * `public.roles.rank`.
+ */
+import type { RoleKey } from "@/lib/auth/role-meta";
+import { ROLE_RANK } from "@/lib/auth/role-meta";
 
-/** Ranks mirror `public.roles.rank` in migration 0002. */
-export const ROLE_RANK: Record<RoleKey, number> = {
-  SUPER_ADMIN: 120,
-  FOUNDER: 100,
-  ADMIN: 80,
-  WORKER: 60,
-  FREELANCER: 30,
-  CLIENT: 10,
-};
+// Re-exported so the 30+ existing imports from this module keep working.
+export type { RoleKey };
+export { ROLE_RANK };
 
 export type RoleSession = {
   supabase: ServiceSupabaseClient;
@@ -237,3 +239,74 @@ export const requireOps = () => requireRole("ADMIN");
 
 /** Any staff member, including a WORKER. */
 export const requireStaff = () => requireRole("WORKER");
+
+// ── Page guards: redirect instead of throwing ────────────────────────────────
+/*
+ * WHY THIS EXISTS SEPARATELY FROM `requireRole`
+ * ---------------------------------------------
+ * `requireRole` throws so that Server Actions can catch the rejection and return
+ * `{ success: false, error }`. An action that called `redirect()` would break its
+ * own contract: the form would navigate instead of rendering an inline error.
+ *
+ * A PAGE has the opposite requirement. A rank refusal is not an exception, it is
+ * a routine navigation outcome. Throwing from a page produced an HTTP 500 that
+ * rendered the error boundary — which reads to an operator as "the app is
+ * broken". `redirect()` yields a real 307, so a bookmark, a browser, and any
+ * HTTP client all observe a clean refusal.
+ */
+
+/** Where a refused page sends the caller. `?denied=` drives the notice on /admin. */
+const DENIED_PATH = "/admin?denied=unauthorized";
+
+/**
+ * Page-level guard. Redirects instead of throwing.
+ *
+ * - No session              → `/admin/login`
+ * - Session below `minimum` → `/admin?denied=unauthorized`
+ *
+ * The denied target is a FIXED string: it cannot echo caller-controlled text,
+ * and it does not disclose which tier the surface actually requires.
+ */
+export async function requirePageRole(minimum: RoleKey): Promise<RoleSession> {
+  const session = await getRoleSession();
+  if (!session) {
+    redirect("/admin/login");
+  }
+  if (session.rank < ROLE_RANK[minimum]) {
+    redirect(DENIED_PATH);
+  }
+  return session;
+}
+
+/**
+ * Page guard for a permission grant rather than a rank.
+ *
+ * A failed permission LOOKUP (database unreachable) also redirects: an operator
+ * cannot act on "cannot verify permission", and failing closed into the denied
+ * screen is the correct outcome.
+ */
+export async function requirePagePermission(key: string): Promise<RoleSession> {
+  const session = await getRoleSession();
+  if (!session) {
+    redirect("/admin/login");
+  }
+
+  const supabase = await createServerSupabase();
+  const rpc = supabase.rpc as unknown as (
+    fn: "has_permission_for_caller",
+    args: { p_permission_key: string },
+  ) => PromiseLike<{ data: boolean | null; error: { code?: string } | null }>;
+  const { data, error } = await rpc("has_permission_for_caller", {
+    p_permission_key: key,
+  });
+  if (error || data !== true) {
+    redirect(DENIED_PATH);
+  }
+  return session;
+}
+
+/** Named page guards. Keep in step with the action guards above. */
+export const requirePageSuperAdmin = () => requirePageRole("SUPER_ADMIN");
+export const requirePageFounder = () => requirePageRole("FOUNDER");
+export const requirePageOps = () => requirePageRole("ADMIN");
+export const requirePageStaff = () => requirePageRole("WORKER");
