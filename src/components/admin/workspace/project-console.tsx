@@ -9,6 +9,7 @@ import {
   ModuleInvoice, ModuleRab, ModuleMedia, ModuleProofing,
 } from "./modules";
 import { ModuleGearDual } from "./gear-dual-export";
+import { ProjectActionBar } from "./project-action-bar";
 import {
   WORKSPACE_MODULES, WORKSPACE_MODULE_LABEL, type WorkspaceModule,
 } from "@/lib/workspace-contract";
@@ -90,10 +91,16 @@ export function ProjectConsole({ data }: { data: WorkspacePayload }) {
           ))}
         </div>
 
-        <header className="mb-4 hidden items-center justify-between lg:flex">
+        {/*
+         * The action bar stays visible at every breakpoint. Contacting the
+         * client and handing over the invoice are the two things an operator
+         * does most often here, and both were previously buried in modules.
+         */}
+        <header className="mb-4 flex flex-wrap items-center justify-between gap-3">
           <h2 className="text-xl font-semibold tracking-tight text-[#09090b]">
             {MODULE_LABEL[active]}
           </h2>
+          <ProjectActionBar projectId={data.project.id} />
         </header>
 
         {active === "callsheet" ? <ModuleCallSheet data={data} /> : null}

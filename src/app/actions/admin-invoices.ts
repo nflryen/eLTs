@@ -105,8 +105,13 @@ export async function createInvoice(
       return { success: false, error: insertErr?.message || "Failed to create invoice." };
     }
 
-    // Update pdf_url with the generated route
-    const pdfUrl = `/api/invoices/${invoice.id}/pdf`;
+    /*
+     * Point the stored link at the authenticated print route. The public
+     * `/api/invoices/[id]/pdf` endpoint now requires a signed token, so a bare
+     * id there would yield a dead link; this employee-only route renders the
+     * same document behind `withAdmin`.
+     */
+    const pdfUrl = `/api/admin/invoices/${invoice.id}/print`;
     await supabase
       .from("invoices")
       .update({ pdf_url: pdfUrl })
@@ -215,7 +220,7 @@ export async function markInvoicePaid(
     revalidatePath(`/admin/projects/${typedInvoice.project_id}`);
     revalidatePath("/admin/projects");
     revalidatePath("/admin/invoices");
-    revalidatePath(`/api/invoices/${invoiceId}/pdf`);
+    revalidatePath(`/api/admin/invoices/${invoiceId}/print`);
 
     return { success: true, invoice: updatedInvoice as InvoiceRow };
   } catch (error: unknown) {
