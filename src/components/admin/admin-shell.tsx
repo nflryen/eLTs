@@ -2,9 +2,11 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import { Menu, X } from "lucide-react";
 import type { ReactNode } from "react";
+import { ROLE_RANK, isPreviewableRole } from "@/lib/auth/role-meta";
+import { PreviewBanner } from "./role-switcher";
 
 /**
  * Admin navigation shell.
@@ -149,12 +151,32 @@ export function AdminShell({
   children: ReactNode;
 }) {
   const pathname = usePathname();
+  const searchParams = useSearchParams();
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [lastPath, setLastPath] = useState(pathname);
 
+  /*
+   * VIEW-AS PREVIEW
+   * ---------------
+   * A SUPER_ADMIN can inspect the shell as a lower role via ?view_as=.
+   *
+   * DOWNGRADE-ONLY: the preview rank is `min(real, requested)`, so the widget
+   * can only ever show LESS than the caller already has — selecting
+   * SUPER_ADMIN while previewing grants nothing, and a non-SUPER_ADMIN cannot
+   * trigger a preview at all.
+   *
+   * This changes navigation visibility and nothing else. Every route and
+   * Server Action still authorises against the real role from the session.
+   */
+  const requestedPreview = searchParams.get("view_as");
+  const previewRank =
+    rank >= ROLE_RANK.SUPER_ADMIN && isPreviewableRole(requestedPreview)
+      ? Math.min(rank, ROLE_RANK[requestedPreview])
+      : rank;
+
   // Desktop sidebar and mobile drawer share one filtered source of truth, so
   // the two navigations can never disagree about what is visible.
-  const allowed = visibleGroups(groups, rank);
+  const allowed = visibleGroups(groups, previewRank);
 
   /*
    * Route change closes the drawer. This is derived during render rather than
@@ -256,6 +278,9 @@ export function AdminShell({
           <div className="min-w-0 flex-1 truncate">{brand}</div>
           {headerSlot}
         </header>
+
+        {/* Unmissable while previewing: a simulation must never look real. */}
+        <PreviewBanner rank={previewRank} />
 
         <main className="min-w-0 flex-1 p-4 sm:p-6 md:p-8">{children}</main>
       </div>

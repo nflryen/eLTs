@@ -8,6 +8,7 @@ import { adminLogout } from "@/app/actions/admin-auth";
 import { requireStaff } from "@/lib/auth/roles";
 import { Button } from "@/components/ui/button";
 import { AdminShell, type NavGroup } from "@/components/admin/admin-shell";
+import { RoleSwitcher } from "@/components/admin/role-switcher";
 
 export const metadata: Metadata = {
   title: "Studio OS — Elts.",
@@ -78,6 +79,10 @@ export default async function AdminLayout({ children }: { children: React.ReactN
           {role ? (ROLE_LABEL[role] ?? role) : "Tanpa peran"}
         </p>
       </div>
+      {/* View-as preview. Rendered only for a real SUPER_ADMIN; the component
+          itself also refuses to render below rank 120. */}
+      <RoleSwitcher actualRank={rank} />
+
       <form action={adminLogout}>
         <Button
           variant="outline"
