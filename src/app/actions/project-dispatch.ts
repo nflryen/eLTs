@@ -35,6 +35,8 @@ export type ProjectActionContext = {
   suggested: ReminderKind[];
   available: Array<{ kind: ReminderKind; label: string }>;
   invoices: Array<{ id: string; invoiceNumber: string; pdfUrl: string | null }>;
+  /** Outstanding balance of the latest invoice; null when none exists. */
+  amountDue: number | null;
 };
 
 const REMINDER_LABELS: Record<ReminderKind, string> = {
@@ -70,13 +72,32 @@ async function loadReminderContext(projectId: string) {
   const { supabase } = await requireOps();
   const service = createServiceSupabase();
 
+  /*
+   * `public.projects` has NO venue or call-time columns — those live on the crew
+   * assignment (and sector_specs). Selecting them made PostgREST reject the whole
+   * query, `loadReminderContext` returned null, and every caller silently
+   * degraded: the project action bar collapsed to a single dead anchor with no
+   * error surfaced to the operator.
+   */
   const { data: project, error } = await supabase
     .from("projects")
-    .select("id, name, shoot_date, gallery_url, gallery_code, selection_deadline, venue_name, venue_address, venue_maps_url, call_time, customer_id, status")
+    .select("id, name, shoot_date, gallery_code, selection_deadline, customer_id, status, sector_specs")
     .eq("id", projectId)
     .maybeSingle();
 
   if (error || !project) return null;
+
+  // Venue + call time come from the first crew assignment; sector_specs is the
+  // fallback the workspace itself uses.
+  const { data: assignment } = await supabase
+    .from("project_crew_assignments")
+    .select("call_time, venue_name, venue_address, venue_maps_url")
+    .eq("project_id", projectId)
+    .order("call_time", { ascending: true, nullsFirst: false })
+    .limit(1)
+    .maybeSingle();
+
+  const specs = (project.sector_specs as Record<string, unknown> | null) ?? {};
 
   const { data: customer } = await supabase
     .from("customers")
@@ -109,18 +130,17 @@ async function loadReminderContext(projectId: string) {
     if (Number.isFinite(balance) && balance >= 0) amountDue = balance;
   }
 
-  const galleryUrl = project.gallery_url
-    ?? (project.gallery_code ? `${site.url}/g/${project.gallery_code}` : null);
+  const galleryUrl = project.gallery_code ? `${site.url}/g/${project.gallery_code}` : null;
 
   const reminderProject: ReminderProject = {
     name: project.name,
     client_name: customer?.name ?? null,
     client_phone: customer?.phone ?? null,
     shoot_date: project.shoot_date ?? null,
-    call_time: project.call_time ?? null,
-    venue_name: project.venue_name ?? null,
-    venue_address: project.venue_address ?? null,
-    venue_maps_url: project.venue_maps_url ?? null,
+    call_time: (assignment?.call_time as string | null) ?? null,
+    venue_name: (assignment?.venue_name as string | null) ?? (specs.venueName as string | null) ?? null,
+    venue_address: (assignment?.venue_address as string | null) ?? null,
+    venue_maps_url: (assignment?.venue_maps_url as string | null) ?? null,
     gallery_url: galleryUrl,
     selection_deadline: project.selection_deadline ?? null,
     crew_contacts: null,
@@ -170,6 +190,9 @@ export async function getProjectActionContext(projectId: string): Promise<Projec
   return {
     projectId,
     projectName: ctx.project.name,
+    // Used to route "Kirim Tagihan" to the right reminder: a fully-paid invoice
+    // must never produce a "please pay Rp0" message.
+    amountDue: ctx.invoice?.amount_due ?? null,
     clientName: ctx.customer?.name ?? null,
     clientPhoneDisplay: ctx.customer?.phone ? formatPhoneForDisplay(ctx.customer.phone) : null,
     suggested: suggestedFor(ctx.reminderProject),
@@ -188,6 +211,7 @@ function suggestedFor(project: ReminderProject): ReminderKind[] {
     if (days === 1) suggested.push("T_MINUS_1_CALLSHEET");
     if (days === 0) suggested.push("SHOOT_DAY_ONSITE");
   }
+  // `projects.gallery_code` is the identifier; the URL is derived from it.
   if (project.gallery_url) {
     suggested.push("GALLERY_READY");
     if (project.selection_deadline) suggested.push("SELECTION_REMINDER");

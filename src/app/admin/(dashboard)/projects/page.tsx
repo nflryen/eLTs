@@ -1,9 +1,10 @@
 import Link from "next/link";
 import { requireOps } from "@/lib/auth/roles";
-import { Plus, FolderKanban, ChevronRight } from "lucide-react";
+import { Plus, FolderKanban } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { ProjectStatus, ProjectRow, CustomerRow } from "@/types/database";
 import { ProjectsFilter } from "@/components/admin/projects-filter";
+import { SortHeader } from "@/components/admin/projects-sort-header";
 import { Suspense } from "react";
 
 /*
@@ -18,14 +19,33 @@ const statusStyles: Record<ProjectStatus, { label: string; class: string }> = {
   archived: { label: "Archived", class: "bg-[#fafafa] text-[#a1a1aa] border border-[#ececee]" },
 };
 
-export default async function ProjectsPage(props: { searchParams: Promise<{ q?: string; status?: string }> }) {
+/** Columns the table can sort by, mapped to a real database column. */
+const SORTABLE = {
+  name: "name",
+  shoot_date: "shoot_date",
+  status: "status",
+  created_at: "created_at",
+} as const;
+type SortKey = keyof typeof SORTABLE;
+
+function parseSort(raw: string | undefined): { key: SortKey; dir: "asc" | "desc" } {
+  const [key, dir] = (raw ?? "").split(":");
+  const isKey = (k: string): k is SortKey => Object.prototype.hasOwnProperty.call(SORTABLE, k);
+  if (!key || !isKey(key)) return { key: "created_at", dir: "desc" };
+  return { key, dir: dir === "asc" ? "asc" : "desc" };
+}
+
+export default async function ProjectsPage(props: {
+  searchParams: Promise<{ q?: string; status?: string; sort?: string }>;
+}) {
   const searchParams = await props.searchParams;
   const { supabase } = await requireOps();
+  const sort = parseSort(searchParams.sort);
 
   let query = supabase
     .from("projects")
     .select("id, name, slug, photography_type, status, shoot_date, created_at, customer_id, is_dp_paid, is_fully_paid, selection_locked_at, contract_value, dp_amount")
-    .order("created_at", { ascending: false });
+    .order(SORTABLE[sort.key], { ascending: sort.dir === "asc", nullsFirst: false });
 
   if (searchParams.status && searchParams.status !== "all") {
     query = query.eq("status", searchParams.status);
@@ -42,7 +62,7 @@ export default async function ProjectsPage(props: { searchParams: Promise<{ q?: 
     let fallbackQuery = supabase
       .from("projects")
       .select("id, name, slug, photography_type, status, shoot_date, created_at, customer_id")
-      .order("created_at", { ascending: false });
+      .order(SORTABLE[sort.key], { ascending: sort.dir === "asc", nullsFirst: false });
 
     if (searchParams.status && searchParams.status !== "all") {
       fallbackQuery = fallbackQuery.eq("status", searchParams.status);
@@ -118,104 +138,127 @@ export default async function ProjectsPage(props: { searchParams: Promise<{ q?: 
         ))}
       </div>
 
-      {/* Projects Table */}
-      <div className="bg-white border border-border rounded-lg overflow-hidden shadow-sm">
+      {/*
+       * TABLE REDESIGN
+       * ---------------
+       * The status cell previously stacked FOUR badges (production state,
+       * curation, DP, balance) into one 183px column, inflating every row to
+       * 139px on desktop and 171px on mobile. Those are four independent facts,
+       * so they are now four scannable columns with one badge each, and the row
+       * collapses to a single line of height.
+       */}
+      <div className="overflow-hidden rounded-[18px] border border-[#ececee] bg-white">
         {projects && projects.length > 0 ? (
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-[#ececee] bg-[#fafafa]">
-                <th className="text-left font-medium text-muted-foreground px-6 py-3">Project</th>
-                <th className="text-left font-medium text-muted-foreground px-6 py-3 hidden sm:table-cell">Customer</th>
-                <th className="text-left font-medium text-muted-foreground px-6 py-3 hidden md:table-cell">Type</th>
-                <th className="text-left font-medium text-muted-foreground px-6 py-3 hidden lg:table-cell">Shoot Date</th>
-                <th className="text-left font-medium text-muted-foreground px-6 py-3">Status</th>
-                <th className="px-6 py-3"></th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-[#ececee]">
-              {projects.map((p) => {
-                const status = statusStyles[p.status as ProjectStatus] ?? statusStyles.draft;
-                return (
-                  <tr key={p.id} className="hover:bg-[#fafafa] transition-colors [&>td]:h-11">
-                    <td className="px-6 py-4">
-                      <Link href={`/admin/projects/${p.id}`} className="inline-flex min-h-11 flex-col justify-center group">
-                        <p className="font-medium group-hover:underline underline-offset-4">{p.name}</p>
-                        <p className="text-xs text-muted-foreground mt-0.5">{p.slug}</p>
-                      </Link>
-                    </td>
-                    <td className="px-6 py-4 text-muted-foreground hidden sm:table-cell">
-                      {customerMap[p.customer_id] ?? "—"}
-                    </td>
-                    <td className="px-6 py-4 hidden md:table-cell">
-                      <span className="capitalize text-muted-foreground">{p.photography_type}</span>
-                    </td>
-                    <td className="px-6 py-4 text-muted-foreground hidden lg:table-cell">
-                      {p.shoot_date
-                        ? new Date(p.shoot_date).toLocaleDateString("id-ID", {
+          <div className="overflow-x-auto">
+            <table className="w-full border-collapse text-sm">
+              <thead>
+                <tr className="border-b border-[#ececee] bg-[#fafafa]">
+                  <SortHeader column="name" label="Proyek" />
+                  <th className="hidden px-6 py-2.5 text-left text-[11px] font-semibold uppercase tracking-[0.1em] text-[#71717a] sm:table-cell">
+                    Klien
+                  </th>
+                  <th className="hidden px-6 py-2.5 text-left text-[11px] font-semibold uppercase tracking-[0.1em] text-[#71717a] lg:table-cell">
+                    Tipe
+                  </th>
+                  <SortHeader column="shoot_date" label="Tgl Shoot" className="hidden lg:table-cell" />
+                  <SortHeader column="status" label="Produksi" />
+                  <th className="px-4 py-2.5 text-left text-[11px] font-semibold uppercase tracking-[0.1em] text-[#71717a]">
+                    Finansial
+                  </th>
+                  <th className="px-6 py-2.5 text-right text-[11px] font-semibold uppercase tracking-[0.1em] text-[#71717a]">
+                    Aksi
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[#f4f4f5]">
+                {projects.map((p) => {
+                  const status = statusStyles[p.status as ProjectStatus] ?? statusStyles.draft;
+                  const finance = p.is_fully_paid
+                    ? { label: "Lunas", className: "bg-[#09090b] text-white border-[#09090b]" }
+                    : p.is_dp_paid
+                      ? { label: "DP Lunas", className: "bg-white text-[#18181b] border-[#d4d4d8]" }
+                      : { label: "Belum DP", className: "bg-white text-[#c2410c] border-[#ff5a00]/40" };
+                  return (
+                    <tr key={p.id} className="group transition-colors hover:bg-[#fafafa]">
+                      <td className="max-w-[260px] px-6 py-3">
+                        <Link
+                          href={`/admin/projects/${p.id}`}
+                          className="block truncate font-medium text-[#09090b] underline-offset-4 group-hover:underline"
+                          title={p.name}
+                        >
+                          {p.name}
+                        </Link>
+                        <p className="mt-0.5 truncate font-mono text-[10px] text-[#a1a1aa]">{p.slug}</p>
+                      </td>
+                      <td className="hidden max-w-[180px] truncate px-6 py-3 text-[#52525b] sm:table-cell">
+                        {customerMap[p.customer_id] ?? "—"}
+                      </td>
+                      <td className="hidden px-6 py-3 capitalize text-[#71717a] lg:table-cell">
+                        {p.photography_type}
+                      </td>
+                      <td className="hidden whitespace-nowrap px-6 py-3 text-[#52525b] lg:table-cell">
+                        {p.shoot_date ? (
+                          new Date(p.shoot_date).toLocaleDateString("id-ID", {
                             day: "numeric",
                             month: "short",
                             year: "numeric",
                           })
-                        : <span className="text-[#a1a1aa]">—</span>}
-                    </td>
-                    <td className="px-6 py-4">
-                      <div className="flex flex-col gap-1.5 items-start">
-                        <div className="flex items-center gap-1.5 flex-wrap">
-                          <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${status.class}`}>
-                            {status.label}
-                          </span>
-                          {p.selection_locked_at ? (
-                            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-[#09090b] text-white border border-[#09090b]">
-                              Pilihan Terkunci
-                            </span>
-                          ) : (
-                            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-[#fafafa] text-[#52525b] border border-[#ececee]">
-                              Dalam Kurasi
-                            </span>
-                          )}
+                        ) : (
+                          <span className="text-[#a1a1aa]">—</span>
+                        )}
+                      </td>
+                      <td className="whitespace-nowrap px-6 py-3">
+                        <span
+                          className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-[11px] font-semibold ${status.class}`}
+                        >
+                          {status.label}
+                        </span>
+                      </td>
+                      <td className="whitespace-nowrap px-4 py-3">
+                        <span
+                          className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-[11px] font-semibold ${finance.className}`}
+                        >
+                          {finance.label}
+                        </span>
+                      </td>
+                      <td className="px-6 py-3">
+                        {/*
+                         * Labelled cluster replaces the unlabelled chevron. It
+                         * stays visible on touch (no hover dependency) and
+                         * reveals on hover for mouse users.
+                         */}
+                        <div className="flex items-center justify-end gap-1 lg:opacity-0 lg:transition-opacity lg:group-hover:opacity-100 lg:group-focus-within:opacity-100">
+                          <Link
+                            href={`/admin/projects/${p.id}`}
+                            className="inline-flex min-h-9 items-center rounded-[8px] border border-[#ececee] px-2.5 text-[11px] font-semibold text-[#18181b] hover:bg-white"
+                          >
+                            Buka
+                          </Link>
+                          <Link
+                            href={`/admin/projects/${p.id}?module=invoice`}
+                            aria-label={`Kirim tagihan ${p.name} via WhatsApp`}
+                            className="inline-flex min-h-9 items-center rounded-[8px] bg-[#09090b] px-2.5 text-[11px] font-semibold text-white hover:bg-[#27272a]"
+                          >
+                            Tagih
+                          </Link>
                         </div>
-                        <div className="flex items-center gap-1.5 flex-wrap">
-                          {p.is_dp_paid ? (
-                            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-[#09090b] text-white border border-[#09090b]">
-                              DP Lunas
-                            </span>
-                          ) : (
-                            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium border border-[#ff5a00]/30 text-[#ff5a00]">
-                              Belum DP
-                            </span>
-                          )}
-                          {p.is_fully_paid ? (
-                            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-[#09090b] text-white border border-[#09090b]">
-                              Lunas (100%)
-                            </span>
-                          ) : (
-                            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-[#ff5a00] text-white border border-[#ff5a00]">
-                              Sisa Tagihan
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 text-right">
-                      <Link href={`/admin/projects/${p.id}`} className="inline-flex min-h-11 min-w-11 items-center justify-center -mr-2 text-[#52525b] hover:text-[#09090b] rounded-md hover:bg-[#fafafa] transition-colors">
-                        <ChevronRight size={16} />
-                      </Link>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
         ) : (
           <div className="px-6 py-16 text-center">
-            <FolderKanban size={32} className="text-[#a1a1aa] mx-auto mb-3" />
-            <p className="font-medium mb-1">No projects yet</p>
-            <p className="text-sm text-muted-foreground mb-6">
-              Create your first project to share a gallery with a client.
+            <FolderKanban size={32} className="mx-auto mb-3 text-[#a1a1aa]" aria-hidden="true" />
+            <p className="mb-1 font-medium">Belum ada proyek</p>
+            <p className="mb-6 text-sm text-muted-foreground">
+              Buat proyek pertama untuk mulai membagikan galeri ke klien.
             </p>
             <Button asChild size="sm">
               <Link href="/admin/projects/new">
-                <Plus size={16} /> New Project
+                <Plus size={16} /> Proyek Baru
               </Link>
             </Button>
           </div>

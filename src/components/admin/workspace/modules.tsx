@@ -9,8 +9,10 @@ import { Card, CardInner, CardHeader, Badge } from "@/components/ui/glass";
 import { EmptyState } from "@/components/ui/empty-state";
 import type { WorkspacePayload, CrewAssignment } from "@/lib/workspace";
 import { jakartaLongDate, jakartaShortDate, jakartaTime } from "@/lib/datetime";
+import { Suspense } from "react";
 import { RabPanel } from "./rab-panel";
 import { InvoicePanel } from "./invoice-panel";
+import { CrewManager } from "./crew-manager";
 
 const idr = (n: number) => `Rp ${n.toLocaleString("id-ID")}`;
 
@@ -220,8 +222,29 @@ export function ModuleCrew({ data }: { data: WorkspacePayload }) {
           title="Stasiun Lapangan"
           description={`${crew.length} kru ditugaskan · ${crew.filter((c) => c.acceptance_status === "ACCEPTED").length} terkonfirmasi`}
         />
+        {/*
+         * The manager owns assignment. Cards below are read-only summaries of
+         * consent and payment state, which the manager does not duplicate.
+         */}
+        <div className="mt-4">
+          <CrewManager
+            projectId={data.project.id}
+            shootDate={data.project.shoot_date}
+            crew={crew.map((c) => ({
+              id: c.id,
+              crew_member_id: c.crew_member_id,
+              crew_name: c.crew_name,
+              role_title: c.role_title,
+              fee_agreed: c.fee_agreed,
+              acceptance_status: c.acceptance_status,
+              payment_status: c.payment_status,
+              call_time: c.call_time,
+            }))}
+          />
+        </div>
+
         {crew.length === 0 ? (
-          <div className="mt-4">
+          <div className="mt-4 hidden">
             <EmptyState
               icon={<Users size={20} />}
               title="Belum ada kru ditugaskan"
@@ -286,7 +309,34 @@ export function ModuleInvoice({ data }: { data: WorkspacePayload }) {
    RAB — studio-private. The zero-leakage boundary lives here.
    ══════════════════════════════════════════════════════════════════════════ */
 export function ModuleRab({ data }: { data: WorkspacePayload }) {
-  return <RabPanel data={data} />;
+  /*
+   * RabPanel calls `use(promise)` to read its money split. A component that
+   * suspends needs a Suspense boundary ABOVE it in the tree; the page-level
+   * boundary sits above an already-committed client component, so a later
+   * suspension there can never recover and the panel hangs on "Memuat
+   * workspace…" forever. This local boundary lets the panel stream in while
+   * the rest of the console stays interactive.
+   */
+  return (
+    <Suspense fallback={<RabSkeleton />}>
+      <RabPanel data={data} />
+    </Suspense>
+  );
+}
+
+function RabSkeleton() {
+  return (
+    <div className="rounded-[18px] border border-[#ececee] bg-[#09090b] p-5">
+      <div className="h-3 w-32 animate-pulse rounded-full bg-white/10" />
+      <div className="mt-4 h-8 w-48 animate-pulse rounded-full bg-white/10" />
+      <div className="mt-6 grid gap-3 sm:grid-cols-3">
+        <div className="h-16 animate-pulse rounded-[12px] bg-white/5" />
+        <div className="h-16 animate-pulse rounded-[12px] bg-white/5" />
+        <div className="h-16 animate-pulse rounded-[12px] bg-white/5" />
+      </div>
+      <p className="mt-6 text-xs text-[#71717a]">Memuat RAB internal…</p>
+    </div>
+  );
 }
 
 /* ══════════════════════════════════════════════════════════════════════════

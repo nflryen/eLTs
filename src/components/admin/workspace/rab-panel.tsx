@@ -1,6 +1,6 @@
 "use client";
 
-import { use, useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
   AlertTriangle, Calculator, CheckCircle2, Clock, Coins, Lock,
@@ -96,22 +96,41 @@ export function RabPanel({ data }: { data: WorkspacePayload }) {
    * unwraps a fresh request. Never mutate the stored object — the setter is the
    * only sanctioned write.
    */
-  const [splitRequest, setSplitRequest] = useState(() => ({
-    token: 0,
-    promise: getProjectSplit(projectId),
-  }));
-  if (splitRequest.token !== reloadToken) {
-    setSplitRequest({ token: reloadToken, promise: getProjectSplit(projectId) });
-  }
+  /*
+   * A Server Action returns a one-shot POST promise. Passing it to `use()` is
+   * invalid: `use()` expects a CACHEABLE, replayable promise, and on the render
+   * pass that follows suspension the already-consumed promise never settles
+   * again. The panel therefore hung on "Memuat RAB internal…" forever even
+   * though the action itself answered {"success":true,"split":null}.
+   *
+   * A plain effect owns the request instead, keyed by `reloadToken`.
+   */
+  const [splitRes, setSplitRes] = useState<Awaited<ReturnType<typeof getProjectSplit>> | null>(null);
+  const [loaded, setLoaded] = useState(false);
 
-  const splitRes = use(splitRequest.promise);
+  useEffect(() => {
+    let cancelled = false;
+    setLoaded(false);
+    getProjectSplit(projectId)
+      .then((res) => {
+        if (cancelled) return;
+        setSplitRes(res);
+        setLoaded(true);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setSplitRes({ success: false, split: null, error: "Gagal memuat data waterfall." });
+        setLoaded(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [projectId, reloadToken]);
 
-  const split: MoneySplitRow | null = splitRes.success ? splitRes.split : null;
-  // `use()` suspends above, so by the time we render here the fetch has settled.
-  const loaded = true;
-  const loadError = splitRes.success
-    ? null
-    : (splitRes.error ?? "Gagal memuat data waterfall.");
+  const split: MoneySplitRow | null = splitRes?.success ? splitRes.split : null;
+  const loadError = splitRes && !splitRes.success
+    ? (splitRes.error ?? "Gagal memuat data waterfall.")
+    : null;
 
   // ── Cost architecture ─────────────────────────────────────────────────────
   const costs = useMemo(() => {

@@ -10,6 +10,7 @@ import {
 } from "./modules";
 import { ModuleGearDual } from "./gear-dual-export";
 import { ProjectActionBar } from "./project-action-bar";
+import type { ProjectStatus } from "@/lib/projects/lifecycle";
 import {
   WORKSPACE_MODULES, WORKSPACE_MODULE_LABEL, type WorkspaceModule,
 } from "@/lib/workspace-contract";
@@ -100,7 +101,10 @@ export function ProjectConsole({ data }: { data: WorkspacePayload }) {
           <h2 className="text-xl font-semibold tracking-tight text-[#09090b]">
             {MODULE_LABEL[active]}
           </h2>
-          <ProjectActionBar projectId={data.project.id} />
+          <ProjectActionBar
+            projectId={data.project.id}
+            initialStatus={(data.project.status as ProjectStatus) ?? "draft"}
+          />
         </header>
 
         {active === "callsheet" ? <ModuleCallSheet data={data} /> : null}
