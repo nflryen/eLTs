@@ -41,6 +41,35 @@ if (!DATABASE_URL) {
   process.exit(1);
 }
 
+/* ── Initial credential policy ───────────────────────────────────────────────
+ * NO PASSWORD IS STORED IN THIS FILE.
+ *
+ * A plaintext default checked into version control is a permanent leak: git
+ * history keeps it even after deletion, and every clone, fork, and CI log has
+ * it. Two sources are supported, in priority order:
+ *
+ *   1. INITIAL_SEED_PASSWORD — set it in the shell for the provisioning run.
+ *      Every account receives this value. Intended for an operator who will
+ *      hand out credentials out-of-band and force a rotation.
+ *   2. Otherwise a cryptographically random password is generated PER ACCOUNT
+ *      and printed once to stdout. Nothing is persisted anywhere.
+ *
+ * Either way, these are TEMPORARY credentials. `docs/production-deployment-
+ * checklist.md` requires every member to rotate via /settings/security on
+ * first login, and the accounts must not be reachable until that has happened.
+ */
+const INITIAL_SEED_PASSWORD = process.env.INITIAL_SEED_PASSWORD;
+
+if (INITIAL_SEED_PASSWORD !== undefined && INITIAL_SEED_PASSWORD.length < 12) {
+  console.error("INITIAL_SEED_PASSWORD must be at least 12 characters.");
+  process.exit(1);
+}
+
+/** 24 bytes of entropy, base64url — no ambiguous shell characters. */
+function generatePassword() {
+  return randomBytes(24).toString("base64url");
+}
+
 /* ── The five real identities ────────────────────────────────────────────────
  * `roles[0]` is the BASE role: what the account resolves to on login before any
  * elevation. The brief specifies WORKER as the base for hybrid accounts.
@@ -48,7 +77,6 @@ if (!DATABASE_URL) {
 const TEAM = [
   {
     email: "gendeng@elts.id",
-    password: "Gendeng#[REDACTED_SEED_SECRET]",
     fullName: "Gendeng Gila Sugih",
     displayName: "Gendeng",
     roles: ["SUPER_ADMIN"],
@@ -56,7 +84,6 @@ const TEAM = [
   },
   {
     email: "el@elts.id",
-    password: "El#[REDACTED_SEED_SECRET]",
     fullName: "El",
     displayName: "El",
     roles: ["FOUNDER"],
@@ -64,7 +91,6 @@ const TEAM = [
   },
   {
     email: "wardah@elts.id",
-    password: "Wardah#[REDACTED_SEED_SECRET]",
     fullName: "Wardah",
     displayName: "Wardah",
     roles: ["ADMIN"],
@@ -72,7 +98,6 @@ const TEAM = [
   },
   {
     email: "cahyo@elts.id",
-    password: "Cahyo#[REDACTED_SEED_SECRET]",
     fullName: "Cahyo",
     displayName: "Cahyo",
     // Hybrid: base WORKER, can elevate to FOUNDER with a password challenge.
@@ -81,7 +106,6 @@ const TEAM = [
   },
   {
     email: "ray@elts.id",
-    password: "Ray#[REDACTED_SEED_SECRET]",
     fullName: "Ray",
     displayName: "Ray",
     // Hybrid: base WORKER, can drop to EDITOR or elevate to FOUNDER.
@@ -237,15 +261,20 @@ async function main() {
 
     /* ── Provision identities ───────────────────────────────────────────── */
     const userIds = {};
+    const generatedPasswords = [];
     for (const member of TEAM) {
       /*
        * Written directly to auth.users because this script has no service-role
-       * key. The identity row and the password hash are produced the way GoTrue
-       * stores them: bcrypt via crypt() is not available, so we insert the
-       * email identity and let the operator set the password through the
-       * Supabase dashboard OR the seed password below is applied via
-       * `auth.users.encrypted_password` using pgcrypto's bcrypt.
+       * key. The password is hashed with pgcrypto's bcrypt (`crypt(...,
+       * gen_salt('bf'))`), which is the same algorithm GoTrue uses, so the
+       * resulting row authenticates through the normal password grant.
+       *
+       * The plaintext exists only in this process's memory and, when generated,
+       * in the one-time console output below.
        */
+      const initialPassword = INITIAL_SEED_PASSWORD ?? generatePassword();
+      generatedPasswords.push({ email: member.email, password: initialPassword });
+
       const existing = await client.query(
         "select id from auth.users where lower(email) = lower($1)",
         [member.email],
@@ -260,7 +289,7 @@ async function main() {
                   email_confirmed_at = coalesce(email_confirmed_at, now()),
                   updated_at = now()
             where id = $1`,
-          [uid, member.password],
+          [uid, initialPassword],
         );
       } else {
         const ins = await client.query(
@@ -276,7 +305,7 @@ async function main() {
               jsonb_build_object('full_name', $3::text),
               false, false)
            returning id`,
-          [member.email, member.password, member.fullName],
+          [member.email, initialPassword, member.fullName],
         );
         uid = ins.rows[0].id;
       }
@@ -458,6 +487,31 @@ async function main() {
 
     await client.query("commit");
     console.log("\n✓ committed");
+
+    /*
+     * One-time credential disclosure.
+     *
+     * Printed AFTER commit so a rollback never leaves an operator holding
+     * credentials for accounts that do not exist. This is the ONLY place the
+     * plaintext appears; it is never written to a file, a log, or the repo.
+     */
+    if (INITIAL_SEED_PASSWORD === undefined) {
+      console.log("\n" + "=".repeat(64));
+      console.log("TEMPORARY CREDENTIALS — shown once, not stored anywhere");
+      console.log("=".repeat(64));
+      for (const { email, password } of generatedPasswords) {
+        console.log(`  ${email.padEnd(22)} ${password}`);
+      }
+      console.log("=".repeat(64));
+      console.log("Distribute out-of-band. Every member MUST rotate via");
+      console.log("/settings/security on first login.");
+      console.log("=".repeat(64) + "\n");
+    } else {
+      console.log(
+        "\nAll accounts were provisioned with INITIAL_SEED_PASSWORD. " +
+          "Distribute out-of-band; every member must rotate on first login.",
+      );
+    }
   } catch (err) {
     await client.query("rollback");
     console.error("\n✗ FAILED — rolled back:", err.message);
