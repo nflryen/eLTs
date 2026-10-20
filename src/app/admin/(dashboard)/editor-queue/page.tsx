@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { requirePageStaff } from "@/lib/auth/roles";
+import { CompensationKpiCards } from "@/components/admin/payroll/compensation-kpi-cards";
 import { Clock, ChevronRight, FolderKanban } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -50,6 +51,17 @@ export default async function EditorQueuePage() {
    * `editor_tasks_worker_self` policy scopes a WORKER to their own assigned row.
    */
   const { supabase } = await requirePageStaff();
+
+  /*
+   * Personal compensation KPI for the WORKER.
+   *
+   * Fetched through `my_earnings_summary()`, a zero-argument RPC scoped to
+   * `auth.uid()`. Deliberately NOT the payroll rollup: an editor must not be
+   * able to infer a colleague's rate from an aggregate. A failure here must not
+   * blank the queue, so it degrades to null and the card is simply omitted.
+   */
+  const { getMyEarnings } = await import("@/app/actions/payroll");
+  const mine = await getMyEarnings().catch(() => null);
 
   // 1. Fetch editor tasks
   const { data: editorTasksData } = await supabase
@@ -199,6 +211,22 @@ export default async function EditorQueuePage() {
 
   return (
     <div className="max-w-5xl">
+      {/*
+        Personal earnings sit ABOVE the queue, per spec. No project-wide or
+        colleague figures are loaded on this page at all.
+      */}
+      {mine ? (
+        <div className="mb-5">
+          <CompensationKpiCards
+            data={{
+              pendingPayout: mine.pendingPayout,
+              pendingCount: mine.pendingCount + mine.awaitingVerificationCount,
+              currentMonthPayout: mine.currentMonthPayout,
+            }}
+          />
+        </div>
+      ) : null}
+
       {/* Page Header */}
       <div className="flex items-center justify-between mb-8">
         <div>

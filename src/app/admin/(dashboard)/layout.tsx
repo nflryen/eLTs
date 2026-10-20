@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import {
   LayoutDashboard, FolderKanban, Calendar, Users, Package,
-  Coins, Building2, Settings, LogOut, Clock, Receipt,
+  Coins, Building2, Settings, LogOut, Clock, Receipt, Wallet,
 } from "lucide-react";
 import { adminLogout } from "@/app/actions/admin-auth";
 import { requireStaff } from "@/lib/auth/roles";
@@ -56,6 +56,8 @@ const NAV_GROUPS: NavGroup[] = [
       { href: "/admin/invoices", label: "Tagihan", icon: <Receipt size={18} />, minRank: RANKS.ADMIN },
       { href: "/admin/finance", label: "Treasury", icon: <Coins size={18} />, minRank: RANKS.FOUNDER },
       { href: "/admin/customers", label: "Klien", icon: <Building2 size={18} />, minRank: RANKS.ADMIN },
+      // Compensation hub: operational payroll for ADMIN, dividends for FOUNDER.
+      { href: "/admin/payroll", label: "Payroll", icon: <Wallet size={18} />, minRank: RANKS.ADMIN },
     ],
   },
 ];

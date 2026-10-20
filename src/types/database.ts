@@ -248,9 +248,116 @@ type Table<Row, Required extends keyof Row> = {
 };
 
 export type Database = {
+  /*
+   * Required by @supabase/postgrest-js >= 1.x.
+   *
+   * The typed client resolves its schema through
+   *   Omit<Database, "__InternalSupabase">[SchemaName]
+   * and only treats that as a GenericSchema when this marker is present. Without
+   * it every `.from(...).select(...)` infers `never`, which is why every caller
+   * in this codebase had been using the untyped service-role client instead.
+   * The client library is unaffected; only type inference changes.
+   */
+  __InternalSupabase: {
+    PostgrestVersion: "12";
+  };
   public: {
     Tables: {
       admins: Table<AdminRow, "user_id" | "display_name">;
+      /* ── Payroll pivot (migrations 0012–0015) ───────────────────────────── */
+      partner_accounts: Table<
+        {
+          id: string;
+          user_id: string;
+          display_name: string;
+          equity_bp: number;
+          is_active: boolean;
+          created_at: string;
+          updated_at: string;
+        },
+        "user_id" | "display_name" | "equity_bp"
+      >;
+      compensation_rates: Table<
+        {
+          id: string;
+          role_key: string;
+          task_kind: string;
+          label: string;
+          amount: number;
+          unit: string;
+          is_active: boolean;
+          created_at: string;
+          updated_at: string;
+        },
+        "role_key" | "task_kind" | "label" | "amount"
+      >;
+      project_profit_snapshots: Table<
+        {
+          id: string;
+          project_id: string;
+          gross_revenue: number;
+          direct_costs: number;
+          net_profit: number;
+          operational_reserve: number;
+          distributable_profit: number;
+          status: "DRAFT" | "FINALIZED" | "LOSS" | "SUPERSEDED";
+          computed_at: string;
+          computed_by: string | null;
+          superseded_by: string | null;
+        },
+        "project_id"
+      >;
+      compensation_line_items: Table<
+        {
+          id: string;
+          payee_user_id: string | null;
+          payee_crew_id: string | null;
+          kind: "CREW_FEE" | "EDITOR_RATE" | "SALARY" | "DIVIDEND" | "RESERVE";
+          project_id: string | null;
+          source_table: string;
+          source_id: string;
+          role_label: string | null;
+          gross_amount: number;
+          deduction_amount: number;
+          net_amount: number;
+          earned_on: string;
+          state: "PENDING_VERIFICATION" | "APPROVED" | "READY_FOR_DISBURSEMENT" | "PAID" | "VOID";
+          payroll_cycle_id: string | null;
+          payslip_id: string | null;
+          paid_at: string | null;
+          created_at: string;
+          updated_at: string;
+        },
+        "kind" | "source_table" | "source_id" | "gross_amount"
+      >;
+      payroll_cycles: Table<
+        {
+          id: string;
+          period_key: string;
+          status: "DRAFT" | "APPROVED" | "DISBURSED" | "CLOSED";
+          opened_at: string;
+          approved_at: string | null;
+          disbursed_at: string | null;
+          closed_at: string | null;
+          created_by: string | null;
+        },
+        "period_key"
+      >;
+      payslip_records: Table<
+        {
+          id: string;
+          slip_number: string;
+          payroll_cycle_id: string;
+          payee_user_id: string | null;
+          payee_crew_id: string | null;
+          total_gross: number;
+          total_deduction: number;
+          total_net: number;
+          verification_hash: string;
+          issued_at: string;
+        },
+        "slip_number" | "payroll_cycle_id" | "verification_hash"
+      >;
       customers: Table<CustomerRow, "name">;
       projects: Table<
         ProjectRow,
@@ -296,7 +403,45 @@ export type Database = {
       inventory_assets: Table<InventoryAssetRow, "asset_code" | "name" | "category">;
       project_invoices: Table<ProjectInvoiceRow, "project_id" | "invoice_number" | "gross_contract_value">;
     };
-    Views: Record<string, never>;
+    /*
+     * Must be a concrete Record<string, GenericView>, NOT Record<string, never>.
+     *
+     * @supabase/postgrest-js checks `public extends GenericSchema`, and
+     * GenericSchema requires Tables + Views + Functions. `Record<string, never>`
+     * does not satisfy `Record<string, GenericView>`, so the check failed and the
+     * whole schema fell back to `any` — every `.from().select()` inferred
+     * `never`. That is why callers had been routing reads through the untyped
+     * service client.
+     */
+    Views: {
+      v_invoice_financial_position: {
+        Row: {
+          invoice_id: string;
+          invoice_number: string;
+          project_id: string;
+          issue_date: string;
+          due_date: string;
+          contract_value: number;
+          minimum_dp_pct: number;
+          minimum_dp_required: number;
+          paid_amount: number;
+          unverified_amount: number;
+          balance_due: number;
+          overpayment_amount: number;
+          derived_status: string;
+          dp_floor_satisfied: boolean;
+        };
+        Insert: Record<string, unknown>;
+        Update: Record<string, unknown>;
+        Relationships: [];
+      };
+      v_inventory_assets_for_caller: {
+        Row: Record<string, unknown>;
+        Insert: Record<string, unknown>;
+        Update: Record<string, unknown>;
+        Relationships: [];
+      };
+    };
     Functions: {
       create_gallery_session: {
         Args: { p_project_id: string; p_verified_pin_hash: string; p_token_hash: string; p_upgraded_pin_hash?: string | null };
@@ -368,6 +513,18 @@ export type Database = {
       // RBAC helpers (migration 0002). SECURITY DEFINER, resolving the actor
       // from auth.uid(); must be called on a user-scoped client, never the
       // service-role client (which carries no JWT and yields a null role).
+      my_earnings_summary: {
+        Args: Record<string, never>;
+        Returns: Record<string, unknown>;
+      };
+      payroll_operational_summary: {
+        Args: { p_caller_rank?: number };
+        Returns: Record<string, unknown>;
+      };
+      payroll_executive_summary: {
+        Args: { p_caller_rank?: number };
+        Returns: Record<string, unknown>;
+      };
       get_caller_role: {
         Args: Record<string, never>;
         Returns: {

@@ -1,6 +1,8 @@
 import { getDashboardTelemetry } from "@/app/actions/admin-dashboard";
 import { readSectorLens } from "@/lib/sector-lens.server";
 import { requireStaff } from "@/lib/auth/roles";
+import { getCompensationKpiForCaller } from "@/app/actions/payroll";
+import { CompensationKpiInline } from "@/components/admin/payroll/compensation-kpi-cards";
 import { SectorLens } from "@/components/admin/sector-lens";
 import { AdminDashboard } from "@/components/admin/dashboard/admin-dashboard";
 
@@ -20,11 +22,14 @@ export default async function AdminHomePage({
 }: {
   searchParams: Promise<{ denied?: string }>;
 }) {
-  const [telemetry, lens, params, session] = await Promise.all([
+  const [telemetry, lens, params, session, kpi] = await Promise.all([
     getDashboardTelemetry(),
     readSectorLens(),
     searchParams,
     requireStaff(),
+    // Resolves per role: WORKER gets only their own figures via
+    // my_earnings_summary(); ADMIN+ gets the payroll rollup.
+    getCompensationKpiForCaller().catch(() => null),
   ]);
 
   /*
@@ -65,6 +70,7 @@ export default async function AdminHomePage({
     <div className="space-y-5">
       {deniedNotice}
       <SectorLens active={lens} />
+      {kpi ? <CompensationKpiInline data={kpi} /> : null}
       <AdminDashboard data={telemetry} rank={session.rank} />
     </div>
   );
