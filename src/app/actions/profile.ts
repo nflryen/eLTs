@@ -193,6 +193,72 @@ export async function updatePayoutAction(input: {
  * change* is enabled AND the session is older than 24 hours, so we verify
  * explicitly rather than relying on project settings.
  */
+/**
+ * Starts an email change.
+ *
+ * Supabase does NOT switch the address immediately: it sends a confirmation
+ * link to the NEW address and (depending on project settings) a notice to the
+ * old one. The account keeps its current email until the link is followed, so
+ * this action reports "pending" rather than "changed" — claiming success here
+ * would be a lie the user discovers at next login.
+ *
+ * Requires the current password. An attacker with a borrowed session must not
+ * be able to move the account's recovery address to a mailbox they control,
+ * which is a full account takeover.
+ */
+export async function changeEmailAction(input: {
+  newEmail: string;
+  password: string;
+}): Promise<{ ok: true; pendingEmail: string } | { ok: false; error: string }> {
+  const schema = z.object({
+    newEmail: z.string().trim().email("Alamat email tidak valid.").max(254),
+    password: z.string().min(1),
+  });
+
+  const parsed = schema.safeParse(input);
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues[0]?.message ?? "Data tidak valid." };
+  }
+
+  const session = await getRoleSession().catch(() => null);
+  if (!session) return { ok: false, error: "Sesi tidak ditemukan." };
+
+  const currentEmail = (session.user.email ?? "").toLowerCase();
+  const nextEmail = parsed.data.newEmail.toLowerCase();
+
+  if (nextEmail === currentEmail) {
+    return { ok: false, error: "Email baru sama dengan email saat ini." };
+  }
+
+  const supabase = await createServerSupabase();
+
+  /* Step-up: prove the caller knows the current password. */
+  const { error: authError } = await supabase.auth.signInWithPassword({
+    email: session.user.email ?? "",
+    password: parsed.data.password,
+  });
+
+  if (authError) {
+    return { ok: false, error: "Kata sandi salah. Perubahan email dibatalkan." };
+  }
+
+  /*
+   * `emailRedirectTo` must point at a route that can explain the outcome. It is
+   * resolved from the configured app URL rather than the request Host header,
+   * so a spoofed Host cannot redirect the confirmation link elsewhere.
+   */
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "";
+  const { error } = await supabase.auth.updateUser(
+    { email: nextEmail },
+    appUrl ? { emailRedirectTo: `${appUrl}/settings/security?email=confirmed` } : undefined,
+  );
+
+  if (error) return { ok: false, error: error.message };
+
+  revalidatePath("/settings/security");
+  return { ok: true, pendingEmail: nextEmail };
+}
+
 export async function changePasswordAction(input: {
   currentPassword: string;
   newPassword: string;

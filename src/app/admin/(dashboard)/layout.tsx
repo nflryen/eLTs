@@ -3,6 +3,7 @@ import Link from "next/link";
 import {
   LayoutDashboard, FolderKanban, Calendar, Users, Package,
   Coins, Building2, Settings, LogOut, Clock, Receipt, Wallet,
+  User, ShieldCheck,
 } from "lucide-react";
 import { adminLogout } from "@/app/actions/admin-auth";
 import { requireStaff } from "@/lib/auth/roles";
@@ -49,7 +50,8 @@ const NAV_GROUPS: NavGroup[] = [
     items: [
       { href: "/admin/inventory", label: "Gear", icon: <Package size={18} />, minRank: RANKS.WORKER },
       // User & role administration is not an operations concern.
-      { href: "/admin/users", label: "Kru & Akses", icon: <Users size={18} />, minRank: RANKS.FOUNDER },
+      /* Role administration is SUPER_ADMIN-only; FOUNDER cannot grant roles. */
+      { href: "/admin/users", label: "Kru & Akses", icon: <Users size={18} />, minRank: RANKS.SUPER_ADMIN },
     ],
   },
   {
@@ -112,6 +114,27 @@ export default async function AdminLayout({ children }: { children: React.ReactN
         activeRank={rank}
         elevatedUntil={roleContext?.elevatedUntil ?? null}
       />
+
+      {/*
+        * Self-service routes. These pages existed but had NO inbound link
+        * anywhere in the UI, which made them unreachable in practice. Every
+        * staff member needs them: a WORKER must be able to set a payout
+        * destination or their payslip has nowhere to go.
+        */}
+      <div className="space-y-1 px-1">
+        <Link
+          href="/settings/profile"
+          className="flex items-center gap-2 rounded-lg px-2 py-1.5 text-xs font-medium text-[#52525b] hover:bg-[#f4f4f5]"
+        >
+          <User size={14} /> Profil & Pembayaran
+        </Link>
+        <Link
+          href="/settings/security"
+          className="flex items-center gap-2 rounded-lg px-2 py-1.5 text-xs font-medium text-[#52525b] hover:bg-[#f4f4f5]"
+        >
+          <ShieldCheck size={14} /> Keamanan Akun
+        </Link>
+      </div>
 
       <form action={adminLogout}>
         <Button

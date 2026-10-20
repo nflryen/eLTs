@@ -573,6 +573,18 @@ client_reminders_log: Table<
         },
         "user_id" | "role_key"
       >;
+      role_management_audit: Table<
+        {
+          id: number;
+          actor_user_id: string;
+          target_user_id: string;
+          action: "GRANT" | "REVOKE" | "SET_DEFAULT";
+          role_key: string;
+          detail: Record<string, unknown>;
+          created_at: string;
+        },
+        "actor_user_id" | "target_user_id" | "action" | "role_key"
+      >;
       user_profiles: Table<
         {
           user_id: string;
@@ -959,6 +971,33 @@ client_reminders_log: Table<
       revoke_my_session: {
         Args: { p_session_id: string };
         Returns: boolean;
+      };
+      grant_user_role: {
+        Args: { p_target_user: string; p_role_key: string };
+        Returns: undefined;
+      };
+      revoke_user_role: {
+        Args: { p_target_user: string; p_role_key: string };
+        Returns: undefined;
+      };
+      set_default_user_role: {
+        Args: { p_target_user: string; p_role_key: string };
+        Returns: undefined;
+      };
+      list_users_with_roles: {
+        Args: Record<string, never>;
+        Returns: {
+          user_id: string;
+          email: string;
+          full_name: string | null;
+          display_name: string | null;
+          roles: string[] | null;
+          base_role: string | null;
+          max_rank: number;
+          email_confirmed: boolean;
+          last_sign_in_at: string | null;
+          created_at: string;
+        }[];
       };
     };
     Enums: {

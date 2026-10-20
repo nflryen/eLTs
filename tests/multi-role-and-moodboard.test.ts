@@ -375,12 +375,18 @@ async function bootSessionContextDb(): Promise<PGlite> {
     create function private.reject_audit_mutation() returns trigger language plpgsql as $$
       begin raise exception 'append-only (% blocked)', tg_op using errcode = 'insufficient_privilege'; end $$;
     /* Stub replaced by 0020; policies in 0019/0021 reference it at CREATE time. */
-    create function private.has_role_rank(p_min integer) returns boolean language sql stable as $$
-      select false
-    $$;
-    create function private.current_role_rank() returns smallint language sql stable as $$
+    /*
+     * Stand-in for 0002's definition. It MUST delegate to current_role_rank()
+     * rather than returning a constant: 0020 replaces current_role_rank() but
+     * never redefines has_role_rank(), so a select-false stub here would
+     * silently deny every caller — including SUPER_ADMIN.
+     */
+    create function private.current_role_rank() returns smallint language sql stable as $fn$
       select 0::smallint
-    $$;
+    $fn$;
+    create function private.has_role_rank(p_min integer) returns boolean language sql stable as $fn$
+      select private.current_role_rank() >= p_min
+    $fn$;
 
     insert into public.roles(key,label,rank) values
       ('CLIENT','Client',10),('FREELANCER','Field Crew',30),

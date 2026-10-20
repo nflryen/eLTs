@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { KeyRound, LogOut, ShieldAlert } from "lucide-react";
 import {
+  changeEmailAction,
   changePasswordAction,
   revokeSessionAction,
   type SessionRow,
@@ -11,6 +12,12 @@ import {
 
 export function SecurityForm({ sessions }: { sessions: SessionRow[] }) {
   const router = useRouter();
+
+  const [newEmail, setNewEmail] = useState("");
+  const [emailPassword, setEmailPassword] = useState("");
+  const [emailMsg, setEmailMsg] = useState<string | null>(null);
+  const [emailErr, setEmailErr] = useState<string | null>(null);
+  const [savingEmail, startEmail] = useTransition();
 
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
@@ -45,6 +52,27 @@ export function SecurityForm({ sessions }: { sessions: SessionRow[] }) {
     });
   };
 
+  const submitEmail = (e: React.FormEvent) => {
+    e.preventDefault();
+    setEmailMsg(null);
+    setEmailErr(null);
+    startEmail(async () => {
+      const res = await changeEmailAction({ newEmail, password: emailPassword });
+      if (!res.ok) {
+        setEmailErr(res.error);
+        return;
+      }
+      /*
+       * Deliberately "pending", not "changed": Supabase has only SENT a
+       * confirmation link. The account keeps its current address until that
+       * link is followed.
+       */
+      setEmailMsg(`Tautan konfirmasi dikirim ke ${res.pendingEmail}. Email belum berubah sampai tautan diklik.`);
+      setNewEmail("");
+      setEmailPassword("");
+    });
+  };
+
   const revoke = (sessionId: string) => {
     setRevokeErr(null);
     startRevoke(async () => {
@@ -59,6 +87,61 @@ export function SecurityForm({ sessions }: { sessions: SessionRow[] }) {
 
   return (
     <>
+      {/* ── Email change ──────────────────────────────────────────────────── */}
+      <form
+        onSubmit={submitEmail}
+        className="space-y-4 rounded-xl border border-[#ececee] bg-white p-5"
+      >
+        <h2 className="text-sm font-semibold text-[#18181b]">Ubah Alamat Email</h2>
+        <p className="text-xs text-[#71717a]">
+          Supabase mengirim tautan konfirmasi ke alamat baru. Email akun tidak berubah
+          sampai tautan tersebut diklik.
+        </p>
+
+        <div>
+          <label htmlFor="newEmail" className="mb-1 block text-xs font-medium text-[#3f3f46]">
+            Email Baru
+          </label>
+          <input
+            id="newEmail"
+            type="email"
+            value={newEmail}
+            onChange={(e) => setNewEmail(e.target.value)}
+            required
+            className="w-full rounded-lg border border-[#ececee] px-3 py-2 text-sm outline-none focus:border-[#18181b]"
+          />
+        </div>
+
+        <div>
+          <label
+            htmlFor="emailPassword"
+            className="mb-1 block text-xs font-medium text-[#3f3f46]"
+          >
+            Kata Sandi Saat Ini
+          </label>
+          <input
+            id="emailPassword"
+            type="password"
+            autoComplete="current-password"
+            value={emailPassword}
+            onChange={(e) => setEmailPassword(e.target.value)}
+            required
+            className="w-full rounded-lg border border-[#ececee] px-3 py-2 text-sm outline-none focus:border-[#18181b]"
+          />
+        </div>
+
+        {emailErr && <p className="text-xs text-red-600">{emailErr}</p>}
+        {emailMsg && <p className="text-xs text-emerald-600">{emailMsg}</p>}
+
+        <button
+          type="submit"
+          disabled={savingEmail}
+          className="rounded-lg bg-[#18181b] px-4 py-2 text-xs font-medium text-white disabled:opacity-50"
+        >
+          {savingEmail ? "Mengirim…" : "Kirim Tautan Konfirmasi"}
+        </button>
+      </form>
+
       {/* ── Password change ───────────────────────────────────────────────── */}
       <form
         onSubmit={submit}
