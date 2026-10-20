@@ -38,12 +38,22 @@ export type ExpensePaidBy =
   | "FOUNDER_B_ADVANCE"
   | "CLIENT_BILLED";
 
+/**
+ * `public.crew_members` — ASSIGNMENT facts only.
+ *
+ * Migration 0024 removed `phone`, `email`, `bank_*` and `avatar_url` from this
+ * table. Person identity and payout live in exactly one place per crew member:
+ *
+ *   auth_user_id NOT NULL -> `public.user_profiles`   (they have a login)
+ *   auth_user_id IS NULL  -> `public.crew_contact_details`
+ *
+ * Read them through the `v_crew_identity` view rather than querying either
+ * table directly, so the linked/unlinked split never leaks into call sites.
+ */
 export type CrewMemberRow = {
   id: string;
   crew_code: string;
   full_name: string;
-  phone: string;
-  email: string | null;
   /**
    * Login identity for this crew member (migration 0012).
    *
@@ -53,20 +63,44 @@ export type CrewMemberRow = {
    */
   auth_user_id: string | null;
   primary_skills: string[];
-  bank_name: string;
-  bank_account_number: string;
-  bank_account_holder: string;
   standard_day_rate: number;
   rating: number;
   role_category?: string;
   emergency_contact?: string | null;
-  avatar_url?: string | null;
   member_type?: CrewMemberType;
   jobdesk_specialties?: string[];
   is_active: boolean;
   notes: string | null;
   created_at: string;
   updated_at: string;
+};
+
+/**
+ * `public.v_crew_identity` — resolved identity + payout destination.
+ *
+ * The single read model for "who is this and how do we pay them". `has_login`
+ * distinguishes the two backing sources above.
+ */
+export type CrewIdentityRow = {
+  crew_member_id: string;
+  crew_code: string;
+  full_name: string;
+  auth_user_id: string | null;
+  member_type: CrewMemberType | null;
+  primary_skills: string[] | null;
+  jobdesk_specialties: string[] | null;
+  role_category: string | null;
+  standard_day_rate: number;
+  rating: number;
+  is_active: boolean;
+  has_login: boolean;
+  phone: string | null;
+  display_full_name: string | null;
+  bank_name: string | null;
+  bank_account_holder: string | null;
+  bank_account_number: string | null;
+  payout_method: "BANK" | "EWALLET" | null;
+  display_name: string | null;
 };
 
 export type ProjectCrewAssignmentRow = {
@@ -180,17 +214,22 @@ export interface AssignCrewInput {
 }
 
 export interface ProjectCrewAssignmentWithCrew extends ProjectCrewAssignmentRow {
-  crew_member: Pick<
-    CrewMemberRow,
-    | "id"
-    | "crew_code"
-    | "full_name"
-    | "phone"
-    | "primary_skills"
-    | "bank_name"
-    | "bank_account_number"
-    | "bank_account_holder"
-  >;
+  /*
+   * Assignment + resolved identity.
+   *
+   * Contact and payout fields come from `v_crew_identity` (which resolves
+   * user_profiles for linked crew and crew_contact_details for unlinked),
+   * because migration 0024 dropped them from crew_members. They are optional:
+   * a caller that only needs the name can omit them, and a crew member with no
+   * recorded bank account must not make the assignment unrenderable.
+   */
+  crew_member: Pick<CrewMemberRow, "id" | "crew_code" | "full_name" | "primary_skills"> &
+    Partial<{
+      phone: string | null;
+      bank_name: string | null;
+      bank_account_number: string | null;
+      bank_account_holder: string | null;
+    }>;
 }
 
 // Scoped Zero-Leakage DTO returned by get_crew_hub_payload RPC

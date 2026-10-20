@@ -10,7 +10,8 @@ import type {
   AdminRow,
   EditorTaskRow,
 } from "@/types/database";
-import type { CrewMemberRow } from "@/types/operations";
+import type { CrewMemberRow, CrewIdentityRow } from "@/types/operations";
+import type { UserProfileRow } from "@/types/database";
 
 import type {
   UserRole,
@@ -121,10 +122,18 @@ export async function getUnifiedUsersList(): Promise<UnifiedUser[]> {
   // =========================================================================
   try {
     const [crewRes, editorTasksRes] = await Promise.all([
+      /*
+       * Read through `v_crew_identity`, not `crew_members`.
+       *
+       * Migration 0024 removed phone/email/bank_* from crew_members; the view
+       * resolves them from user_profiles (linked crew) or crew_contact_details
+       * (unlinked). Querying crew_members directly would silently lose the
+       * operator's ability to see a freelancer's contact details.
+       */
       supabase
-        .from("crew_members")
+        .from("v_crew_identity")
         .select("*")
-        .order("created_at", { ascending: false }),
+        .order("crew_code", { ascending: true }),
       supabase
         .from("editor_tasks")
         .select(
@@ -132,7 +141,7 @@ export async function getUnifiedUsersList(): Promise<UnifiedUser[]> {
         ),
     ]);
 
-    const crewList = (crewRes.data || []) as CrewMemberRow[];
+    const crewList = (crewRes.data || []) as CrewIdentityRow[];
     const editorTasks = (editorTasksRes.data || []) as EditorTaskRow[];
 
     const assignedEditorIds = new Set<string>();
@@ -149,19 +158,19 @@ export async function getUnifiedUsersList(): Promise<UnifiedUser[]> {
     }
 
     for (const crew of crewList) {
-      const skills = Array.isArray(crew.primary_skills)
-        ? crew.primary_skills
+      const skills = Array.isArray((crew.primary_skills ?? []))
+        ? (crew.primary_skills ?? [])
         : [];
       const hasEditorSkill = skills.some((s: string) =>
         /editor|editing|lightroom|retouch|grading|post/i.test(s)
       );
       const isRoleEditor = crew.role_category === "EDITOR";
-      const isAssignedEditor = assignedEditorIds.has(crew.id);
+      const isAssignedEditor = assignedEditorIds.has(crew.crew_member_id);
 
       const isEditor = isRoleEditor || hasEditorSkill || isAssignedEditor;
       const role: UserRole = isEditor ? "EDITOR" : "FREELANCE";
       const status: UserStatus = crew.is_active ? "ACTIVE" : "SUSPENDED";
-      const taskCount = editorTaskCountByCrewId.get(crew.id) || 0;
+      const taskCount = editorTaskCountByCrewId.get(crew.crew_member_id) || 0;
 
       let details = "";
       if (isEditor) {
@@ -179,32 +188,32 @@ export async function getUnifiedUsersList(): Promise<UnifiedUser[]> {
       }
 
       const waLink = await formatWhatsAppLink(
-        crew.phone,
+        crew.phone ?? "",
         `Halo kak ${crew.full_name} (${crew.crew_code}) - Operasional ELTs. Studio`
       );
 
       results.push({
-        id: crew.id,
+        id: crew.crew_member_id,
         name: crew.full_name,
         role,
-        email: crew.email || "",
+        email: "",
         phone: crew.phone || "",
         details,
         status,
-        lastActive: crew.updated_at || crew.created_at || null,
+        lastActive: null,
         waLink,
         metadata: {
           crewCode: crew.crew_code,
-          roleCategory: crew.role_category,
+          roleCategory: crew.role_category ?? undefined,
           primarySkills: skills,
           standardDayRate: Number(crew.standard_day_rate || 0),
           rating: Number(crew.rating || 5.0),
-          bankName: crew.bank_name,
-          bankAccountNumber: crew.bank_account_number,
-          bankAccountHolder: crew.bank_account_holder,
+          bankName: crew.bank_name ?? "",
+          bankAccountNumber: crew.bank_account_number ?? "",
+          bankAccountHolder: crew.bank_account_holder ?? "",
           isActive: crew.is_active,
           assignedTasksCount: taskCount,
-          emergencyContact: crew.emergency_contact,
+          emergencyContact: undefined,
         },
       });
     }
@@ -455,20 +464,83 @@ export async function updateCrewMemberProfileAction(
   try {
     const { supabase } = await requireOps();
 
+    /*
+     * ASSIGNMENT facts go to crew_members; PERSON facts go elsewhere.
+     *
+     * Migration 0024 removed phone/email/bank_* from crew_members. Writing them
+     * back there would silently fail, so the payload is split by destination:
+     *
+     *   crew_members              -> full_name, skills, day rate, category…
+     *   user_profiles             -> phone/email/bank, WHEN the crew has a login
+     *   crew_contact_details      -> the same, when they do NOT
+     *
+     * The split is resolved from `auth_user_id`, so an operator editing a
+     * freelancer without an account still lands the data somewhere durable.
+     */
     const updatePayload: Partial<CrewMemberRow> = {
       updated_at: new Date().toISOString(),
     };
 
     if (data.full_name?.trim()) updatePayload.full_name = data.full_name.trim();
-    if (data.phone?.trim()) updatePayload.phone = data.phone.trim();
-    if (data.email !== undefined) updatePayload.email = data.email?.trim() || null;
     if (data.primary_skills) updatePayload.primary_skills = data.primary_skills;
     if (data.standard_day_rate !== undefined) updatePayload.standard_day_rate = Number(data.standard_day_rate);
-    if (data.bank_name?.trim()) updatePayload.bank_name = data.bank_name.trim();
-    if (data.bank_account_number?.trim()) updatePayload.bank_account_number = data.bank_account_number.trim();
-    if (data.bank_account_holder?.trim()) updatePayload.bank_account_holder = data.bank_account_holder.trim();
     if (data.emergency_contact !== undefined) updatePayload.emergency_contact = data.emergency_contact?.trim() || null;
     if (data.role_category) updatePayload.role_category = data.role_category;
+
+    /* Resolve which contact store this crew member belongs to. */
+    const { data: crewRow } = await supabase
+      .from("crew_members")
+      .select("auth_user_id")
+      .eq("id", crewId)
+      .maybeSingle();
+
+    const linkedUserId = (crewRow as { auth_user_id: string | null } | null)?.auth_user_id ?? null;
+
+    const wantsContactWrite =
+      data.phone !== undefined ||
+      data.email !== undefined ||
+      data.bank_name !== undefined ||
+      data.bank_account_number !== undefined ||
+      data.bank_account_holder !== undefined;
+
+    if (wantsContactWrite) {
+      if (linkedUserId) {
+        const profilePatch: Partial<Pick<
+          UserProfileRow,
+          "phone" | "bank_name" | "bank_account_number" | "bank_account_holder"
+        >> = {};
+        if (data.phone !== undefined) profilePatch.phone = data.phone?.trim() || null;
+        if (data.bank_name !== undefined) profilePatch.bank_name = data.bank_name?.trim() || null;
+        if (data.bank_account_number !== undefined)
+          profilePatch.bank_account_number = data.bank_account_number?.trim() || null;
+        if (data.bank_account_holder !== undefined)
+          profilePatch.bank_account_holder = data.bank_account_holder?.trim() || null;
+
+        if (Object.keys(profilePatch).length > 0) {
+          const { error: profileError } = await supabase
+            .from("user_profiles")
+            .update(profilePatch)
+            .eq("user_id", linkedUserId);
+          if (profileError) return { success: false, error: profileError.message };
+        }
+      } else {
+        const contactPatch: Record<string, string | null> = {};
+        if (data.phone !== undefined) contactPatch.phone = data.phone?.trim() || null;
+        if (data.email !== undefined) contactPatch.email = data.email?.trim() || null;
+        if (data.bank_name !== undefined) contactPatch.bank_name = data.bank_name?.trim() || null;
+        if (data.bank_account_number !== undefined)
+          contactPatch.bank_account_number = data.bank_account_number?.trim() || null;
+        if (data.bank_account_holder !== undefined)
+          contactPatch.bank_account_holder = data.bank_account_holder?.trim() || null;
+
+        if (Object.keys(contactPatch).length > 0) {
+          const { error: contactError } = await supabase
+            .from("crew_contact_details")
+            .upsert({ crew_member_id: crewId, ...contactPatch }, { onConflict: "crew_member_id" });
+          if (contactError) return { success: false, error: contactError.message };
+        }
+      }
+    }
 
     const { error } = await supabase
       .from("crew_members")

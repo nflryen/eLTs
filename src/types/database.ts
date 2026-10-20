@@ -262,6 +262,22 @@ type Table<Row, Required extends keyof Row> = {
   Relationships: [];
 };
 
+export type UserProfileRow = {
+  user_id: string;
+  full_name: string;
+  display_name: string | null;
+  phone: string | null;
+  avatar_url: string | null;
+  payout_method: "BANK" | "EWALLET" | null;
+  bank_name: string | null;
+  bank_account_holder: string | null;
+  bank_account_number: string | null;
+  ewallet_provider: string | null;
+  ewallet_id: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
 export type Database = {
   /*
    * Required by @supabase/postgrest-js >= 1.x.
@@ -407,7 +423,32 @@ export type Database = {
       money_splits: Table<MoneySplitRow, "project_id" | "gross_revenue">;
       cash_ledger: Table<CashLedgerRow, "type" | "category" | "amount" | "description">;
       studio_events: Table<StudioEventRow, "title" | "event_type" | "start_time" | "end_time">;
-      crew_members: Table<CrewMemberRow, "crew_code" | "full_name" | "phone" | "bank_name" | "bank_account_number" | "bank_account_holder">;
+      crew_members: Table<CrewMemberRow, "crew_code" | "full_name">;
+      crew_contact_details: Table<
+        {
+          crew_member_id: string;
+          phone: string | null;
+          email: string | null;
+          bank_name: string | null;
+          bank_account_holder: string | null;
+          bank_account_number: string | null;
+          updated_at: string;
+        },
+        "crew_member_id"
+      >;
+      identity_reconciliation_log: Table<
+        {
+          id: number;
+          user_id: string | null;
+          crew_code: string | null;
+          field: string;
+          profile_value: string | null;
+          crew_value: string | null;
+          resolution: string;
+          reconciled_at: string;
+        },
+        "field" | "resolution"
+      >;
       project_crew_assignments: Table<ProjectCrewAssignmentRow, "project_id" | "crew_member_id" | "magic_token" | "role_title" | "call_time" | "venue_name" | "venue_address">;
       equipment_presets: Table<EquipmentPresetRow, "name" | "category">;
       project_expenses: Table<ProjectExpenseRow, "project_id" | "category" | "name" | "unit_cost">;
@@ -748,6 +789,37 @@ client_reminders_log: Table<
      * service client.
      */
     Views: {
+      v_crew_identity: {
+        Row: {
+          crew_member_id: string;
+          crew_code: string;
+          full_name: string;
+          auth_user_id: string | null;
+          member_type: string | null;
+          primary_skills: string[] | null;
+          jobdesk_specialties: string[] | null;
+          role_category: string | null;
+          standard_day_rate: number;
+          rating: number;
+          is_active: boolean;
+          has_login: boolean;
+          phone: string | null;
+          display_full_name: string | null;
+          bank_name: string | null;
+          bank_account_holder: string | null;
+          bank_account_number: string | null;
+          payout_method: string | null;
+          display_name: string | null;
+        };
+        /*
+         * A view still needs the full GenericView shape. Declaring only `Row`
+         * leaves it non-conforming, the schema fails the GenericSchema check,
+         * and EVERY `.from().select()` in the app silently infers `never`.
+         */
+        Insert: Record<string, unknown>;
+        Update: Record<string, unknown>;
+        Relationships: [];
+      };
       v_invoice_financial_position: {
         Row: {
           invoice_id: string;
