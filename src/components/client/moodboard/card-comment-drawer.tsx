@@ -119,12 +119,13 @@ export function CardCommentDrawer({
     setIsSubmitting(true);
 
     try {
-      const res = await addMoodboardComment(
-        card.id,
-        trimmed,
-        authorRole,
-        finalName
-      );
+      /*
+       * Author identity is derived server-side from the authenticated
+       * principal. Passing authorRole/authorName here was the identity-spoofing
+       * vector; the optimistic row below uses the same derived values only for
+       * instant paint, and is replaced by the server's row on success.
+       */
+      const res = await addMoodboardComment(card.id, trimmed);
 
       if (!res.success || !res.comment) {
         throw new Error(res.error || "Failed to post comment");

@@ -6,10 +6,12 @@ import {
 } from "lucide-react";
 import { adminLogout } from "@/app/actions/admin-auth";
 import { requireStaff } from "@/lib/auth/roles";
+import { ROLE_LABEL, ROLE_RANK } from "@/lib/auth/role-meta";
 import { getAttentionQueue } from "@/app/actions/attention";
 import { Button } from "@/components/ui/button";
 import { AdminShell, type NavGroup } from "@/components/admin/admin-shell";
-import { RoleSwitcher } from "@/components/admin/role-switcher";
+import { ActiveRoleSwitcher } from "@/components/admin/active-role-switcher";
+import { getRoleContextAction } from "@/app/actions/role-switch";
 
 export const metadata: Metadata = {
   title: "Studio OS — Elts.",
@@ -62,15 +64,31 @@ const NAV_GROUPS: NavGroup[] = [
   },
 ];
 
-const ROLE_LABEL: Record<string, string> = {
-  SUPER_ADMIN: "Super Admin",
-  FOUNDER: "Founder",
-  ADMIN: "Operations Lead",
-  WORKER: "Kreatif",
-};
+/*
+ * Re-exported from `role-meta`, not redeclared.
+ *
+ * The local copy omitted EDITOR, so an editor's sidebar rendered the raw key.
+ * `role-meta` is the single source of rank and label truth and is
+ * dependency-free, so it is safe in both Server and Client Components.
+ */
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
   const { admin, role, rank } = await requireStaff();
+
+  /*
+   * The active role is resolved from the database on every render, never from
+   * a prop or cookie. `ownedRoles` drives the switcher so a member can only
+   * ever see roles they actually hold.
+   */
+  const roleContext = await getRoleContextAction();
+  const switchableRoles = (roleContext?.ownedRoles ?? (role ? [role] : []))
+    .map((key) => ({
+      key,
+      label: ROLE_LABEL[key] ?? key,
+      rank: ROLE_RANK[key] ?? 0,
+      isActive: key === role,
+    }))
+    .sort((a, b) => b.rank - a.rank);
 
   const footer = (
     <div className="space-y-3">
@@ -82,9 +100,18 @@ export default async function AdminLayout({ children }: { children: React.ReactN
           {role ? (ROLE_LABEL[role] ?? role) : "Tanpa peran"}
         </p>
       </div>
-      {/* View-as preview. Rendered only for a real SUPER_ADMIN; the component
-          itself also refuses to render below rank 120. */}
-      <RoleSwitcher actualRank={rank} />
+      {/*
+        * Authority-bearing switcher. Downgrades apply instantly; escalations
+        * require the account password. The previous preview-only dropdown was
+        * a SUPER_ADMIN presentation toy and could not change authority, so it
+        * is deliberately gone rather than kept alongside this one.
+        */}
+      <ActiveRoleSwitcher
+        roles={switchableRoles}
+        activeRole={role}
+        activeRank={rank}
+        elevatedUntil={roleContext?.elevatedUntil ?? null}
+      />
 
       <form action={adminLogout}>
         <Button

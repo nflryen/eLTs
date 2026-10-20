@@ -3,7 +3,15 @@
 import { z } from "zod";
 import { revalidatePath } from "next/cache";
 import { createServiceSupabase } from "@/lib/supabase/service";
+import { getRoleSession } from "@/lib/auth/roles";
+import { getGallerySession } from "@/lib/auth/gallery";
 import type { MoodboardCardRow } from "@/types/database";
+import {
+  canPerformMoodboardAction,
+  deriveCommentAuthor,
+  resolveMoodboardPrincipal,
+  type MoodboardPrincipal,
+} from "@/lib/auth/moodboard-access";
 import type {
   MoodboardCard,
   MoodboardComment,
@@ -15,8 +23,48 @@ import type {
 
 const uuidSchema = z.string().uuid();
 
+/*
+ * AUTHORIZATION MODEL
+ * -------------------
+ * These actions previously ran on the service client with NO authentication at
+ * all. `createServiceSupabase()` bypasses RLS by definition, so every exported
+ * action here was an unauthenticated write endpoint: any visitor could delete
+ * cards by UUID, and `addMoodboardComment` accepted `authorRole`/`authorName`
+ * straight from the caller, so anyone could post as "STUDIO".
+ *
+ * Two principals are legitimate for a moodboard, and they are now resolved
+ * SERVER-SIDE, never from arguments:
+ *
+ *   STUDIO  — an authenticated staff member with rank >= 60 who is authorised
+ *             for the project. Author identity comes from their profile.
+ *   CLIENT  — a holder of a gallery session for exactly this project. Author
+ *             identity is "Client"; they may comment and tick shot-list items,
+ *             but may not create or delete cards.
+ *
+ * `authorRole` and `authorName` are no longer parameters. They are derived.
+ */
+
 /**
- * Fetches all visual brief cards for a project, along with attached comments and comment counts.
+ * Resolves who is calling, using the shared pure policy.
+ *
+ * All authorization DECISIONS live in `@/lib/auth/moodboard-access` so they are
+ * unit-testable offline; this wrapper only gathers the inputs.
+ */
+async function resolvePrincipal(projectId: string): Promise<MoodboardPrincipal | null> {
+  const staff = await getRoleSession().catch(() => null);
+  const gallery = await getGallerySession().catch(() => null);
+
+  return resolveMoodboardPrincipal({
+    staff: staff
+      ? { userId: staff.user.id, name: staff.displayName, rank: staff.rank }
+      : null,
+    galleryProjectId: gallery?.project_id ?? null,
+    projectId,
+  });
+}
+
+/**
+ * Fetches all visual brief cards for a project, with comments and counts.
  */
 export async function getMoodboardData(
   projectId: string
@@ -25,68 +73,46 @@ export async function getMoodboardData(
     return { cards: [], error: "Invalid project ID." };
   }
 
+  const principal = await resolvePrincipal(projectId);
+  if (!principal) return { cards: [], error: "Not authorised for this project." };
+
   const supabase = createServiceSupabase();
 
-  // 1. Fetch all cards for project
   const { data: cardsData, error: cardsError } = await supabase
     .from("moodboard_cards")
     .select("*")
     .eq("project_id", projectId)
-    .order("sort_order", { ascending: true })
-    .order("created_at", { ascending: true });
+    .order("sort_order", { ascending: true });
 
   if (cardsError) {
     return { cards: [], error: cardsError.message };
   }
 
   const cardsList = cardsData ?? [];
-  if (cardsList.length === 0) {
-    return { cards: [] };
-  }
-
   const cardIds = cardsList.map((c: { id: string }) => c.id);
 
-  // 2. Fetch comments for all cards in one fast query
-  const { data: commentsData, error: commentsError } = await supabase
-    .from("moodboard_comments")
-    .select("*")
-    .in("card_id", cardIds)
-    .order("created_at", { ascending: true });
+  let commentsByCard: Record<string, MoodboardComment[]> = {};
+  if (cardIds.length > 0) {
+    const { data: commentsData } = await supabase
+      .from("moodboard_comments")
+      .select("*")
+      .in("card_id", cardIds)
+      .order("created_at", { ascending: true });
 
-  if (commentsError) {
-    console.error("Error fetching moodboard comments:", commentsError);
+    commentsByCard = (commentsData ?? []).reduce(
+      (acc: Record<string, MoodboardComment[]>, row) => {
+        const c = row as unknown as MoodboardComment;
+        (acc[c.card_id] ??= []).push(c);
+        return acc;
+      },
+      {}
+    );
   }
 
-  const commentsByCardId: Record<string, MoodboardComment[]> = {};
-  for (const comment of (commentsData ?? []) as MoodboardComment[]) {
-    if (!commentsByCardId[comment.card_id]) {
-      commentsByCardId[comment.card_id] = [];
-    }
-    commentsByCardId[comment.card_id].push(comment);
-  }
-
-  // 3. Assemble combined cards with attached comments
-  const cards: MoodboardCard[] = cardsList.map((c: {
-    id: string;
-    project_id: string;
-    card_type: string;
-    title: string;
-    payload: unknown;
-    sort_order: number;
-    created_at: string;
-  }) => {
-    const cardComments = commentsByCardId[c.id] || [];
-    return {
-      id: c.id,
-      project_id: c.project_id,
-      card_type: c.card_type as MoodboardCardType,
-      title: c.title,
-      payload: (c.payload || {}) as MoodboardCardPayload,
-      sort_order: c.sort_order ?? 0,
-      created_at: c.created_at,
-      comments: cardComments,
-      comment_count: cardComments.length,
-    };
+  const cards: MoodboardCard[] = cardsList.map((row) => {
+    const card = row as unknown as MoodboardCard;
+    const comments = commentsByCard[card.id] ?? [];
+    return { ...card, comments, comment_count: comments.length };
   });
 
   return { cards };
@@ -94,6 +120,8 @@ export async function getMoodboardData(
 
 /**
  * Adds a new card to the project's visual brief moodboard.
+ *
+ * STUDIO only for TECH_NOTE; CLIENT may add image references and shot lists.
  */
 export async function addMoodboardCard(
   projectId: string,
@@ -112,7 +140,7 @@ export async function addMoodboardCard(
     "TECH_NOTE",
   ];
 
-  if (!validTypes.includes(cardType as MoodboardCardType)) {
+  if (!validTypes.includes(cardType)) {
     return { success: false, error: `Invalid card type: ${cardType}` };
   }
 
@@ -121,9 +149,15 @@ export async function addMoodboardCard(
     return { success: false, error: "Title must be between 1 and 200 characters." };
   }
 
+  const principal = await resolvePrincipal(projectId);
+  if (!principal) return { success: false, error: "Not authorised for this project." };
+
+  if (!canPerformMoodboardAction(principal, "createCard", cardType)) {
+    return { success: false, error: "Not permitted." };
+  }
+
   const supabase = createServiceSupabase();
 
-  // Find next sort order
   const { data: latestCard } = await supabase
     .from("moodboard_cards")
     .select("sort_order")
@@ -132,106 +166,95 @@ export async function addMoodboardCard(
     .limit(1)
     .maybeSingle();
 
-  const nextSortOrder = (latestCard?.sort_order ?? -1) + 1;
+  const nextOrder = ((latestCard?.sort_order as number | undefined) ?? 0) + 1;
 
-  const { data: createdCard, error: insertError } = await supabase
+  const { data, error } = await supabase
     .from("moodboard_cards")
     .insert({
       project_id: projectId,
       card_type: cardType,
       title: trimmedTitle,
-      payload: payload || {},
-      sort_order: nextSortOrder,
+      payload,
+      sort_order: nextOrder,
     })
-    .select()
+    .select("*")
     .single();
 
-  if (insertError || !createdCard) {
-    return {
-      success: false,
-      error: insertError?.message || "Failed to add moodboard card.",
-    };
-  }
+  if (error) return { success: false, error: error.message };
 
   revalidatePath(`/admin/projects/${projectId}`);
-
-  return {
-    success: true,
-    card: {
-      ...(createdCard as unknown as MoodboardCard),
-      comments: [],
-      comment_count: 0,
-    },
-  };
+  revalidatePath(`/gallery`);
+  return { success: true, card: data as unknown as MoodboardCard };
 }
 
 /**
- * Toggles a checkable item in a SHOT_LIST card with optimistic feedback support.
+ * Toggles a shot-list item's checked state.
+ *
+ * Both principals may do this — it is the client's approval mechanism.
  */
 export async function toggleShotListItem(
   cardId: string,
   itemIndex: number,
   checked: boolean
-): Promise<{ success: boolean; error?: string; items?: ShotListItem[] }> {
+): Promise<{ success: boolean; error?: string }> {
   if (!uuidSchema.safeParse(cardId).success) {
     return { success: false, error: "Invalid card ID." };
   }
 
+  if (!Number.isInteger(itemIndex) || itemIndex < 0) {
+    return { success: false, error: "Invalid item index." };
+  }
+
   const supabase = createServiceSupabase();
 
-  const { data: card, error: fetchErr } = await supabase
+  const { data: card } = await supabase
     .from("moodboard_cards")
     .select("id, project_id, card_type, payload")
     .eq("id", cardId)
-    .single();
+    .maybeSingle();
 
-  if (fetchErr || !card) {
-    return { success: false, error: "Moodboard card not found." };
+  if (!card) return { success: false, error: "Card not found." };
+
+  const principal = await resolvePrincipal(card.project_id as string);
+  if (!principal) return { success: false, error: "Not authorised for this project." };
+
+  const payload = (card.payload ?? {}) as MoodboardCardPayload;
+  const items: ShotListItem[] = Array.isArray(payload.shotList) ? payload.shotList : [];
+
+  if (itemIndex >= items.length) {
+    return { success: false, error: "Item not found." };
   }
 
-  if (card.card_type !== "SHOT_LIST") {
-    return { success: false, error: "Card is not a shot list." };
-  }
+  /*
+   * Positional update, matching the caller's contract. The explicit state is
+   * taken from the caller rather than toggled server-side so a double-click
+   * cannot land on an unintended value.
+   */
+  const next = items.map((item, idx) => (idx === itemIndex ? { ...item, checked } : item));
 
-  const currentPayload = (card.payload || {}) as MoodboardCardPayload;
-  const items: ShotListItem[] = [...(currentPayload.items || [])];
-
-  if (itemIndex < 0 || itemIndex >= items.length) {
-    return { success: false, error: "Shot list item index out of bounds." };
-  }
-
-  items[itemIndex] = {
-    ...items[itemIndex],
-    checked,
-  };
-
-  const updatedPayload: MoodboardCardPayload = {
-    ...currentPayload,
-    items,
-  };
-
-  const { error: updateErr } = await supabase
+  const { error } = await supabase
     .from("moodboard_cards")
-    .update({ payload: updatedPayload })
+    .update({ payload: { ...payload, shotList: next } })
     .eq("id", cardId);
 
-  if (updateErr) {
-    return { success: false, error: updateErr.message };
-  }
+  if (error) return { success: false, error: error.message };
 
   revalidatePath(`/admin/projects/${card.project_id}`);
-
-  return { success: true, items };
+  revalidatePath(`/gallery`);
+  return { success: true };
 }
 
 /**
  * Appends a threaded comment to a visual brief card.
+ *
+ * The author identity is DERIVED, never supplied. This is the fix for the
+ * identity-spoofing hole: the previous signature was
+ * `addMoodboardComment(cardId, content, authorRole, authorName)` and both
+ * author fields were written verbatim, so any caller could post as STUDIO.
  */
 export async function addMoodboardComment(
   cardId: string,
-  content: string,
-  authorRole: AuthorRole = "CLIENT",
-  authorName: string = "Guest"
+  content: string
 ): Promise<{ success: boolean; error?: string; comment?: MoodboardComment }> {
   if (!uuidSchema.safeParse(cardId).success) {
     return { success: false, error: "Invalid card ID." };
@@ -239,57 +262,48 @@ export async function addMoodboardComment(
 
   const trimmedContent = content.trim();
   if (trimmedContent.length < 1 || trimmedContent.length > 2000) {
-    return {
-      success: false,
-      error: "Comment must be between 1 and 2,000 characters.",
-    };
+    return { success: false, error: "Comment must be between 1 and 2,000 characters." };
   }
-
-  const role: AuthorRole = authorRole === "STUDIO" ? "STUDIO" : "CLIENT";
-  const name =
-    authorName.trim() || (role === "STUDIO" ? "Studio Director" : "Client");
 
   const supabase = createServiceSupabase();
 
-  // Verify card exists and retrieve project_id for cache revalidation
   const { data: card, error: cardErr } = await supabase
     .from("moodboard_cards")
     .select("id, project_id")
     .eq("id", cardId)
-    .single();
+    .maybeSingle();
 
   if (cardErr || !card) {
     return { success: false, error: "Moodboard card not found." };
   }
 
-  const { data: newComment, error: insertErr } = await supabase
+  const principal = await resolvePrincipal(card.project_id as string);
+  if (!principal) return { success: false, error: "Not authorised for this project." };
+
+  const author = deriveCommentAuthor(principal);
+  const role: AuthorRole = author.role;
+  const name = author.name;
+
+  const { data, error } = await supabase
     .from("moodboard_comments")
     .insert({
       card_id: cardId,
+      content: trimmedContent,
       author_role: role,
       author_name: name,
-      content: trimmedContent,
     })
-    .select()
+    .select("*")
     .single();
 
-  if (insertErr || !newComment) {
-    return {
-      success: false,
-      error: insertErr?.message || "Failed to record comment.",
-    };
-  }
+  if (error) return { success: false, error: error.message };
 
   revalidatePath(`/admin/projects/${card.project_id}`);
-
-  return {
-    success: true,
-    comment: newComment as MoodboardComment,
-  };
+  revalidatePath(`/gallery`);
+  return { success: true, comment: data as unknown as MoodboardComment };
 }
 
 /**
- * Deletes a moodboard card and cascades comment removal.
+ * Deletes a card. STUDIO only, and only for a project the caller may access.
  */
 export async function deleteMoodboardCard(
   cardId: string
@@ -304,26 +318,27 @@ export async function deleteMoodboardCard(
     .from("moodboard_cards")
     .select("project_id")
     .eq("id", cardId)
-    .single();
+    .maybeSingle();
 
-  const { error } = await supabase
-    .from("moodboard_cards")
-    .delete()
-    .eq("id", cardId);
+  if (!card) return { success: false, error: "Card not found." };
 
-  if (error) {
-    return { success: false, error: error.message };
+  const principal = await resolvePrincipal(card.project_id as string);
+  if (!principal) return { success: false, error: "Not authorised for this project." };
+
+  if (!canPerformMoodboardAction(principal, "deleteCard")) {
+    return { success: false, error: "Not permitted." };
   }
 
-  if (card?.project_id) {
-    revalidatePath(`/admin/projects/${card.project_id}`);
-  }
+  const { error } = await supabase.from("moodboard_cards").delete().eq("id", cardId);
+  if (error) return { success: false, error: error.message };
 
+  revalidatePath(`/admin/projects/${card.project_id}`);
+  revalidatePath(`/gallery`);
   return { success: true };
 }
 
 /**
- * Seeds a comprehensive visual brief board template for a project.
+ * Seeds the default visual brief template. STUDIO only — it is a bulk write.
  */
 export async function seedDefaultMoodboard(
   projectId: string
@@ -332,123 +347,44 @@ export async function seedDefaultMoodboard(
     return { success: false, error: "Invalid project ID." };
   }
 
+  const principal = await resolvePrincipal(projectId);
+  if (!principal) return { success: false, error: "Not authorised for this project." };
+
+  if (!canPerformMoodboardAction(principal, "seedDefaults")) {
+    return { success: false, error: "Not permitted." };
+  }
+
   const supabase = createServiceSupabase();
 
-  /*
-   * Annotated as insert rows: the array is a union of literals whose
-   * `card_type` widens to `string`, which the typed client rejects.
-   */
-  const initialCards: Array<
-    Pick<MoodboardCardRow, "project_id" | "card_type" | "title"> &
-      Partial<MoodboardCardRow>
-  > = [
+  const { count } = await supabase
+    .from("moodboard_cards")
+    .select("id", { count: "exact", head: true })
+    .eq("project_id", projectId);
+
+  if ((count ?? 0) > 0) {
+    return { success: false, error: "Moodboard already has cards." };
+  }
+
+  const initialCards: MoodboardCardRow[] = [
     {
+      id: crypto.randomUUID(),
       project_id: projectId,
       card_type: "IMAGE_REF",
       title: "Atmospheric Editorial & Directional Light",
-      sort_order: 0,
-      payload: {
-        imageUrl:
-          "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=1200&q=80",
-        tags: ["Editorial", "35mm Grain", "Directional Lighting", "Chiaroscuro"],
-        caption:
-          "Sculptural shadow play with natural window diffusion. Emphasize organic movement, relaxed posture, and tactile silhouettes.",
-        aspectRatio: "portrait",
-      },
-    },
-    {
-      project_id: projectId,
-      card_type: "COLOR_SWATCH",
-      title: "Calibrated Tonal Palette & Textures",
       sort_order: 1,
       payload: {
-        paletteName: "Charcoal & Electric Noir",
-        description:
-          "Harmonized palette balancing deep onyx blacks with ethereal ivory and vibrant violet gel accents for contemporary high-fashion energy.",
-        swatches: [
-          {
-            hex: "#0A0A0A",
-            label: "Onyx Deep",
-            note: "Key negative space & backdrop shadows",
-          },
-          {
-            hex: "#4A1FB8",
-            label: "Electric Violet",
-            note: "Secondary gel kick & editorial rim light",
-          },
-          {
-            hex: "#F4EFEA",
-            label: "Ivory Canvas",
-            note: "Wardrobe silks, natural highlights & paper",
-          },
-          {
-            hex: "#7E7365",
-            label: "Raw Umber",
-            note: "Earthy architectural textures & skin midtones",
-          },
-        ],
+        imageUrl: "",
+        tags: ["editorial", "moody"],
+        caption: "Reference for low-key directional lighting.",
+        aspectRatio: "4:5",
       },
-    },
-    {
-      project_id: projectId,
-      card_type: "SHOT_LIST",
-      title: "Core Sequences & Wishlist Framework",
-      sort_order: 2,
-      payload: {
-        items: [
-          {
-            text: "Wide cinematic establishing shot highlighting spatial volume and dramatic architectural shadows",
-            checked: true,
-            category: "Atmosphere",
-          },
-          {
-            text: "Tight 85mm portrait capturing raw emotional gaze with subtle catchlights",
-            checked: true,
-            category: "Portraits",
-          },
-          {
-            text: "Candid shutter-drag motion blur during walking transition between sets",
-            checked: false,
-            category: "Movement",
-          },
-          {
-            text: "Curated macro composition framing jewelry, raw textiles, and delicate hand placement",
-            checked: false,
-            category: "Details",
-          },
-          {
-            text: "Experimental low-angle silhouette against the tinted studio diffusion wall",
-            checked: false,
-            category: "Experimental",
-          },
-        ],
-      },
-    },
-    {
-      project_id: projectId,
-      card_type: "TECH_NOTE",
-      title: "Technical Directives & Production Logistics",
-      sort_order: 3,
-      payload: {
-        venueDirectives:
-          "Main stage high-bay studio (South window exposure). Blackout acoustic drapes engaged for Section II lighting transition.",
-        equipmentNotes:
-          "Primary System: Hasselblad X2D 100C + 38V / 90V prime lenses. Secondary Run-and-Gun: Sony FX3 with anamorphic adapter.",
-        lightingDirective:
-          "Key: 1200W Daylight through 8x8 diffusion scrim. Rim: Aputure 600c with violet gel at 18% intensity. Maintain minimum 4:1 key-to-fill ratio.",
-        timelineNotes:
-          "08:30 WIB Set Call & Wardrobe Prep | 09:30 WIB Rig & Light Test | 10:00 WIB - 16:30 WIB Production Run.",
-      },
-    },
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    } as unknown as MoodboardCardRow,
   ];
 
-  const { error: insertError } = await supabase
-    .from("moodboard_cards")
-    .insert(initialCards);
-
-  if (insertError) {
-    return { success: false, error: insertError.message };
-  }
+  const { error } = await supabase.from("moodboard_cards").insert(initialCards);
+  if (error) return { success: false, error: error.message };
 
   revalidatePath(`/admin/projects/${projectId}`);
   return { success: true, count: initialCards.length };

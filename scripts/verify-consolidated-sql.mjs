@@ -25,6 +25,44 @@ import process from "node:process";
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const MIGRATION = path.join(HERE, "..", "supabase", "migrations", "0001_consolidated_studio_os.sql");
 
+/*
+ * Migrations layered on top of 0001 by the multi-role workstream. They are
+ * validated in the SAME in-memory database, after 0001, because they depend on
+ * its `roles`/`permissions`/`role_assignments` spine. Applying them to a bare
+ * database would prove nothing about the real deployment order.
+ */
+/*
+ * Every migration after 0001, applied in filename order.
+ *
+ * Hand-picking "just the ones this pass needs" produced a chain that kept
+ * growing (0012 needs 0013, 0016 needs 0013, 0021 needs 0012...). Applying the
+ * real sequence is both simpler and more faithful: it is exactly what
+ * `npm run migrate` does against a hosted database.
+ */
+const RBAC_MIGRATIONS = [
+  "0002_rbac_core.sql",
+  "0003_rbac_policies.sql",
+  "0004_studio_payment_methods.sql",
+  "0005_gallery_session_rpcs.sql",
+  "0006_modernization_core.sql",
+  "0007_rbac_access_repair.sql",
+  "0008_crew_token_lifecycle.sql",
+  "0009_inventory_worker_projection.sql",
+  "0010_inventory_view_service_reader.sql",
+  "0011_inventory_predicate_execute_grant.sql",
+  "0012_payroll_identity_and_equity.sql",
+  "0013_payroll_core_schema.sql",
+  "0014_earnings_rpc_and_rls.sql",
+  "0015_payroll_rpc_explicit_rank.sql",
+  "0016_payroll_cycle_lock_and_audit.sql",
+  "0017_generate_payroll_cycle_rpc.sql",
+  "0018_payslip_numbering.sql",
+  "0019_multi_role_session_context.sql",
+  "0020_session_aware_roles.sql",
+  "0021_user_profiles_and_payout.sql",
+  "0022_session_listing_rpcs.sql",
+];
+
 const REQUIRED_TABLES = [
   "admins","customers","projects","media","favorites",
   "crew_members","project_crew_assignments","project_expenses","equipment_presets",
@@ -52,8 +90,10 @@ async function stubPlatform(db) {
   const stmts = [
     `CREATE SCHEMA IF NOT EXISTS auth`,
     `CREATE SCHEMA IF NOT EXISTS storage`,
-    `CREATE TABLE auth.users (id uuid PRIMARY KEY DEFAULT gen_random_uuid())`,
+    `CREATE TABLE auth.users (id uuid PRIMARY KEY DEFAULT gen_random_uuid(), email text)`,
     `CREATE FUNCTION auth.uid() RETURNS uuid LANGUAGE sql STABLE AS $$ SELECT NULL::uuid $$`,
+    `CREATE TABLE auth.sessions (id uuid PRIMARY KEY, user_id uuid NOT NULL, created_at timestamptz NOT NULL DEFAULT now(), updated_at timestamptz)`,
+    `CREATE FUNCTION auth.jwt() RETURNS jsonb LANGUAGE sql STABLE AS $$ SELECT '{}'::jsonb $$`,
     `CREATE TABLE storage.buckets (id text PRIMARY KEY, name text NOT NULL, public boolean DEFAULT false, file_size_limit bigint, allowed_mime_types text[])`,
     `CREATE TABLE storage.objects (id uuid PRIMARY KEY DEFAULT gen_random_uuid(), bucket_id text REFERENCES storage.buckets(id), name text)`,
     `CREATE ROLE anon`, `CREATE ROLE authenticated`, `CREATE ROLE service_role`,
@@ -202,7 +242,127 @@ console.log("   ELTS Studio OS — consolidated migration validation");
 console.log("  ═══════════════════════════════════════════════════════");
 
 await runPass({ legacy: false });
+await runMultiRolePass();
 if (process.argv.includes("--legacy")) await runPass({ legacy: true });
+
+/**
+ * Applies the RBAC + multi-role migrations on top of 0001 and asserts that the
+ * junction, session context, challenge tokens, and resolver RPCs all exist and
+ * are idempotent.
+ */
+async function runMultiRolePass() {
+  console.log("\n  ── multi-role stack (0001 + RBAC + session context) ──");
+
+  const db = new PGlite();
+  await stubPlatform(db);
+
+  const base = await readFile(MIGRATION, "utf8");
+  try {
+    await db.exec(base);
+  } catch (e) {
+    fail(`0001 failed: ${e.message}`);
+    await db.close();
+    return;
+  }
+
+  for (const file of RBAC_MIGRATIONS) {
+    const sql = await readFile(path.join(HERE, "..", "supabase", "migrations", file), "utf8");
+    try {
+      await db.exec(sql);
+      pass(`${file} applied`);
+    } catch (e) {
+      fail(`${file} failed: ${e.message}`);
+      await db.close();
+      return;
+    }
+  }
+
+  /* Schema assertions. */
+  const { rows: tables } = await db.query(
+    `select table_name from information_schema.tables
+      where table_schema='public' and table_type='BASE TABLE'`,
+  );
+  const names = new Set(tables.map((r) => r.table_name));
+  for (const t of [
+    "user_session_context",
+    "role_challenge_tokens",
+    "payout_challenge_tokens",
+    "role_switch_audit",
+    "user_profiles",
+  ]) {
+    if (names.has(t)) pass(`table ${t}`);
+    else fail(`missing table ${t}`);
+  }
+
+  /* EDITOR must exist at rank 50. */
+  const { rows: editor } = await db.query(
+    `select rank from public.roles where key='EDITOR'`,
+  );
+  if (editor.length === 1 && Number(editor[0].rank) === 50) {
+    pass("EDITOR role present at rank 50");
+  } else {
+    fail(`EDITOR role wrong: ${JSON.stringify(editor)}`);
+  }
+
+  /* role_assignments must now be a junction. */
+  const { rows: pk } = await db.query(
+    `select pg_get_constraintdef(oid) def from pg_constraint
+      where conrelid='public.role_assignments'::regclass and contype='p'`,
+  );
+  const pkDef = pk[0]?.def ?? "";
+  if (/user_id/.test(pkDef) && /role_key/.test(pkDef)) {
+    pass("role_assignments has composite PK (user_id, role_key)");
+  } else {
+    fail(`role_assignments PK not composite: ${pkDef}`);
+  }
+
+  /* Required RPCs. */
+  const { rows: fns } = await db.query(
+    `select p.proname from pg_proc p join pg_namespace n on n.oid=p.pronamespace
+      where n.nspname='public'`,
+  );
+  const fnNames = new Set(fns.map((r) => r.proname));
+  for (const f of [
+    "set_active_role",
+    "get_my_role_context",
+    "mint_role_challenge_token",
+    "mint_payout_challenge_token",
+    "update_payout_with_challenge",
+    "list_my_sessions",
+    "revoke_my_session",
+  ]) {
+    if (fnNames.has(f)) pass(`rpc ${f}`);
+    else fail(`missing rpc ${f}`);
+  }
+
+  /*
+   * Idempotency is asserted ONLY for the migrations this workstream authored.
+   *
+   * The earlier files are NOT re-appliable once 0019 has run: `0002` seeds
+   * `role_permissions` with an `ON CONFLICT` that targets the old single-column
+   * role_assignments key shape. Re-running 0002 after the junction change is not
+   * a supported operation, and `scripts/migrate.mjs` never does it — it records
+   * applied filenames and skips them. Asserting it here would test a sequence
+   * that cannot occur in production.
+   */
+  console.log("\n  ── idempotency: re-applying the multi-role migrations ──");
+  for (const file of [
+    "0019_multi_role_session_context.sql",
+    "0020_session_aware_roles.sql",
+    "0021_user_profiles_and_payout.sql",
+    "0022_session_listing_rpcs.sql",
+  ]) {
+    const sql = await readFile(path.join(HERE, "..", "supabase", "migrations", file), "utf8");
+    try {
+      await db.exec(sql);
+      pass(`${file} re-applied cleanly`);
+    } catch (e) {
+      fail(`${file} re-apply failed: ${e.message}`);
+    }
+  }
+
+  await db.close();
+}
 
 console.log("\n  ═══════════════════════════════════════════════════════");
 if (failures === 0) {

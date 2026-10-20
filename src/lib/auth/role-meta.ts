@@ -10,6 +10,7 @@ export type RoleKey =
   | "FOUNDER"
   | "ADMIN"
   | "WORKER"
+  | "EDITOR"
   | "FREELANCER"
   | "CLIENT";
 
@@ -18,6 +19,7 @@ export const ROLE_RANK: Record<RoleKey, number> = {
   FOUNDER: 100,
   ADMIN: 80,
   WORKER: 60,
+  EDITOR: 50,
   FREELANCER: 30,
   CLIENT: 10,
 };
@@ -27,6 +29,7 @@ export const ROLE_LABEL: Record<RoleKey, string> = {
   FOUNDER: "Founder",
   ADMIN: "Operations Lead",
   WORKER: "Kreatif",
+  EDITOR: "Editor",
   FREELANCER: "Field Crew",
   CLIENT: "Client",
 };

@@ -568,8 +568,81 @@ client_reminders_log: Table<
           granted_by: string | null;
           granted_at: string;
           revoked_at: string | null;
+          /** Base role for hybrid accounts. One true per user. */
+          is_default: boolean;
         },
-        never
+        "user_id" | "role_key"
+      >;
+      user_profiles: Table<
+        {
+          user_id: string;
+          full_name: string;
+          display_name: string | null;
+          phone: string | null;
+          avatar_url: string | null;
+          payout_method: "BANK" | "EWALLET" | null;
+          bank_name: string | null;
+          bank_account_holder: string | null;
+          bank_account_number: string | null;
+          ewallet_provider: string | null;
+          ewallet_id: string | null;
+          created_at: string;
+          updated_at: string;
+        },
+        "user_id"
+      >;
+      user_session_context: Table<
+        {
+          session_id: string;
+          user_id: string;
+          active_role: string;
+          elevated_until: string | null;
+          established_by: "LOGIN" | "SWITCH" | "DOWNGRADE" | "CHALLENGE";
+          updated_at: string;
+        },
+        "session_id"
+      >;
+      role_switch_audit: Table<
+        {
+          id: number;
+          user_id: string;
+          session_id: string | null;
+          from_role: string | null;
+          to_role: string | null;
+          actor_rank: number;
+          event:
+            | "SWITCH"
+            | "DOWNGRADE"
+            | "CHALLENGE_FAILED"
+            | "CHALLENGE_OK"
+            | "EXPIRED"
+            | "REVOKED";
+          detail: Record<string, unknown>;
+          created_at: string;
+        },
+        "user_id" | "actor_rank" | "event"
+      >;
+      role_challenge_tokens: Table<
+        {
+          id: string;
+          user_id: string;
+          session_id: string;
+          target_role: string;
+          expires_at: string;
+          consumed_at: string | null;
+          created_at: string;
+        },
+        "user_id" | "session_id" | "target_role" | "expires_at"
+      >;
+      payout_challenge_tokens: Table<
+        {
+          id: string;
+          user_id: string;
+          expires_at: string;
+          consumed_at: string | null;
+          created_at: string;
+        },
+        "user_id" | "expires_at"
       >;
       role_permissions: Table<
         {
@@ -834,6 +907,57 @@ client_reminders_log: Table<
       };
       has_permission_for_caller: {
         Args: { p_permission_key: string };
+        Returns: boolean;
+      };
+      get_my_role_context: {
+        Args: Record<string, never>;
+        Returns: {
+          role_key: string | null;
+          role_rank: number | null;
+          elevated_until: string | null;
+          owned_roles: string[] | null;
+        }[];
+      };
+      set_active_role: {
+        Args: { p_role_name: string; p_challenge_token?: string | null };
+        Returns: {
+          active_role: string;
+          active_rank: number;
+          elevated_until: string | null;
+        }[];
+      };
+      mint_role_challenge_token: {
+        Args: { p_user_id: string; p_session_id: string; p_target_role: string };
+        Returns: string;
+      };
+      mint_payout_challenge_token: {
+        Args: { p_user_id: string };
+        Returns: string;
+      };
+      update_payout_with_challenge: {
+        Args: {
+          p_token: string;
+          p_payout_method: string;
+          p_bank_name: string | null;
+          p_bank_account_holder: string | null;
+          p_bank_account_number: string | null;
+          p_ewallet_provider: string | null;
+          p_ewallet_id: string | null;
+        };
+        Returns: boolean;
+      };
+      list_my_sessions: {
+        Args: Record<string, never>;
+        Returns: {
+          session_id: string;
+          created_at: string;
+          updated_at: string | null;
+          active_role: string | null;
+          elevated_until: string | null;
+        }[];
+      };
+      revoke_my_session: {
+        Args: { p_session_id: string };
         Returns: boolean;
       };
     };
