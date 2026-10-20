@@ -284,10 +284,23 @@ async function main() {
       if (existing.rowCount > 0) {
         uid = existing.rows[0].id;
         await client.query(
+          /*
+           * The token columns are normalised here too, not just on INSERT.
+           * Re-running the seed over an account created by an older version of
+           * this script would otherwise leave the NULLs that break sign-in.
+           */
           `update auth.users
-              set encrypted_password = crypt($2, gen_salt('bf')),
-                  email_confirmed_at = coalesce(email_confirmed_at, now()),
-                  updated_at = now()
+              set encrypted_password       = crypt($2, gen_salt('bf')),
+                  email_confirmed_at       = coalesce(email_confirmed_at, now()),
+                  confirmation_token       = coalesce(confirmation_token, ''),
+                  recovery_token           = coalesce(recovery_token, ''),
+                  email_change_token_new   = coalesce(email_change_token_new, ''),
+                  email_change             = coalesce(email_change, ''),
+                  email_change_token_current = coalesce(email_change_token_current, ''),
+                  phone_change             = coalesce(phone_change, ''),
+                  phone_change_token       = coalesce(phone_change_token, ''),
+                  reauthentication_token   = coalesce(reauthentication_token, ''),
+                  updated_at               = now()
             where id = $1`,
           [uid, initialPassword],
         );
@@ -296,14 +309,27 @@ async function main() {
           `insert into auth.users
              (instance_id, id, aud, role, email, encrypted_password,
               email_confirmed_at, created_at, updated_at,
-              raw_app_meta_data, raw_user_meta_data, is_sso_user, is_anonymous)
+              raw_app_meta_data, raw_user_meta_data, is_sso_user, is_anonymous,
+              /*
+               * GoTrue scans these token columns into Go strings. A NULL makes
+               * the password grant fail with "Database error querying schema"
+               * (HTTP 500) at sign-in — AFTER the password has already been
+               * verified, which makes it look like a wrong password. They must
+               * be empty strings, not NULL. Accounts created through the Auth
+               * API get '' automatically; a raw INSERT does not.
+               */
+              confirmation_token, recovery_token,
+              email_change_token_new, email_change,
+              email_change_token_current,
+              phone_change, phone_change_token, reauthentication_token)
            values
              ('00000000-0000-0000-0000-000000000000', gen_random_uuid(),
               'authenticated', 'authenticated', $1,
               crypt($2, gen_salt('bf')), now(), now(), now(),
               '{"provider":"email","providers":["email"]}'::jsonb,
               jsonb_build_object('full_name', $3::text),
-              false, false)
+              false, false,
+              '', '', '', '', '', '', '', '')
            returning id`,
           [member.email, initialPassword, member.fullName],
         );
