@@ -1,6 +1,11 @@
 import type { Metadata } from "next";
 import { requirePageOps } from "@/lib/auth/roles";
-import { getPayrollLineItems, getPayrollSummary } from "@/app/actions/payroll";
+import {
+  getPayrollLineItems,
+  getPayrollSummary,
+  getPayrollCycle,
+} from "@/app/actions/payroll";
+import { currentPayrollPeriod } from "@/lib/payroll/period";
 import { PayrollHubClient } from "@/components/admin/payroll/payroll-hub-client";
 
 export const metadata: Metadata = {
@@ -21,14 +26,22 @@ export const metadata: Metadata = {
 export default async function PayrollPage() {
   const { rank } = await requirePageOps();
 
-  const [summary, lines] = await Promise.all([
+  const period = currentPayrollPeriod();
+
+  const [summary, lines, cycle] = await Promise.all([
     getPayrollSummary(),
     getPayrollLineItems("all"),
+    getPayrollCycle(period),
   ]);
 
   return (
     <div className="mx-auto max-w-7xl py-2">
-      <PayrollHubClient initialSummary={summary} initialLines={lines} rank={rank} />
+      <PayrollHubClient
+        initialSummary={summary}
+        initialLines={lines}
+        initialCycle={cycle}
+        rank={rank}
+      />
     </div>
   );
 }

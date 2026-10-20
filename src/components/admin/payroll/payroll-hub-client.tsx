@@ -8,10 +8,13 @@ import {
 } from "lucide-react";
 import {
   advanceLineItemState,
+  getPayrollLineItems,
   type PayrollLineItem,
   type PayrollSummary,
   type PayrollTab,
+  type PayrollCycleInfo,
 } from "@/app/actions/payroll";
+import { PayrollCycleControls } from "./payroll-cycle-controls";
 import { formatRupiah } from "@/lib/reminders/compose";
 
 /**
@@ -79,18 +82,41 @@ function StatCard({
 export function PayrollHubClient({
   initialSummary,
   initialLines,
+  initialCycle,
   rank,
 }: {
   initialSummary: PayrollSummary;
   initialLines: PayrollLineItem[];
+  initialCycle: PayrollCycleInfo | null;
   rank: number;
 }) {
   const [tab, setTab] = useState<PayrollTab>("all");
   const [base, setBase] = useState(initialLines);
   const [error, setError] = useState<string | null>(null);
+  /*
+   * Tracks the cycle so row actions freeze as soon as it is disbursed.
+   * `initialCycle` is only the first paint; the controls own subsequent state,
+   * so this mirrors their status changes via `refresh` on completion.
+   */
+  const [cycleStatus, setCycleStatus] = useState(initialCycle?.status ?? null);
   const [isPending, startTransition] = useTransition();
 
   // Optimistic state so a status change does not wait on the round trip.
+  /**
+   * Re-read the ledger after a cycle action.
+   *
+   * `router.refresh()` would also work, but the ledger is a client-held array
+   * that `useOptimistic` wraps — refetching just the lines keeps the optimistic
+   * base in sync without a full navigation.
+   */
+  const refresh = () => {
+    startTransition(async () => {
+      const fresh = await getPayrollLineItems(tab === "equity" ? "all" : tab);
+      setBase(fresh);
+      setError(null);
+    });
+  };
+
   const [lines, applyOptimistic] = useOptimistic(
     base,
     (state: PayrollLineItem[], action: { id: string; state: PayrollLineItem["state"] }) =>
@@ -98,6 +124,8 @@ export function PayrollHubClient({
   );
 
   const canSeeDividends = initialSummary.canSeeDividends && rank >= 100;
+  /** Disbursed/closed cycles are immutable: no row may be re-advanced. */
+  const frozen = cycleStatus === "DISBURSED" || cycleStatus === "CLOSED";
   const visibleTabs = TABS.filter((t) => !t.execOnly || canSeeDividends);
 
   const filtered = useMemo(
@@ -167,6 +195,17 @@ export function PayrollHubClient({
           </button>
         </div>
       </header>
+
+      {/* Cycle controls: generate / lock / disburse. */}
+      <PayrollCycleControls
+        initialCycle={initialCycle}
+        rank={rank}
+        canSeeDividends={canSeeDividends}
+        onChanged={(status) => {
+          if (status) setCycleStatus(status);
+          refresh();
+        }}
+      />
 
       {/* ── KPI strip ───────────────────────────────────────────────────── */}
       <section aria-label="Ringkasan payroll" className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
@@ -295,7 +334,16 @@ export function PayrollHubClient({
                       </td>
                       <td className="px-4 py-3">
                         <div className="flex items-center justify-end gap-1.5">
-                          {line.state === "PENDING_VERIFICATION" ? (
+                          {/*
+                            Once the cycle is disbursed the ledger is immutable:
+                            every line is PAID and re-advancing is meaningless.
+                            The buttons are removed rather than disabled so a
+                            keyboard user cannot tab into a dead control.
+                          */}
+                          {frozen ? (
+                            <span className="text-[10px] font-medium text-[#a1a1aa]">Selesai</span>
+                          ) : null}
+                          {!frozen && line.state === "PENDING_VERIFICATION" ? (
                             <button
                               type="button"
                               onClick={() => advance(line, "APPROVED")}
@@ -304,7 +352,7 @@ export function PayrollHubClient({
                               <CheckCircle2 size={12} /> Verifikasi
                             </button>
                           ) : null}
-                          {line.state === "APPROVED" ? (
+                          {!frozen && line.state === "APPROVED" ? (
                             <button
                               type="button"
                               onClick={() => advance(line, "READY_FOR_DISBURSEMENT")}
@@ -313,7 +361,7 @@ export function PayrollHubClient({
                               Siap Cair
                             </button>
                           ) : null}
-                          {line.state === "READY_FOR_DISBURSEMENT" && rank >= 100 ? (
+                          {!frozen && line.state === "READY_FOR_DISBURSEMENT" && rank >= 100 ? (
                             <button
                               type="button"
                               onClick={() => advance(line, "PAID")}

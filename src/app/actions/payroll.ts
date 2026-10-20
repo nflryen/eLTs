@@ -346,3 +346,294 @@ export async function getCompensationKpiForCaller(): Promise<{
     currentMonthPayout: summary.currentMonthPayout,
   };
 }
+
+/* ───────────────────────────────────────────────────────────────────────────
+ * Payroll cycle lifecycle
+ * ───────────────────────────────────────────────────────────────────────────
+ * Generation and disbursement are delegated to single plpgsql functions
+ * (`generate_payroll_cycle`, `lock_payroll_cycle`, `disburse_payroll_cycle`)
+ * because the Supabase client has no multi-statement transaction. A Server
+ * Action looping over payees could fail half-way and leave a cycle that cannot
+ * be reconciled; one function call is atomic by construction.
+ *
+ * Rank handling: the guard resolves rank from a real JWT, and that rank is
+ * passed down so the function can enforce the same rule again. The functions
+ * are executable by service_role ONLY, so a browser cannot call them with a
+ * forged rank.
+ */
+
+export type GenerateCycleResult =
+  | {
+      success: true;
+      cycleId: string;
+      slipsCreated: number;
+      linesSettled: number;
+      totalDisbursement: number;
+      reusedCycle: boolean;
+    }
+  | { success: false; error: string; message?: string; cycleId?: string };
+
+export type CycleActionResult =
+  | { success: true; cycleId: string; status: string; slips?: number; totalDisbursement?: number }
+  | { success: false; error: string; message?: string };
+
+type RpcRaw = Record<string, unknown>;
+
+const str = (v: unknown) => (typeof v === "string" ? v : "");
+const num = (v: unknown) => Number(v ?? 0) || 0;
+const bool = (v: unknown) => v === true;
+
+/*
+ * `currentPayrollPeriod` lives in a separate module, NOT here.
+ *
+ * A `"use server"` file may export only async functions, so a synchronous helper
+ * throws "Server Actions must be async functions" at build time — and a Client
+ * Component importing it from here fails with "Export does not exist in target
+ * module". It is a pure date computation, so it belongs in lib/ where both the
+ * page and the client dialog can import it.
+ */
+
+/**
+ * Pre-flight: what WOULD be generated, without writing anything.
+ *
+ * Used by the confirmation dialog so an operator sees headcount and total before
+ * committing a pay period. There is no side effect here.
+ */
+export type CyclePreview = {
+  lines: number;
+  headcount: number;
+  totalNet: number;
+  dividendLines: number;
+  existingCycleStatus: string | null;
+};
+
+export async function previewPayrollCycle(period: string): Promise<CyclePreview | null> {
+  const { rank } = await requirePageOps();
+  if (!/^\d{4}-\d{2}$/.test(period)) return null;
+
+  const supabase = createServiceSupabase();
+  const [y, m] = period.split("-").map(Number);
+  const start = `${period}-01`;
+  const end = `${String(m === 12 ? y + 1 : y)}-${String(m === 12 ? 1 : m + 1).padStart(2, "0")}-01`;
+
+  let q = supabase
+    .from("compensation_line_items")
+    .select("id, kind, payee_crew_id, payee_user_id, net_amount")
+    .in("state", ["APPROVED", "READY_FOR_DISBURSEMENT"])
+    .is("payslip_id", null)
+    .gte("earned_on", start)
+    .lt("earned_on", end);
+
+  // Dividends stay invisible to ADMIN, including in the preview.
+  if (rank < 100) q = q.neq("kind", "DIVIDEND");
+
+  const { data: rows } = await q;
+  const list = (rows ?? []) as Array<Record<string, unknown>>;
+
+  const payees = new Set(
+    list.map((r) => (r.payee_user_id as string) ?? (r.payee_crew_id as string)),
+  );
+
+  const { data: cycle } = await supabase
+    .from("payroll_cycles")
+    .select("status")
+    .eq("period_key", period)
+    .maybeSingle();
+
+  return {
+    lines: list.length,
+    headcount: payees.size,
+    totalNet: list.reduce((s, r) => s + num(r.net_amount), 0),
+    dividendLines: list.filter((r) => r.kind === "DIVIDEND").length,
+    existingCycleStatus: (cycle as { status: string } | null)?.status ?? null,
+  };
+}
+
+/**
+ * Generate the cycle. Safe to call twice: the function reuses an open cycle and
+ * the client-side duplicate guard (`payslip_id IS NULL`) means the second call
+ * creates zero slips.
+ */
+export async function generatePayrollCycleAction(
+  period: string,
+  includeDividends = false,
+): Promise<GenerateCycleResult> {
+  const { rank } = await requirePageOps();
+
+  if (rank < 80) {
+    return { success: false, error: "FORBIDDEN" };
+  }
+  if (!/^\d{4}-\d{2}$/.test(period)) {
+    return { success: false, error: "INVALID_PERIOD", message: "Format periode harus YYYY-MM." };
+  }
+
+  const supabase = createServiceSupabase();
+
+  // Dividends are only ever included for a founder, regardless of the flag.
+  const wantDividends = includeDividends && rank >= 100;
+
+  const { data, error } = await supabase.rpc("generate_payroll_cycle", {
+    p_period_key: period,
+    p_caller_rank: rank,
+    p_include_dividends: wantDividends,
+  });
+
+  if (error) {
+    console.error("generate_payroll_cycle failed", { code: error.code });
+    return { success: false, error: "RPC_ERROR", message: error.message };
+  }
+
+  const raw = (data ?? {}) as RpcRaw;
+
+  if (!bool(raw.success)) {
+    return {
+      success: false,
+      error: str(raw.error) || "UNKNOWN",
+      message: str(raw.message) || undefined,
+      cycleId: str(raw.cycle_id) || undefined,
+    };
+  }
+
+  const cycleId = str(raw.cycle_id);
+  const slipsCreated = num(raw.slips_created);
+
+  /*
+   * Sign each new slip.
+   *
+   * The HMAC seal is also defined in TypeScript (`payslip-token.ts`) because the
+   * PDF route and the public verify page must compute the identical value. The
+   * plpgsql function deliberately leaves `verification_hash = 'pending'` rather
+   * than duplicating that algorithm in SQL, so it is written here, once.
+   */
+  if (slipsCreated > 0) {
+    const secret = process.env.INVOICE_PDF_SECRET;
+    if (!secret || secret.length < 32) {
+      return {
+        success: false,
+        error: "SIGNING_NOT_CONFIGURED",
+        message: "INVOICE_PDF_SECRET belum diatur; slip tidak dapat ditandatangani.",
+        cycleId,
+      };
+    }
+
+    const { signSlipVerification } = await import("@/lib/pdf/payslip-token");
+
+    const { data: slips } = await supabase
+      .from("payslip_records")
+      .select("id, slip_number, total_net, verification_hash")
+      .eq("payroll_cycle_id", cycleId)
+      .eq("verification_hash", "pending");
+
+    for (const s of (slips ?? []) as Array<Record<string, unknown>>) {
+      const hash = signSlipVerification(
+        String(s.id),
+        String(s.slip_number),
+        num(s.total_net),
+        secret,
+      );
+      await supabase
+        .from("payslip_records")
+        .update({ verification_hash: hash })
+        .eq("id", String(s.id));
+    }
+  }
+
+  return {
+    success: true,
+    cycleId,
+    slipsCreated,
+    linesSettled: num(raw.lines_settled),
+    totalDisbursement: num(raw.total_disbursement),
+    reusedCycle: bool(raw.reused_cycle),
+  };
+}
+
+/** Freeze the cycle for payment. Founder only. */
+export async function lockPayrollCycleAction(cycleId: string): Promise<CycleActionResult> {
+  const { rank, user } = await requirePageOps();
+  if (rank < 100) {
+    return { success: false, error: "FORBIDDEN", message: "Hanya Founder yang dapat mengunci siklus." };
+  }
+
+  const supabase = createServiceSupabase();
+  const { data, error } = await supabase.rpc("lock_payroll_cycle", {
+    p_cycle_id: cycleId,
+    p_caller_rank: rank,
+    p_actor: user.id,
+  });
+
+  if (error) return { success: false, error: "RPC_ERROR", message: error.message };
+
+  const raw = (data ?? {}) as RpcRaw;
+  if (!bool(raw.success)) {
+    return { success: false, error: str(raw.error) || "UNKNOWN", message: str(raw.message) || undefined };
+  }
+  return { success: true, cycleId, status: str(raw.status) || "LOCKED" };
+}
+
+/** Disburse. Founder only; marks slips + line items PAID and writes the ledger. */
+export async function disbursePayrollCycleAction(cycleId: string): Promise<CycleActionResult> {
+  const { rank, user } = await requirePageOps();
+  if (rank < 100) {
+    return { success: false, error: "FORBIDDEN", message: "Pencairan hanya dapat dilakukan Founder." };
+  }
+
+  const supabase = createServiceSupabase();
+  const { data, error } = await supabase.rpc("disburse_payroll_cycle", {
+    p_cycle_id: cycleId,
+    p_caller_rank: rank,
+    p_actor: user.id,
+  });
+
+  if (error) return { success: false, error: "RPC_ERROR", message: error.message };
+
+  const raw = (data ?? {}) as RpcRaw;
+  if (!bool(raw.success)) {
+    return { success: false, error: str(raw.error) || "UNKNOWN", message: str(raw.message) || undefined };
+  }
+  return {
+    success: true,
+    cycleId,
+    status: "DISBURSED",
+    slips: num(raw.slips),
+    totalDisbursement: num(raw.total_disbursement),
+  };
+}
+
+/** The cycle for a period, for the status banner. */
+export type PayrollCycleInfo = {
+  id: string;
+  periodKey: string;
+  status: string;
+  slipCount: number;
+  totalNet: number;
+};
+
+export async function getPayrollCycle(period: string): Promise<PayrollCycleInfo | null> {
+  await requirePageOps();
+  const supabase = createServiceSupabase();
+
+  const { data: cycle } = await supabase
+    .from("payroll_cycles")
+    .select("id, period_key, status")
+    .eq("period_key", period)
+    .maybeSingle();
+
+  if (!cycle) return null;
+  const c = cycle as { id: string; period_key: string; status: string };
+
+  const { data: slips } = await supabase
+    .from("payslip_records")
+    .select("total_net")
+    .eq("payroll_cycle_id", c.id);
+
+  const list = (slips ?? []) as Array<{ total_net: number }>;
+
+  return {
+    id: c.id,
+    periodKey: c.period_key,
+    status: c.status,
+    slipCount: list.length,
+    totalNet: list.reduce((s, r) => s + num(r.total_net), 0),
+  };
+}
