@@ -154,6 +154,14 @@ export async function createInventoryAsset(
       condition_status: input.condition_status || "GOOD",
       is_available_for_outgoing_rental: Boolean(input.is_available_for_outgoing_rental),
       notes: input.notes?.trim() || null,
+      /* Columns with DB defaults (0006/0007); mirrored here for the optimistic row. */
+      power_draw_watts: null,
+      power_peak_watts: null,
+      requires_clean_earth: false,
+      requires_ups: false,
+      accessories_default: null,
+      condition_reported_by: null,
+      condition_reported_at: null,
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     };
@@ -253,7 +261,11 @@ export async function updateInventoryAssetAction(
   try {
     const { supabase } = await requireOps();
 
-    const updatePayload: Record<string, unknown> = {
+    /*
+     * Typed as the table's Update shape: an untyped bag cannot match the
+     * PostgREST update overload now that the client carries the schema generic.
+     */
+    const updatePayload: Partial<InventoryAssetRow> = {
       updated_at: new Date().toISOString(),
     };
 
@@ -487,6 +499,11 @@ export async function getVendorRentalManifest(
           crew_assignment_id: null,
           equipment_preset_id: null,
           paid_by: "STUDIO_CASH",
+          pack_status: "PENDING",
+          pack_checked_at: null,
+          pack_checked_by: null,
+          return_condition: null,
+          accessories: {},
           source_type: "VENDOR_RENTAL",
           owner_name: "Koi Rental",
           vendor_name: targetVendor,
@@ -510,6 +527,11 @@ export async function getVendorRentalManifest(
           crew_assignment_id: null,
           equipment_preset_id: null,
           paid_by: "STUDIO_CASH",
+          pack_status: "PENDING",
+          pack_checked_at: null,
+          pack_checked_by: null,
+          return_condition: null,
+          accessories: {},
           source_type: "VENDOR_RENTAL",
           owner_name: "Koi Rental",
           vendor_name: targetVendor,
@@ -650,6 +672,11 @@ export async function addExpenseFromHardwarePreset(
       rental_duration_days: 1,
       return_date: null,
       return_status: "RETURNED",
+      pack_status: "PENDING",
+      pack_checked_at: null,
+      pack_checked_by: null,
+      return_condition: null,
+      accessories: {},
       receipt_proof_url: null,
       notes: item.notes?.trim() || null,
       created_at: new Date().toISOString(),

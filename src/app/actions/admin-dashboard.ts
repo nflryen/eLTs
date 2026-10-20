@@ -81,7 +81,7 @@ export async function getDashboardTelemetry(): Promise<DashboardTelemetry> {
       supabase
         .from("projects")
         .select("*", { count: "exact", head: true })
-        .in("status", ACTIVE_PROJECT_STATUSES as unknown as string[]),
+        .in("status", [...ACTIVE_PROJECT_STATUSES]),
       ({ count }) => countMetric(count)
     ),
 
@@ -90,7 +90,7 @@ export async function getDashboardTelemetry(): Promise<DashboardTelemetry> {
         .from("projects")
         .select("*", { count: "exact", head: true })
         .eq("shoot_date", today)
-        .in("status", ACTIVE_PROJECT_STATUSES as unknown as string[]),
+        .in("status", [...ACTIVE_PROJECT_STATUSES]),
       ({ count }) => countMetric(count)
     ),
 
@@ -183,7 +183,7 @@ async function loadShootsToday(supabase: Supabase, today: string): Promise<Metri
       // column made PostgREST reject the whole query and blank the tile.
       .select("id, name, shoot_date, status")
       .eq("shoot_date", today)
-      .in("status", ACTIVE_PROJECT_STATUSES as unknown as string[]);
+      .in("status", [...ACTIVE_PROJECT_STATUSES]);
 
     if (error || !projects) return failed<ShootsTodayItem[]>();
     if (projects.length === 0) return { state: "empty", value: [] };
@@ -240,7 +240,7 @@ async function loadCrewOnDuty(supabase: Supabase, dayStartIso: string): Promise<
     supabase
       .from("project_crew_assignments")
       .select("*", { count: "exact", head: true })
-      .in("acceptance_status", ["ACCEPTED", "CONFIRMED"])
+      .in("acceptance_status", ["ACCEPTED"])
       .not("call_time", "is", null)
       .gte("call_time", dayStartIso)
       .lt("call_time", dayEnd),
@@ -303,7 +303,7 @@ async function loadActiveContractValue(supabase: Supabase): Promise<Metric<numbe
     const { data, error } = await supabase
       .from("projects")
       .select("id, contract_value, status")
-      .in("status", ACTIVE_PROJECT_STATUSES as unknown as string[]);
+      .in("status", [...ACTIVE_PROJECT_STATUSES]);
 
     if (error || !data) return failed<number>();
     const total = data.reduce((sum, p) => sum + (Number(p.contract_value) || 0), 0);

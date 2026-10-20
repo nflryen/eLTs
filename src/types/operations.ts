@@ -38,12 +38,20 @@ export type ExpensePaidBy =
   | "FOUNDER_B_ADVANCE"
   | "CLIENT_BILLED";
 
-export interface CrewMemberRow {
+export type CrewMemberRow = {
   id: string;
   crew_code: string;
   full_name: string;
   phone: string;
   email: string | null;
+  /**
+   * Login identity for this crew member (migration 0012).
+   *
+   * NULL means the freelancer has no portal account. Earnings RPCs resolve the
+   * caller through this column, so a NULL here means `my_earnings_summary()`
+   * returns zeros for that person.
+   */
+  auth_user_id: string | null;
   primary_skills: string[];
   bank_name: string;
   bank_account_number: string;
@@ -59,9 +67,9 @@ export interface CrewMemberRow {
   notes: string | null;
   created_at: string;
   updated_at: string;
-}
+};
 
-export interface ProjectCrewAssignmentRow {
+export type ProjectCrewAssignmentRow = {
   id: string;
   project_id: string;
   crew_member_id: string;
@@ -85,12 +93,14 @@ export interface ProjectCrewAssignmentRow {
   accepted_at: string | null;
   declined_at: string | null;
   declined_reason: string | null;
+  /** Migration 0008: a revoked token behaves like an unknown one. */
+  revoked_at: string | null;
   offer_expires_at: string | null;
   created_at: string;
   updated_at: string;
-}
+};
 
-export interface EquipmentPresetRow {
+export type EquipmentPresetRow = {
   id: string;
   name: string;
   category: EquipmentCategory;
@@ -98,9 +108,9 @@ export interface EquipmentPresetRow {
   ownership_type: EquipmentOwnershipType;
   is_active: boolean;
   created_at: string;
-}
+};
 
-export interface ProjectExpenseRow {
+export type ProjectExpenseRow = {
   id: string;
   project_id: string;
   category: ExpenseCategory;
@@ -122,9 +132,15 @@ export interface ProjectExpenseRow {
   receipt_proof_url: string | null;
   notes: string | null;
   is_cash_outflow?: boolean;
+  /** Migration 0006: gear pack verification before dispatch. */
+  pack_status: string;
+  pack_checked_at: string | null;
+  pack_checked_by: string | null;
+  return_condition: string | null;
+  accessories: unknown;
   created_at: string;
   updated_at: string;
-}
+};
 export interface AddProjectExpenseInput {
   category: ExpenseCategory;
   name: string;

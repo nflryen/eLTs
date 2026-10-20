@@ -63,18 +63,21 @@ export default async function CrewHubPage({ params }: Props) {
   let payload: CrewHubPayload | null = null;
 
   try {
+    const { data, error } = await supabase.rpc("get_crew_hub_payload", {
+      p_magic_token: magicToken,
+    });
     /*
-     * The generated `Database` type declares this RPC's Args as an empty
-     * object, so the typed client reports zero parameters. The function really
-     * takes `p_magic_token`; casting the argument bag keeps the call honest
-     * without regenerating the whole type file for one function.
+     * The RPC returns jsonb, which the `Database` type can only describe as
+     * `Record<string, unknown>`. Narrowing it to `CrewHubPayload` therefore has
+     * to go through `unknown`: the two types share no declared members, so a
+     * direct cast is rejected — and rightly so, since nothing at the type level
+     * proves the JSON matches the DTO.
+     *
+     * The runtime guard below is what actually validates it: an `error` key
+     * means the token was rejected, and the page renders the not-found screen.
      */
-    const { data, error } = await supabase.rpc(
-      "get_crew_hub_payload",
-      { p_magic_token: magicToken } as never,
-    );
     if (!error && data && !(data as { error?: string }).error) {
-      payload = data as CrewHubPayload;
+      payload = data as unknown as CrewHubPayload;
     }
   } catch {
     // Fall through to the invalid-token screen.

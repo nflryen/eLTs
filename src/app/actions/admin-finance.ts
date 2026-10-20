@@ -114,7 +114,7 @@ export async function createOrUpdateProjectSplit(
           approved_by_a: false,
           approved_by_b: false,
           updated_at: new Date().toISOString(),
-        } as unknown as Record<string, unknown>)
+        })
         .eq("id", existingSplit.id)
         .select()
         .single();
@@ -141,7 +141,7 @@ export async function createOrUpdateProjectSplit(
           approved_by_a: false,
           approved_by_b: false,
           status: "DRAFT",
-        } as unknown as Record<string, unknown>)
+        })
         .select()
         .single();
 
@@ -208,7 +208,7 @@ export async function approveSplit(
           approved_by_b: approvedB,
           status: newStatus,
           updated_at: new Date().toISOString(),
-        } as unknown as Record<string, unknown>)
+        })
         .eq("id", splitId)
         .select()
         .single();
@@ -227,7 +227,7 @@ export async function approveSplit(
           category: "RESERVE_INFLOW",
           amount: split.reserve_amount,
           description: `5% Studio Reserve from ${projectName}`,
-        } as unknown as Record<string, unknown>);
+        });
       }
 
       revalidatePath("/admin/finance");
@@ -386,7 +386,7 @@ export async function createLedgerEntry(input: {
       category: input.category,
       amount: input.amount,
       description: input.description.trim(),
-    } as unknown as Record<string, unknown>);
+    });
     if (error) {
       return { success: false, error: error.message };
     }

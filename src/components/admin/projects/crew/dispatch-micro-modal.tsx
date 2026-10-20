@@ -122,6 +122,7 @@ export function DispatchMicroModal({
         accepted_at: null,
         declined_at: null,
         declined_reason: null,
+        revoked_at: null,
         offer_expires_at: null,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),

@@ -148,7 +148,13 @@ export async function createOrUpdateSplit(input: {
     const founderBShare = Math.round((distributable * 35) / 100);
     const withRemainderToA = founderAShare + (distributable - founderAShare - founderBShare);
 
-    const payload = {
+    /*
+     * Annotated against the row type. Without it the literal widens `status` to
+     * `string`, which no longer matches `MoneySplitStatus` now that the client is
+     * typed — the object would be accepted by the compiler but rejected by
+     * PostgREST's overload resolution.
+     */
+    const payload: Partial<MoneySplitRow> & Pick<MoneySplitRow, "project_id" | "gross_revenue"> = {
       project_id: projectId,
       gross_revenue: Math.round(grossRevenue),
       direct_costs: Math.round(directCosts),
@@ -164,7 +170,7 @@ export async function createOrUpdateSplit(input: {
       approved_by_b: false,
       status: "PENDING_APPROVAL",
       updated_at: new Date().toISOString(),
-    } as unknown as Record<string, unknown>;
+    };
 
     const { data: existing, error: existingError } = await supabase
       .from("money_splits")
@@ -273,7 +279,7 @@ export async function rejectSplit(
         approved_by_a: false,
         approved_by_b: false,
         updated_at: new Date().toISOString(),
-      } as unknown as Record<string, unknown>)
+      })
       .eq("id", parsed.data.splitId)
       .select()
       .single();

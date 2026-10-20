@@ -307,16 +307,27 @@ export async function getExecutiveCockpitData(selectedSector?: string): Promise<
   let pendingReceivables = 0;
   let pendingInvoicesCount = 0;
   try {
+    /*
+     * Reads the DERIVED position view, not a phantom `invoices` table.
+     *
+     * The previous query targeted `public.invoices`, which does not exist —
+     * PostgREST answered 404, the surrounding try/catch swallowed it, and the
+     * cockpit reported Rp 0 receivables no matter what was actually owed.
+     *
+     * `v_invoice_financial_position` is the single source of truth: `balance_due`
+     * is already net of verified payments, and `derived_status` distinguishes
+     * UNPAID / PARTIALLY_PAID / PAID_IN_FULL / OVERPAID / CANCELLED.
+     */
     const { data: pendingInvoices } = await supabase
-      .from("invoices")
-      .select("id, amount, status")
-      .eq("status", "PENDING");
+      .from("v_invoice_financial_position")
+      .select("invoice_id, balance_due, derived_status")
+      .in("derived_status", ["UNPAID", "PARTIALLY_PAID"]);
 
     if (pendingInvoices) {
       pendingInvoicesCount = pendingInvoices.length;
       pendingReceivables = pendingInvoices.reduce(
-        (sum, inv) => sum + (Number(inv.amount) || 0),
-        0
+        (sum, inv) => sum + (Number(inv.balance_due) || 0),
+        0,
       );
     }
   } catch (err) {

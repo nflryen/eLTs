@@ -2,6 +2,7 @@
 
 import { z } from "zod";
 import { createServiceSupabase } from "@/lib/supabase/service";
+import type { InquiryRow } from "@/types/database";
 
 const inquirySchema = z.object({
   name: z.string().min(2, "Nama minimal 2 karakter").max(160, "Nama maksimal 160 karakter"),
@@ -21,7 +22,12 @@ export async function submitInquiryAction(data: InquiryFormValues) {
     const validated = inquirySchema.parse(data);
     const supabase = createServiceSupabase();
 
-    const insertPayload = {
+    /*
+     * Annotated so `status` stays the enum union rather than widening to
+     * `string`, which the typed insert overload rejects.
+     */
+    const insertPayload: Pick<InquiryRow, "name" | "phone" | "pillar" | "message"> &
+      Partial<InquiryRow> = {
       name: validated.name.trim(),
       brand_name: validated.brandName?.trim() || null,
       phone: validated.phone.trim(),

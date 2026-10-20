@@ -3,7 +3,7 @@
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { requireOps } from "@/lib/auth/roles";
-import type { ProjectRow, ProjectStatus } from "@/types/database";
+import type { CustomerRow, ProjectRow, ProjectStatus } from "@/types/database";
 import {
   generateGalleryCode,
   generateAccessToken,
@@ -166,7 +166,12 @@ export async function updateProjectWizardStepAction(
   try {
     const { supabase } = await requireOps();
 
-    const updatePayload: Record<string, unknown> = {
+    /*
+     * Typed as the table's Update shape. A `Record<string, unknown>` bag is
+     * rejected by the now-typed client: PostgREST cannot match an object with no
+     * declared keys against the insert/update overloads.
+     */
+    const updatePayload: Partial<ProjectRow> = {
       updated_at: new Date().toISOString(),
     };
 
@@ -221,32 +226,19 @@ export async function completeProjectScaffoldAction(
       return { success: false, error: updateErr.message };
     }
 
-    // Auto-generate milestone invoices if contract_value is provided
-    const contractVal = Number(project.contract_value) || 0;
-    if (contractVal > 0) {
-      const dpVal = Number(project.dp_amount) || Math.round(contractVal * 0.5);
-      const finalVal = contractVal - dpVal;
-
-      // Generate DP invoice
-      await supabase.from("invoices").insert([
-        {
-          project_id: projectId,
-          invoice_number: `INV-${Date.now().toString().slice(-6)}-DP`,
-          milestone: "DP_50",
-          amount: dpVal,
-          status: "PENDING",
-          pdf_url: null,
-        },
-        {
-          project_id: projectId,
-          invoice_number: `INV-${Date.now().toString().slice(-6)}-FIN`,
-          milestone: "FINAL_BALANCE",
-          amount: finalVal,
-          status: "DRAFT",
-          pdf_url: null,
-        },
-      ]);
-    }
+    /*
+     * Milestone invoices are deliberately NOT created here.
+     *
+     * This block used to insert into `public.invoices` — a table that does not
+     * exist. PostgREST answered 404, the error was discarded, and project
+     * creation still reported success, so operators believed two invoices had
+     * been raised when none had.
+     *
+     * Invoicing is a separate, deliberate action (`createRentalInvoiceAction`
+     * in invoice-actions.ts) which writes a real `project_invoices` row with a
+     * gap-free document number. Creating invoices as a side effect of project
+     * creation would also bypass the DP-floor rule.
+     */
 
     return { success: true, redirectUrl: `/admin/projects/${projectId}` };
   } catch (err: unknown) {
@@ -284,7 +276,12 @@ export async function updateProjectOverviewAction(
       return { success: false, error: "ID proyek tidak valid." };
     }
 
-    const updatePayload: Record<string, unknown> = {
+    /*
+     * Typed as the table's Update shape. A `Record<string, unknown>` bag is
+     * rejected by the now-typed client: PostgREST cannot match an object with no
+     * declared keys against the insert/update overloads.
+     */
+    const updatePayload: Partial<ProjectRow> = {
       updated_at: new Date().toISOString(),
     };
 
@@ -336,7 +333,7 @@ export async function updateProjectOverviewAction(
 
     // Update customer details if supplied
     if (input.customer_id && (input.customer_name || input.customer_phone || input.customer_email)) {
-      const customerUpdate: Record<string, unknown> = {
+      const customerUpdate: Partial<CustomerRow> = {
         updated_at: new Date().toISOString(),
       };
       if (input.customer_name?.trim()) customerUpdate.name = input.customer_name.trim();

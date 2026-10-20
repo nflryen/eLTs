@@ -15,7 +15,20 @@ export interface CommercialInvoiceLineItem {
   duration_days?: number;
 }
 
-export interface ProjectInvoiceRow {
+/**
+ * Row of `public.project_invoices`.
+ *
+ * LEDGER SPINE, NOT DOCUMENT SKIN (migration 0001 section 12):
+ * `gross_contract_value` is the immutable contract. There is deliberately no
+ * `dp_amount`, `dp_paid_at`, `final_balance_amount`, `final_balance_paid_at` or
+ * `payment_status` column — payments are ROWS in `invoice_payment_receipts`, and
+ * balance/status are DERIVED in `v_invoice_financial_position`.
+ *
+ * Those five columns used to be declared here. They never existed in the
+ * database, which is why every `.select()` against this table silently resolved
+ * to `never` once the client became properly typed.
+ */
+export type ProjectInvoiceRow = {
   id: string;
   project_id: string;
   invoice_number: string;
@@ -23,16 +36,16 @@ export interface ProjectInvoiceRow {
   due_date: string;
   line_items: CommercialInvoiceLineItem[];
   gross_contract_value: number;
-  dp_amount: number;
-  dp_paid_at: string | null;
-  final_balance_amount: number;
-  final_balance_paid_at: string | null;
-  payment_status: CommercialInvoiceStatus;
+  /** DP floor percentage; the payable DP is derived, not stored. */
+  minimum_dp_pct: number;
   client_notes: string | null;
   pdf_storage_key: string | null;
+  /** Migration 0006: cancelled invoices reject new receipts. */
+  is_cancelled: boolean;
+  cancelled_reason: string | null;
   created_at: string;
   updated_at: string;
-}
+};
 
 export interface ClientInvoiceDTO {
   id?: string;

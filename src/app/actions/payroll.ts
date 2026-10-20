@@ -246,7 +246,16 @@ export async function advanceLineItemState(
     return { success: false, error: "Pencairan dana hanya dapat dilakukan Founder." };
   }
 
-  const patch: Record<string, unknown> = { state: next, updated_at: new Date().toISOString() };
+  /*
+   * Typed as the table's Update shape rather than `Record<string, unknown>`.
+   * An untyped bag is rejected by the now-typed client: PostgREST's insert and
+   * update overloads cannot match an object with no declared keys.
+   */
+  const patch: {
+    state: "APPROVED" | "READY_FOR_DISBURSEMENT" | "PAID";
+    updated_at: string;
+    paid_at?: string;
+  } = { state: next, updated_at: new Date().toISOString() };
   if (next === "PAID") patch.paid_at = new Date().toISOString();
 
   const { error } = await supabase

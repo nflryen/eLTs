@@ -29,7 +29,7 @@ export type ReturnStatus =
   | "RETURNED"
   | "OVERDUE";
 
-export interface InventoryAssetRow {
+export type InventoryAssetRow = {
   id: string;
   asset_code: string;
   name: string;
@@ -44,9 +44,18 @@ export interface InventoryAssetRow {
   condition_status: ConditionStatus;
   is_available_for_outgoing_rental: boolean;
   notes: string | null;
+  /* Electrical planning — added by migration 0006. */
+  power_draw_watts: number | null;
+  power_peak_watts: number | null;
+  requires_clean_earth: boolean;
+  requires_ups: boolean;
+  accessories_default: string[] | null;
+  /* Condition reporting, written by a WORKER (migration 0007). */
+  condition_reported_by: string | null;
+  condition_reported_at: string | null;
   created_at: string;
   updated_at: string;
-}
+};
 
 export interface AssetConflictResult {
   conflict_found: boolean;

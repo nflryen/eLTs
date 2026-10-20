@@ -306,7 +306,7 @@ export async function updateProjectExpenseAction(
       return { success: false, error: "ID pengeluaran tidak valid." };
     }
 
-    const updatePayload: Record<string, unknown> = {
+    const updatePayload: Partial<ProjectExpenseRow> = {
       updated_at: new Date().toISOString(),
     };
 

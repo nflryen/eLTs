@@ -455,7 +455,7 @@ export async function updateCrewMemberProfileAction(
   try {
     const { supabase } = await requireOps();
 
-    const updatePayload: Record<string, unknown> = {
+    const updatePayload: Partial<CrewMemberRow> = {
       updated_at: new Date().toISOString(),
     };
 

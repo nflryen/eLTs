@@ -1,5 +1,7 @@
 "use server";
 
+import type { ProjectCrewAssignmentRow } from "@/types/operations";
+
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { randomBytes } from "node:crypto";
@@ -232,7 +234,8 @@ export async function assignCrewToProjectAction(input: {
       return { ok: false, error: "Waktu call time tidak valid." };
     }
 
-    const payload = {
+    // Annotated so the status unions survive instead of widening to `string`.
+    const payload: Partial<ProjectCrewAssignmentRow> = {
       role_title: v.roleTitle,
       call_time: callIso,
       fee_agreed: v.feeAgreed,
@@ -253,7 +256,19 @@ export async function assignCrewToProjectAction(input: {
     const { data, error } = await supabase
       .from("project_crew_assignments")
       .insert({
-        ...payload,
+        /*
+         * Spread `payload` is the UPDATE shape (every field optional, including
+         * `id`). Spreading it into an INSERT would carry optional keys the insert
+         * overload rejects, so the required columns are restated explicitly.
+         */
+        role_title: payload.role_title!,
+        call_time: payload.call_time!,
+        fee_agreed: payload.fee_agreed ?? 0,
+        venue_name: payload.venue_name!,
+        venue_address: payload.venue_address!,
+        revoked_at: null,
+        acceptance_status: "PENDING_OFFER",
+        payment_status: "UNPAID",
         project_id: v.projectId,
         crew_member_id: v.crewMemberId,
         magic_token: randomBytes(32).toString("base64url"),

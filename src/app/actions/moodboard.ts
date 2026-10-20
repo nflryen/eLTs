@@ -3,6 +3,7 @@
 import { z } from "zod";
 import { revalidatePath } from "next/cache";
 import { createServiceSupabase } from "@/lib/supabase/service";
+import type { MoodboardCardRow } from "@/types/database";
 import type {
   MoodboardCard,
   MoodboardComment,
@@ -96,7 +97,7 @@ export async function getMoodboardData(
  */
 export async function addMoodboardCard(
   projectId: string,
-  cardType: string,
+  cardType: MoodboardCardType,
   title: string,
   payload: MoodboardCardPayload = {}
 ): Promise<{ success: boolean; error?: string; card?: MoodboardCard }> {
@@ -333,7 +334,14 @@ export async function seedDefaultMoodboard(
 
   const supabase = createServiceSupabase();
 
-  const initialCards = [
+  /*
+   * Annotated as insert rows: the array is a union of literals whose
+   * `card_type` widens to `string`, which the typed client rejects.
+   */
+  const initialCards: Array<
+    Pick<MoodboardCardRow, "project_id" | "card_type" | "title"> &
+      Partial<MoodboardCardRow>
+  > = [
     {
       project_id: projectId,
       card_type: "IMAGE_REF",

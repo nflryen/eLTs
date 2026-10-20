@@ -11,6 +11,7 @@ import type {
   AssignCrewInput,
   ProjectCrewAssignmentWithCrew,
 } from "@/types/operations";
+import type { ProjectCrewAssignmentRow } from "@/types/operations";
 
 /*
  * The in-process `fallbackMemoryCrew` / `fallbackMemoryAssignments` stores were
@@ -159,7 +160,17 @@ export async function assignCrewToProject(
   // Generate 43-char base64url token (32 random bytes)
   const magicToken = randomBytes(32).toString("base64url");
 
-  const insertPayload = {
+  /*
+   * Annotated against the row's insert shape. Without it `payment_status` and
+   * `acceptance_status` widen to `string`, which the typed insert overload
+   * rejects because the columns are CHECK-constrained unions.
+   */
+  const insertPayload: Pick<
+    ProjectCrewAssignmentRow,
+    "project_id" | "crew_member_id" | "magic_token" | "role_title" |
+    "call_time" | "venue_name" | "venue_address"
+  > &
+    Partial<ProjectCrewAssignmentRow> = {
     project_id: input.projectId,
     crew_member_id: input.crewMemberId,
     magic_token: magicToken,

@@ -3,6 +3,7 @@ import { timingSafeEqual } from "node:crypto";
 import { createServiceSupabase } from "@/lib/supabase/service";
 import { hashGalleryPin } from "@/lib/security/credentials";
 import { getPinPepper } from "@/lib/env";
+import type { MediaRow } from "@/types/database";
 
 export const runtime = "nodejs";
 
@@ -131,34 +132,10 @@ export async function GET(request: Request) {
         sort_order: i,
       });
     }
-    await supabase.from("media").insert(mediaPayloads);
-
-    // 4. Invoices
-    await supabase.from("invoices").delete().eq("project_id", projectId);
-    await supabase.from("invoices").insert([
-      {
-        id: "d0000000-0000-0000-0000-000000000001",
-        project_id: projectId,
-        invoice_number: "INV-2026-09-DP01",
-        milestone: "DP_50",
-        amount: 750000,
-        status: "PAID",
-        due_date: "2026-09-15",
-        paid_at: new Date("2026-09-14T10:00:00Z").toISOString(),
-        pdf_url: "/api/invoices/d0000000-0000-0000-0000-000000000001/pdf",
-      },
-      {
-        id: "d0000000-0000-0000-0000-000000000002",
-        project_id: projectId,
-        invoice_number: "INV-2026-09-FIN01",
-        milestone: "FINAL_BALANCE",
-        amount: 750000,
-        status: "PENDING",
-        due_date: "2026-09-28",
-        paid_at: null,
-        pdf_url: "/api/invoices/d0000000-0000-0000-0000-000000000002/pdf",
-      },
-    ]);
+    // `mediaPayloads` is built from a literal, so it infers a structural type
+    // that PostgREST's insert overload cannot match. Annotating it against the
+    // row type keeps the shape honest at the call site.
+    await supabase.from("media").insert(mediaPayloads as MediaRow[]);
 
     // Never echo credentials. The operator already holds them; returning the
     // PIN and access token in a response body risks it landing in a log,
