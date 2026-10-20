@@ -2,23 +2,27 @@
 
 import { redirect } from "next/navigation";
 import { createServerSupabase } from "@/lib/supabase/server";
+import { sanitiseReturnPath } from "@/lib/url";
 
-/**
- * Only same-origin admin paths are valid post-login destinations.
+/*
+ * The post-login destination is sanitised by `sanitiseReturnPath`, which is
+ * stricter than the previous local `startsWith('/admin')` check.
  *
- * Without this check, `redirectedFrom` becomes an open-redirect vector: an
- * attacker could send `/admin/login?redirectedFrom=https://evil.example` and
- * land a freshly authenticated admin on a phishing page that looks like the
- * studio OS. Relative admin paths only.
+ * That check accepted three shapes it should have refused:
+ *   /admin\..\x          browsers read `\` as `/`, so this is a traversal
+ *   /admin//finance      doubled slash
+ *   /admin/../../etc     resolves outside /admin entirely
+ *
+ * It also rejected legitimate settings destinations such as
+ * /settings/profile?denied=super_admin_required. Both bugs are fixed in one
+ * place, and the helper is unit-tested.
  */
+const LOGIN_RETURN_PREFIXES = ["/admin", "/settings"] as const;
+
 function safeRedirectTarget(raw: unknown): string {
-  const value = typeof raw === "string" ? raw : "";
-  const isAdminPath = value.startsWith("/admin") || value.startsWith("/api/admin");
-  // Reject protocol-relative ("//evil.com") and absolute ("https://…") forms:
-  // both would turn `redirectedFrom` into an open redirect after sign-in.
-  if (!isAdminPath || value.startsWith("//") || value.includes("://")) return "/admin";
-  return value;
+  return sanitiseReturnPath(typeof raw === "string" ? raw : null, LOGIN_RETURN_PREFIXES) ?? "/admin";
 }
+
 export async function adminLogin(state: unknown, formData: FormData) {
   const email = formData.get("email")?.toString();
   const password = formData.get("password")?.toString();

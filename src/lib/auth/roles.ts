@@ -6,6 +6,7 @@ import "server-only";
  * Client Component cannot pull it in by accident.
  */
 import { redirect } from "next/navigation";
+import { sanitiseReturnPath } from "@/lib/url";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { createServiceSupabase, type ServiceSupabaseClient } from "@/lib/supabase/service";
 import { ForbiddenError, UnauthorizedError } from "@/lib/auth/admin";
@@ -340,12 +341,11 @@ export async function requirePageRole(
  * rejected so `?redirectedFrom=` cannot become a phishing hop.
  */
 function safeReturnPath(raw: string | undefined): string | null {
-  if (!raw) return null;
-  if (!raw.startsWith("/")) return null;
-  if (raw.startsWith("//")) return null;
-  if (raw.includes("://")) return null;
-  if (!raw.startsWith("/admin") && !raw.startsWith("/settings")) return null;
-  return raw;
+  /*
+   * Delegates to the tested helper. The inline version this replaced accepted
+   * `/admin\..\x`, `/admin//finance` and `/admin/../etc`; see src/lib/url.ts.
+   */
+  return sanitiseReturnPath(raw, ["/admin", "/settings"]);
 }
 
 /**

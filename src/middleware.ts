@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { createServerClient } from '@supabase/ssr';
+import { normaliseSupabaseUrl, sanitiseReturnPath } from '@/lib/url';
 
 /**
  * Route-level capability enforcement.
@@ -78,8 +79,26 @@ export async function middleware(request: NextRequest) {
     },
   });
 
+  /*
+   * Normalise the project URL before the SDK appends `/auth/v1`.
+   *
+   * A trailing slash in the Vercel environment variable produced
+   * `https://<ref>.supabase.co//auth/v1`, and every auth call then failed with
+   * "Invalid path specified in request URL" — a message that points at the
+   * request, not at the one character in the configuration that caused it.
+   *
+   * `normaliseSupabaseUrl` returns null for an unusable value; in that case the
+   * request is failed explicitly rather than sent to a malformed endpoint.
+   */
+  const supabaseUrl = normaliseSupabaseUrl(process.env.NEXT_PUBLIC_SUPABASE_URL);
+  if (!supabaseUrl) {
+    return new NextResponse('Supabase is misconfigured (invalid project URL).', {
+      status: 500,
+    });
+  }
+
   const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    supabaseUrl,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
       cookies: {
@@ -114,7 +133,12 @@ export async function middleware(request: NextRequest) {
     const redirectUrl = request.nextUrl.clone();
     redirectUrl.pathname = '/admin/login';
     redirectUrl.search = '';
-    redirectUrl.searchParams.set('redirectedFrom', pathname);
+    /* Sanitised even though `pathname` is server-derived: defence in depth, and
+       it guarantees a single-leading-slash path with no dot segments. */
+    redirectUrl.searchParams.set(
+      'redirectedFrom',
+      sanitiseReturnPath(pathname, ['/admin', '/settings']) ?? '/admin',
+    );
     return NextResponse.redirect(redirectUrl);
   }
 

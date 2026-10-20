@@ -6,6 +6,7 @@ import { createServerSupabase } from "@/lib/supabase/server";
 import { createServiceSupabase } from "@/lib/supabase/service";
 import { getRoleSession } from "@/lib/auth/roles";
 import { PAYOUT_PROVIDERS } from "@/lib/payout-providers";
+import { absoluteUrl } from "@/lib/url";
 
 /*
  * SELF-SERVICE PROFILE, PAYOUT, AND CREDENTIAL MANAGEMENT
@@ -247,10 +248,19 @@ export async function changeEmailAction(input: {
    * resolved from the configured app URL rather than the request Host header,
    * so a spoofed Host cannot redirect the confirmation link elsewhere.
    */
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "";
+  /*
+   * Built through `absoluteUrl`, which strips trailing slashes from the base and
+   * collapses doubled slashes in the path. Naive `${appUrl}/settings/security`
+   * produced `https://host//settings/security` whenever NEXT_PUBLIC_APP_URL ended
+   * in a slash.
+   */
+  const confirmUrl = absoluteUrl(
+    process.env.NEXT_PUBLIC_APP_URL,
+    "/settings/security?email=confirmed",
+  );
   const { error } = await supabase.auth.updateUser(
     { email: nextEmail },
-    appUrl ? { emailRedirectTo: `${appUrl}/settings/security?email=confirmed` } : undefined,
+    confirmUrl ? { emailRedirectTo: confirmUrl } : undefined,
   );
 
   if (error) return { ok: false, error: error.message };
