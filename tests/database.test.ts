@@ -430,11 +430,17 @@ test("PostgreSQL foundation constraints, RLS and access lifecycle", async (t) =>
           // 1. Insert Crew Member
           await db.query(`
             insert into public.crew_members (
-              id, crew_code, full_name, phone, bank_name,
-              bank_account_number, bank_account_holder, standard_day_rate
+              id, crew_code, full_name, standard_day_rate
             ) values (
-              '${crewId}', 'CRW-01', 'Bambang Sudirman', '081234567890',
-              'BCA', '1234567890', 'Bambang Sudirman', 500000
+              '${crewId}', 'CRW-01', 'Bambang Sudirman', 500000
+            );
+          `);
+          /* 0024 moved contact/bank to crew_contact_details (no login here). */
+          await db.query(`
+            insert into public.crew_contact_details (
+              crew_member_id, phone, bank_name, bank_account_number, bank_account_holder
+            ) values (
+              '${crewId}', '081234567890', 'BCA', '1234567890', 'Bambang Sudirman'
             );
           `);
 

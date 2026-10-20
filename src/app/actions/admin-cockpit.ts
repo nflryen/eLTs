@@ -100,18 +100,24 @@ export async function getExecutiveCockpitData(selectedSector?: string): Promise<
   const in7DaysDateStr = in7Days.toISOString().slice(0, 10);
 
   // 1. Fetch Crew Directory for lookup
+  /*
+   * `v_crew_identity`, not `crew_members`.
+   *
+   * The cockpit only needs names and codes, but the view is the sanctioned
+   * identity read after migration 0024 and exposes the key as `crew_member_id`.
+   */
   const crewMap = new Map<string, { full_name: string; crew_code: string }>();
   try {
     const { data: crewData } = await supabase
-      .from("crew_members")
-      .select("id, full_name, crew_code");
+      .from("v_crew_identity")
+      .select("crew_member_id, full_name, crew_code");
     if (crewData) {
       for (const c of crewData) {
-        crewMap.set(c.id, { full_name: c.full_name, crew_code: c.crew_code });
+        crewMap.set(c.crew_member_id, { full_name: c.full_name, crew_code: c.crew_code });
       }
     }
   } catch (err) {
-    console.warn("[AdminCockpit] Warning fetching crew_members:", err);
+    console.warn("[AdminCockpit] Warning fetching v_crew_identity:", err);
   }
 
   // 2. 5-Day Upcoming Agenda

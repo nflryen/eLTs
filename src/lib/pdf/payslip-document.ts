@@ -2,7 +2,7 @@ import "server-only";
 import { PDFDocument, StandardFonts, rgb, type PDFFont, type PDFPage } from "pdf-lib";
 import QRCode from "qrcode";
 import { formatRupiah, formatDateId } from "@/lib/reminders/compose";
-import type { PayslipData } from "./load-payslip";
+import { formatPayoutDestination, type PayslipData } from "./load-payslip";
 
 /**
  * Payslip PDF as a real vector document.
@@ -142,12 +142,17 @@ export async function renderPayslipPdf(
     .filter(Boolean)
     .join("  -  ");
   text(codeLine, { size: 8, color: MUTED });
-  if (data.bank) {
+  /*
+   * Printed from the shared formatter so the PDF and the admin screen agree.
+   * A missing destination is printed as an explicit warning, never omitted: an
+   * absent line reads as "paid another way", which hides a payable slip with no
+   * account behind it. The data itself comes from `v_crew_identity` (see
+   * load-payslip.ts) — never from the dropped `crew_members.bank_*` columns.
+   */
+  const payout = formatPayoutDestination(data);
+  if (payout) {
     y -= 12;
-    text(`Rekening tujuan: ${data.bank.name} ${data.bank.accountNumber} a/n ${data.bank.holder}`, {
-      size: 8,
-      color: MUTED,
-    });
+    text(payout, data.bank ? { size: 8, color: MUTED } : { size: 8, font: bold, color: INK });
   }
 
   rule(16);

@@ -6,7 +6,7 @@ import { z } from "zod";
 import { requireOps } from "@/lib/auth/roles";
 import { createServiceSupabase } from "@/lib/supabase/service";
 import type {
-  CrewMemberRow,
+  CrewIdentityRow,
   CrewPaymentStatus,
   AssignCrewInput,
   ProjectCrewAssignmentWithCrew,
@@ -32,13 +32,21 @@ const uuidSchema = z.string().uuid();
 /**
  * Returns active crew directory for dispatch selection dropdowns.
  */
-export async function getCrewMembersList(): Promise<CrewMemberRow[]> {
+export async function getCrewMembersList(): Promise<CrewIdentityRow[]> {
   try {
     await requireOps();
     const supabase = createServiceSupabase();
 
+    /*
+     * `v_crew_identity`, not `crew_members`.
+     *
+     * Migration 0024 dropped phone/email/bank_* from crew_members; the view
+     * resolves them from user_profiles (linked) or crew_contact_details
+     * (unlinked). This action feeds the roster table, so reading the bare table
+     * would blank every operator-visible phone number.
+     */
     const { data, error } = await supabase
-      .from("crew_members")
+      .from("v_crew_identity")
       .select("*")
       .eq("is_active", true)
       .order("full_name", { ascending: true });
@@ -48,7 +56,7 @@ export async function getCrewMembersList(): Promise<CrewMemberRow[]> {
       return [];
     }
 
-    return (data ?? []) as CrewMemberRow[];
+    return (data ?? []) as CrewIdentityRow[];
   } catch (err: unknown) {
     console.error("crew_list_threw", {
       message: err instanceof Error ? err.message : "unknown",
@@ -68,6 +76,16 @@ export async function getCrewAssignmentsForProject(
     await requireOps();
     const supabase = createServiceSupabase();
 
+    /*
+     * Two reads, because identity and assignment now live apart.
+     *
+     * Migration 0024 dropped phone/email/bank_* from crew_members, so the old
+     * embed — `crew_members(id, crew_code, full_name, phone, primary_skills,
+     * bank_*)` — fails the entire query with 42703. The embed therefore keeps
+     * only surviving columns, and payout/contact is resolved from
+     * `v_crew_identity`, which picks user_profiles for linked crew and
+     * crew_contact_details for unlinked crew.
+     */
     const { data, error } = await supabase
       .from("project_crew_assignments")
       .select(`
@@ -76,11 +94,7 @@ export async function getCrewAssignmentsForProject(
           id,
           crew_code,
           full_name,
-          phone,
-          primary_skills,
-          bank_name,
-          bank_account_number,
-          bank_account_holder
+          primary_skills
         )
       `)
       .eq("project_id", projectId)
@@ -93,7 +107,42 @@ export async function getCrewAssignmentsForProject(
 
     // An empty assignment list is a valid state (no crew booked yet) and is
     // never substituted with demo rows.
-    return (data ?? []) as unknown as ProjectCrewAssignmentWithCrew[];
+    const rows = (data ?? []) as unknown as ProjectCrewAssignmentWithCrew[];
+    const crewIds = [...new Set(rows.map((r) => r.crew_member_id))];
+    if (crewIds.length === 0) return rows;
+
+    const { data: identities, error: identityError } = await supabase
+      .from("v_crew_identity")
+      .select("crew_member_id, phone, bank_name, bank_account_number, bank_account_holder")
+      .in("crew_member_id", crewIds);
+
+    /*
+     * A failed second read degrades to assignments-without-payout rather than
+     * blanks the call sheet: the crew ARE booked, and losing their names would
+     * misreport the schedule. Only the bank block renders empty.
+     */
+    if (identityError) {
+      console.error("crew_identity_failed", { code: identityError.code });
+      return rows;
+    }
+
+    const identityById = new Map(
+      (identities ?? []).map((i) => [i.crew_member_id, i]),
+    );
+
+    return rows.map((row) => {
+      const identity = identityById.get(row.crew_member_id);
+      return {
+        ...row,
+        crew_member: {
+          ...row.crew_member,
+          phone: identity?.phone ?? null,
+          bank_name: identity?.bank_name ?? null,
+          bank_account_number: identity?.bank_account_number ?? null,
+          bank_account_holder: identity?.bank_account_holder ?? null,
+        },
+      };
+    });
   } catch (err: unknown) {
     console.error("crew_assignments_threw", {
       message: err instanceof Error ? err.message : "unknown",

@@ -60,10 +60,17 @@ test("Operations Dispatch: Zero-Leakage RPC, Auto-Expense Trigger & Calendar", a
       '2026-09-28', 'ready', 15000000, 7500000, true, false
     );
 
-    insert into public.crew_members (id, crew_code, full_name, phone, primary_skills, bank_name, bank_account_number, bank_account_holder, standard_day_rate)
+    /* 0024 moved contact/bank out of crew_members. These fixtures have no
+       login, so their details live in crew_contact_details. */
+    insert into public.crew_members (id, crew_code, full_name, primary_skills, standard_day_rate)
     values
-      ('${crewMemberA}', 'CRW-01', 'Fajar Switcher', '081234567001', array['Switcher Operator', 'vMix'], 'BCA', '0000000000', 'Fajar Switcher', 500000),
-      ('${crewMemberB}', 'CRW-02', 'Dimas Roving', '081234567002', array['Cameraman', 'Wireless'], 'Mandiri', '13700192837', 'Dimas Roving', 400000);
+      ('${crewMemberA}', 'CRW-01', 'Fajar Switcher', array['Switcher Operator', 'vMix'], 500000),
+      ('${crewMemberB}', 'CRW-02', 'Dimas Roving', array['Cameraman', 'Wireless'], 400000);
+
+    insert into public.crew_contact_details (crew_member_id, phone, bank_name, bank_account_number, bank_account_holder)
+    values
+      ('${crewMemberA}', '081234567001', 'BCA', '0000000000', 'Fajar Switcher'),
+      ('${crewMemberB}', '081234567002', 'Mandiri', '13700192837', 'Dimas Roving');
     reset role;
   `);
 

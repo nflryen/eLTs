@@ -16,6 +16,13 @@ export type PayslipLine = {
   netAmount: number;
 };
 
+/** Where the money is sent. A `null` part is unknown, not empty. */
+export type PayslipBank = {
+  name: string | null;
+  accountNumber: string;
+  holder: string | null;
+};
+
 export type PayslipData = {
   id: string;
   slipNumber: string;
@@ -25,8 +32,19 @@ export type PayslipData = {
   payeeType: "FREELANCE" | "INTERNAL";
   payeeUserId: string | null;
   payeeCrewId: string | null;
-  /** Bank destination. Null for internal staff paid by transfer with no record. */
-  bank: { name: string; accountNumber: string; holder: string } | null;
+  /**
+   * Payout destination, resolved from `v_crew_identity`. Non-null only when an
+   * account number is actually on file: a bank name alone is not a way to send
+   * money, and printing one would read as a complete payment instruction.
+   */
+  bank: PayslipBank | null;
+  /**
+   * The payee is a crew member, yet no account number is on file. The slip
+   * still renders — the amount and its verification hash are valid — but it
+   * must carry an explicit "destination not set" marker. An omitted line reads
+   * as "paid another way"; a blank account reads as corruption.
+   */
+  payoutDestinationIncomplete: boolean;
   status: string;
   issuedAt: string;
   totalGross: number;
@@ -34,6 +52,16 @@ export type PayslipData = {
   totalNet: number;
   verificationHash: string;
   lines: PayslipLine[];
+};
+
+/** The slice of `v_crew_identity` a payslip needs. */
+type CrewIdentitySlice = {
+  crew_member_id: string;
+  crew_code: string;
+  display_full_name: string | null;
+  bank_name: string | null;
+  bank_account_holder: string | null;
+  bank_account_number: string | null;
 };
 
 export async function loadPayslipData(slipId: string): Promise<PayslipData | null> {
@@ -50,17 +78,45 @@ export async function loadPayslipData(slipId: string): Promise<PayslipData | nul
 
   if (error || !slip) return null;
 
-  const [cycleRes, crewRes, adminRes, linesRes] = await Promise.all([
+  /*
+   * Identity and payout destination come from `public.v_crew_identity`, never
+   * from `crew_members`.
+   *
+   * Both alternatives are wrong. Migration 0024 dropped `crew_members.bank_*`
+   * outright, and even while those columns existed they were the wrong source:
+   * /settings/profile writes `user_profiles`, so a slip built from
+   * `crew_members` could pay a bank account its owner had already replaced,
+   * with nothing telling them. The view resolves linked crew through
+   * `user_profiles` and unlinked crew (no login, so nowhere else to store it)
+   * through `crew_contact_details` — one read, correct for both populations.
+   * Do not reintroduce a `crew_members` bank/name read here.
+   *
+   * A slip is keyed to a crew member OR to a user, but a user-keyed slip still
+   * belongs to a crew member when that person has a crew row (Ray is both), so
+   * falling back to `auth_user_id` keeps their destination on their own slip.
+   */
+  const identityKey = slip.payee_crew_id
+    ? ({ column: "crew_member_id", value: slip.payee_crew_id } as const)
+    : slip.payee_user_id
+      ? ({ column: "auth_user_id", value: slip.payee_user_id } as const)
+      : null;
+
+  const [cycleRes, identityRes, adminRes, linesRes] = await Promise.all([
     supabase
       .from("payroll_cycles")
       .select("period_key, status")
       .eq("id", slip.payroll_cycle_id)
       .maybeSingle(),
-    slip.payee_crew_id
+    identityKey
       ? supabase
-          .from("crew_members")
-          .select("full_name, crew_code, bank_name, bank_account_number, bank_account_holder")
-          .eq("id", slip.payee_crew_id)
+          .from("v_crew_identity")
+          .select(
+            "crew_member_id, crew_code, display_full_name, bank_name, bank_account_holder, bank_account_number",
+          )
+          .eq(identityKey.column, identityKey.value)
+          // `auth_user_id` carries no unique constraint: a duplicated link must
+          // degrade to "take one", not to an error on every slip download.
+          .limit(1)
           .maybeSingle()
       : Promise.resolve({ data: null }),
     slip.payee_user_id
@@ -86,29 +142,36 @@ export async function loadPayslipData(slipId: string): Promise<PayslipData | nul
 
   const projectMap = new Map((projectsRes.data ?? []).map((p) => [p.id, p.name]));
 
-  const crew = crewRes.data as
-    | { full_name: string; crew_code: string; bank_name: string | null; bank_account_number: string | null; bank_account_holder: string | null }
-    | null;
+  const crew = identityRes.data as CrewIdentitySlice | null;
   const admin = adminRes.data as { display_name: string } | null;
   const cycle = cycleRes.data as { period_key: string; status: string } | null;
+
+  const accountNumber = crew?.bank_account_number?.trim() || null;
 
   return {
     id: slip.id,
     slipNumber: slip.slip_number,
     periodKey: cycle?.period_key ?? "",
-    payeeName: crew?.full_name ?? admin?.display_name ?? "Tanpa nama",
-    payeeCode: crew?.crew_code ?? null,
+    payeeName: crew?.display_full_name ?? admin?.display_name ?? "Tanpa nama",
+    // Only a crew-keyed slip carries a crew code. A user-keyed slip that happens
+    // to resolve a crew row uses that row for the NAME and the payout
+    // destination only: printing "CRW-RAY - Staff Internal" would contradict
+    // itself, and the slip's FREELANCE/INTERNAL label is decided by how payroll
+    // keyed the slip, not by this lookup.
+    payeeCode: slip.payee_crew_id ? (crew?.crew_code ?? null) : null,
     payeeType: slip.payee_crew_id ? "FREELANCE" : "INTERNAL",
     payeeUserId: slip.payee_user_id,
     payeeCrewId: slip.payee_crew_id,
-    bank:
-      crew && crew.bank_name && crew.bank_account_number
-        ? {
-            name: crew.bank_name,
-            accountNumber: crew.bank_account_number,
-            holder: crew.bank_account_holder ?? crew.full_name,
-          }
-        : null,
+    bank: accountNumber
+      ? {
+          name: crew?.bank_name?.trim() || null,
+          accountNumber,
+          // Holder is normally the person; fall back to their own name rather
+          // than printing "a/n" with nothing after it.
+          holder: crew?.bank_account_holder?.trim() || crew?.display_full_name || null,
+        }
+      : null,
+    payoutDestinationIncomplete: Boolean(crew) && !accountNumber,
     status: cycle?.status ?? "DRAFT",
     issuedAt: slip.issued_at,
     totalGross: Number(slip.total_gross),
@@ -125,4 +188,22 @@ export async function loadPayslipData(slipId: string): Promise<PayslipData | nul
       netAmount: Number(l.net_amount ?? 0),
     })),
   };
+}
+
+/**
+ * The single "where does this money go" line, shared by the printed PDF and the
+ * admin screen so the two cannot drift apart. Exported because the exact marker
+ * wording is the contract: it must say the destination is MISSING, not silently
+ * omit the line. Null only when there is genuinely no destination to report.
+ */
+export function formatPayoutDestination(data: PayslipData): string | null {
+  if (data.bank) {
+    const institution = data.bank.name ? `${data.bank.name} ` : "";
+    const holder = data.bank.holder ? ` a/n ${data.bank.holder}` : "";
+    return `Rekening tujuan: ${institution}${data.bank.accountNumber}${holder}`;
+  }
+  if (data.payoutDestinationIncomplete) {
+    return "Rekening tujuan: BELUM DIATUR - hubungi Studio Head";
+  }
+  return null;
 }

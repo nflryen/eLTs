@@ -4,7 +4,7 @@ import { redirect } from "next/navigation";
 import { ArrowLeft, Download } from "lucide-react";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { createServiceSupabase } from "@/lib/supabase/service";
-import { loadPayslipData } from "@/lib/pdf/load-payslip";
+import { formatPayoutDestination, loadPayslipData } from "@/lib/pdf/load-payslip";
 import { formatRupiah, formatDateId } from "@/lib/reminders/compose";
 
 export const metadata: Metadata = {
@@ -41,18 +41,25 @@ export default async function PayslipPage({ params }: Props) {
 
   let isRecipient = data.payeeUserId === user.id;
   if (!isRecipient && data.payeeCrewId) {
-    const db = createServiceSupabase();
-    const { data: crew } = await db
-      .from("crew_members")
-      .select("id")
+    /*
+     * Same check as the PDF route, against the same read model: an identity read
+     * for this feature comes from `v_crew_identity`, never `crew_members`.
+     * Filtering on `crew_member_id` too means a duplicated `auth_user_id` link
+     * can never widen this to somebody else's slip.
+     */
+    const { data: crew } = await createServiceSupabase()
+      .from("v_crew_identity")
+      .select("crew_member_id")
+      .eq("crew_member_id", data.payeeCrewId)
       .eq("auth_user_id", user.id)
       .maybeSingle();
-    isRecipient = (crew as { id: string } | null)?.id === data.payeeCrewId;
+    isRecipient = Boolean(crew);
   }
 
   if (!isRecipient && rank < 80) redirect("/admin?denied=unauthorized");
 
   const paidLabel = data.status === "DISBURSED" || data.status === "CLOSED";
+  const payoutLine = formatPayoutDestination(data);
 
   return (
     <div className="mx-auto max-w-2xl px-4 py-8 print:max-w-none print:py-0">
@@ -106,9 +113,20 @@ export default async function PayslipPage({ params }: Props) {
               {paidLabel ? "Lunas / Paid" : data.status}
             </span>
           </div>
-          {data.bank ? (
-            <p className="mt-3 border-t border-[#ececee] pt-2.5 font-mono text-[11px] text-[#52525b]">
-              {data.bank.name} · {data.bank.accountNumber} · a/n {data.bank.holder}
+          {/*
+            Same formatter as the printed PDF: a crew slip with no account on
+            file shows an explicit "BELUM DIATUR" warning instead of silently
+            omitting the row. Destination comes from `v_crew_identity`, which
+            reads `user_profiles` for linked crew and `crew_contact_details` for
+            unlinked crew — never the dropped `crew_members.bank_*` columns.
+          */}
+          {payoutLine ? (
+            <p
+              className={`mt-3 border-t border-[#ececee] pt-2.5 font-mono text-[11px] ${
+                data.bank ? "text-[#52525b]" : "font-semibold text-[#92400e]"
+              }`}
+            >
+              {payoutLine}
             </p>
           ) : null}
         </section>

@@ -196,14 +196,35 @@ export async function loadWorkspace(projectId: string): Promise<WorkspacePayload
       : Promise.resolve({ data: null }),
     supabase
       .from("project_crew_assignments")
+      /*
+       * Survivor columns only. `phone` used to ride along in this embed, but
+       * migration 0024 dropped it from crew_members and the whole query would
+       * now fail with 42703. Contact comes from `v_crew_identity` below.
+       *
+       * The embed is kept for `full_name` / `member_type` / `standard_day_rate`
+       * because it is not filtered by `is_active`: a crew member booked for
+       * this shoot and deactivated afterwards must still render on the call
+       * sheet instead of collapsing to "Kru".
+       */
       .select(
-        "id, role_title, acceptance_status, fee_agreed, payment_status, accepted_at, declined_reason, check_in_at, call_time, roll_time, venue_name, venue_address, venue_maps_url, crew_member_id, crew_members(full_name, phone, member_type, standard_day_rate)",
+        "id, role_title, acceptance_status, fee_agreed, payment_status, accepted_at, declined_reason, check_in_at, call_time, roll_time, venue_name, venue_address, venue_maps_url, crew_member_id, crew_members(full_name, member_type, standard_day_rate)",
       )
       .eq("project_id", projectId),
+    /*
+     * Identity and payout resolve through `v_crew_identity`, never the table.
+     *
+     * Migration 0024 removed phone/email/bank_* from crew_members; the view
+     * joins user_profiles for linked crew and crew_contact_details for unlinked
+     * crew, so this is the only read that returns a phone number for both.
+     *
+     * Deliberately unfiltered by `is_active`, and used for BOTH the dispatch
+     * pool and the booked-crew phone lookup: one round trip, and a booked crew
+     * member who has since been deactivated still keeps their number. The pool
+     * filters on `is_active` in JS below, so its contents are unchanged.
+     */
     supabase
-      .from("crew_members")
-      .select("id, full_name, crew_code, phone, member_type, primary_skills, standard_day_rate")
-      .eq("is_active", true)
+      .from("v_crew_identity")
+      .select("crew_member_id, full_name, crew_code, phone, member_type, primary_skills, standard_day_rate, is_active")
       .order("member_type", { ascending: true })
       .order("full_name", { ascending: true }),
     supabase
@@ -238,6 +259,18 @@ export async function loadWorkspace(projectId: string): Promise<WorkspacePayload
   // Asset code / serial lookup for gear lines
   const assetById = new Map((assets ?? []).map((a) => [a.id, a]));
 
+  /*
+   * One `v_crew_identity` read serves two purposes, keyed by crew id.
+   *
+   * The assignment embed keeps only surviving crew_members columns, so the
+   * number the WhatsApp invite template needs has to come from the view. The
+   * same rows also back the dispatch pool below — and because this read is not
+   * filtered to `is_active`, a crew member booked for this shoot and
+   * deactivated afterwards still keeps their phone on the call sheet. The pool
+   * applies the `is_active` filter itself, so its contents are unchanged.
+   */
+  const identityById = new Map((allCrew ?? []).map((c) => [c.crew_member_id, c]));
+
   const crew: CrewAssignment[] = (crewRows ?? []).map((r) => {
     const member = (r as unknown as { crew_members: Record<string, unknown> | null }).crew_members;
     return {
@@ -253,7 +286,7 @@ export async function loadWorkspace(projectId: string): Promise<WorkspacePayload
       roll_time: r.roll_time as string | null,
       crew_member_id: r.crew_member_id as string,
       crew_name: (member?.full_name as string) ?? "Kru",
-      crew_phone: (member?.phone as string) ?? null,
+      crew_phone: identityById.get(r.crew_member_id as string)?.phone ?? null,
       crew_type: (member?.member_type as string) ?? null,
       standard_day_rate: member?.standard_day_rate != null ? num(member.standard_day_rate) : null,
     };
@@ -389,15 +422,18 @@ export async function loadWorkspace(projectId: string): Promise<WorkspacePayload
       ? { id: customer.id as string, name: customer.name as string, email: customer.email as string | null, phone: customer.phone as string | null }
       : null,
     crew,
-    availableCrew: (allCrew ?? []).map((c) => ({
-      id: c.id as string,
-      full_name: c.full_name as string,
-      crew_code: c.crew_code as string,
-      phone: c.phone as string,
-      member_type: c.member_type as string,
-      primary_skills: (c.primary_skills as string[]) ?? [],
-      standard_day_rate: num(c.standard_day_rate),
-    })),
+    availableCrew: (allCrew ?? [])
+      .filter((c) => c.is_active)
+      .map((c) => ({
+        /* v_crew_identity names the primary key `crew_member_id`. */
+        id: c.crew_member_id,
+        full_name: c.full_name,
+        crew_code: c.crew_code,
+        phone: c.phone ?? "",
+        member_type: (c.member_type as string) ?? "",
+        primary_skills: (c.primary_skills as string[]) ?? [],
+        standard_day_rate: num(c.standard_day_rate),
+      })),
     venue,
     gear,
     inventoryAssets: (assets ?? []).map((a) => ({

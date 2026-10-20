@@ -191,6 +191,15 @@ create policy crew_contact_details_ops on public.crew_contact_details
   using (private.has_role_rank(80))
   with check (private.has_role_rank(80));
 
+/*
+ * Table-level GRANTs. RLS decides WHICH ROWS; a GRANT decides whether the role
+ * may touch the table at all. Without these, an authenticated request is
+ * refused with "permission denied" before any policy is evaluated.
+ */
+grant select, insert, update, delete on public.crew_contact_details
+  to authenticated, service_role;
+grant select on public.identity_reconciliation_log to authenticated, service_role;
+
 -- Now the columns can go: every value lives in exactly one place.
 alter table public.crew_members
   drop column if exists phone,
@@ -230,6 +239,8 @@ select
 from public.crew_members c
 left join public.user_profiles      p on p.user_id = c.auth_user_id
 left join public.crew_contact_details d on d.crew_member_id = c.id;
+
+grant select on public.v_crew_identity to authenticated, service_role;
 
 comment on view public.v_crew_identity is
   'Resolved crew identity and payout destination. Linked crew read user_profiles; '

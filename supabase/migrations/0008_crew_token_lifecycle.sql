@@ -60,8 +60,19 @@ begin
       'message', 'Tautan kru tidak ditemukan atau telah kedaluwarsa.');
   end if;
 
-  select full_name, crew_code, phone, bank_name, bank_account_number, bank_account_holder
-    into v_crew from public.crew_members where id = v_assignment.crew_member_id;
+  /*
+   * Identity and payout resolve through `v_crew_identity` (migration 0024).
+   *
+   * This function is the LIVE definition — it supersedes the one in 0001. The
+   * earlier revision read crew_members.phone/bank_* directly, which 0024
+   * removed, so every crew member opening their call sheet would have hit
+   * 'column "phone" does not exist'. The view resolves linked crew via
+   * user_profiles and unlinked crew via crew_contact_details.
+   */
+  select display_full_name as full_name, crew_code, phone, bank_name,
+         bank_account_number, bank_account_holder
+    into v_crew from public.v_crew_identity
+   where crew_member_id = v_assignment.crew_member_id;
 
   -- Strict zero-leakage: NO contract_value, NO expenses, NO margins.
   select id, name, slug, photography_type, service_pillar, shoot_date

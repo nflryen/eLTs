@@ -73,7 +73,7 @@ export default async function CrewPage() {
             </thead>
             <tbody className="divide-y divide-[#f4f4f5]">
               {crew.map((c) => (
-                <tr key={c.id} className="hover:bg-[#fafafa]">
+                <tr key={c.crew_member_id} className="hover:bg-[#fafafa]">
                   <td className="px-4 py-3">
                     <p className="font-medium text-[#18181b]">{c.full_name}</p>
                     <p className="font-mono text-[10px] text-[#a1a1aa]">{c.crew_code}</p>

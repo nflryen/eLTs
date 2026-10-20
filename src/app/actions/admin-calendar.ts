@@ -89,19 +89,27 @@ export async function getCalendarEvents(
   const aggregatedEvents: CalendarEvent[] = [];
 
   // 1. Fetch Crew Members Directory for name resolution
+  /*
+   * `v_crew_identity`, not `crew_members`.
+   *
+   * Only the name and code are needed here, but the view is the sanctioned read
+   * model for crew identity after migration 0024, and its primary key is
+   * `crew_member_id` rather than `id`. Resolving names through the table would
+   * work today and break the moment identity moves again.
+   */
   const crewMap = new Map<string, { full_name: string; crew_code: string }>();
   try {
     const { data: crewData, error: crewError } = await supabase
-      .from("crew_members")
-      .select("id, full_name, crew_code");
+      .from("v_crew_identity")
+      .select("crew_member_id, full_name, crew_code");
 
     if (!crewError && crewData) {
       for (const cm of crewData) {
-        crewMap.set(cm.id, { full_name: cm.full_name, crew_code: cm.crew_code });
+        crewMap.set(cm.crew_member_id, { full_name: cm.full_name, crew_code: cm.crew_code });
       }
     }
   } catch (err) {
-    console.warn("[AdminCalendar] Warning querying crew_members:", err);
+    console.warn("[AdminCalendar] Warning querying v_crew_identity:", err);
   }
 
   // 2. Fetch Projects (both for shoot_date and for metadata enrichment)

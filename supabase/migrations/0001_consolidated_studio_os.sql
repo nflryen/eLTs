@@ -290,7 +290,12 @@ ALTER TABLE public.crew_members
   ADD COLUMN IF NOT EXISTS role_category   text NOT NULL DEFAULT 'OPERATOR'
     CHECK (role_category IN ('OPERATOR','AUDIO_ENGINEER','DIRECTOR','EDITOR','TECHNICIAN')),
   ADD COLUMN IF NOT EXISTS emergency_contact text,
-  ADD COLUMN IF NOT EXISTS avatar_url      text,
+  /*
+   * `avatar_url` was removed here by migration 0024 (dead column, zero readers).
+   * The ADD is deleted rather than left in place because
+   * ADD COLUMN IF NOT EXISTS would RE-CREATE it on any re-apply of 0001,
+   * silently undoing 0024. Keep this list free of columns 0024 drops.
+   */
   ADD COLUMN IF NOT EXISTS member_type     text NOT NULL DEFAULT 'FREELANCE'
     CHECK (member_type IN ('CORE_TEAM','FREELANCE')),
   ADD COLUMN IF NOT EXISTS jobdesk_specialties text[] NOT NULL DEFAULT '{}';
@@ -1226,8 +1231,35 @@ BEGIN
       'message', 'Tautan kru tidak ditemukan atau telah kedaluwarsa.');
   END IF;
 
-  SELECT full_name, crew_code, phone, bank_name, bank_account_number, bank_account_holder
-  INTO v_crew FROM public.crew_members WHERE id = v_assignment.crew_member_id;
+  /*
+   * Identity and payout resolve through `v_crew_identity` (migration 0024).
+   *
+   * This RPC powers the magic-link crew portal and previously read the columns
+   * directly from crew_members. 0024 moved them to user_profiles (linked crew)
+   * / crew_contact_details (unlinked), so a direct read would fail at runtime
+   * for every crew member opening their call sheet.
+   *
+   * When 0024 has not been applied yet (fresh database, 0001 running first) the
+   * view does not exist, so fall back to the table — keeping this RPC valid in
+   * both migration orders.
+   */
+  /*
+   * Identity and payout come from `v_crew_identity` (migration 0024).
+   *
+   * The view resolves linked crew through user_profiles and unlinked crew
+   * through crew_contact_details, so it covers BOTH populations with one read.
+   *
+   * Deliberately NOT wrapped in an IF to_regclass() fallback: plpgsql validates
+   * every SQL statement in a function body when the branch is first planned, so
+   * a fallback referencing the now-dropped crew_members.phone column fails even
+   * when the view branch is the one that runs. Since 0024 is part of this
+   * migration set and the view is created before any caller can reach this RPC,
+   * a single unconditional read is both correct and simpler.
+   */
+  SELECT display_full_name AS full_name, crew_code, phone, bank_name,
+         bank_account_number, bank_account_holder
+  INTO v_crew
+  FROM public.v_crew_identity WHERE crew_member_id = v_assignment.crew_member_id;
 
   -- Strict zero-leakage: NO contract_value, NO expenses, NO margins.
   SELECT id, name, slug, photography_type, service_pillar, shoot_date
@@ -1742,37 +1774,87 @@ CREATE POLICY elts_admin_storage_delete ON storage.objects FOR DELETE TO authent
 -- ============================================================================
 
 -- ── 20.1 Crew: 3 core team + 2 freelance ───────────────────────────────────
-INSERT INTO public.crew_members (
-  id, crew_code, full_name, phone, email, member_type,
-  primary_skills, jobdesk_specialties, bank_name, bank_account_number,
-  bank_account_holder, standard_day_rate, rating, is_active
-) VALUES
-  ('f0000000-0000-0000-0000-000000000001','CRW-RAY','Rayyan Nufail (Ray)','081234567890','ray@elts.id','CORE_TEAM',
-   ARRAY['Technical Director','Switcher Operator','UI/UX Engineer','Lead Editor'],
-   ARRAY['FOH_SWITCHER','TECHNICAL_DIRECTOR','LEAD_EDITOR'],
-   'BCA','0000000000','Muhammad Rayyan Nufail',500000,5.0,true),
-  ('f0000000-0000-0000-0000-000000000002','CRW-EL','El (Partner / Creative Lead)','081234567891','el@elts.id','CORE_TEAM',
-   ARRAY['Director of Photography','Creative Director','Camera Operator'],
-   ARRAY['CAM_MASTER','CAM_ROVING','CREATIVE_DIRECTOR'],
-   'BCA','0000000000','El Partner Studio',450000,5.0,true),
-  ('f0000000-0000-0000-0000-000000000003','CRW-CYO','Cahyo (Partner / Operations)','081234567892','cahyo@elts.id','CORE_TEAM',
-   ARRAY['Operations Manager','Audio Engineer','Camera Operator'],
-   ARRAY['AUDIO_ENGINEER','CAM_STEADY','FIELD_OPERATIONS'],
-   'Mandiri','0000000000000','Cahyo Operations',400000,5.0,true),
-  ('f0000000-0000-0000-0000-000000000004','CRW-AZR','Azrian (Production Crew)','081399887766','azrian.crew@gmail.com','FREELANCE',
-   ARRAY['Camera Operator','Lighting Technician','Gaffer'],
-   ARRAY['CAM_ROVING','GAFFER','GRIP'],
-   'BCA','0000000000','Azrian',350000,4.9,true),
-  ('f0000000-0000-0000-0000-000000000005','CRW-FAT','Fatteh (Field Support)','081399887755','fatteh.tech@gmail.com','FREELANCE',
-   ARRAY['Audio Assistant','Broadcast Cable Routing','Stream Runner'],
-   ARRAY['AUDIO_ASSISTANT','RUNNER','CABLE_TECH'],
-   'BRI','000000000000000','Fatteh',300000,4.8,true)
-ON CONFLICT (crew_code) DO UPDATE SET
-  full_name = EXCLUDED.full_name,
-  member_type = EXCLUDED.member_type,
-  primary_skills = EXCLUDED.primary_skills,
-  jobdesk_specialties = EXCLUDED.jobdesk_specialties,
-  standard_day_rate = EXCLUDED.standard_day_rate;
+/*
+ * WRAPPED IN A COLUMN-EXISTENCE GUARD (added with migration 0024).
+ *
+ * 0024 removes phone/email/bank_* from crew_members, moving identity to
+ * user_profiles (linked crew) and crew_contact_details (unlinked). This seed
+ * originally wrote those columns directly, which broke in two ways:
+ *
+ *   - On a FRESH database 0001 runs before 0024, so it must still seed them.
+ *   - On RE-APPLY of 0001 (the idempotency test) the columns are already gone,
+ *     so the same INSERT would fail with 'column "phone" does not exist'.
+ *
+ * The guard seeds the identity columns only when they still exist, and always
+ * seeds the assignment facts. That keeps 0001 replayable in both orders.
+ */
+DO $$
+BEGIN
+IF EXISTS (
+  SELECT 1 FROM information_schema.columns
+   WHERE table_schema='public' AND table_name='crew_members'
+     AND column_name='phone'
+) THEN
+  INSERT INTO public.crew_members (
+    id, crew_code, full_name, phone, email, member_type,
+    primary_skills, jobdesk_specialties, bank_name, bank_account_number,
+    bank_account_holder, standard_day_rate, rating, is_active
+  ) VALUES
+    ('f0000000-0000-0000-0000-000000000001','CRW-RAY','Rayyan Nufail (Ray)','081234567890','ray@elts.id','CORE_TEAM',
+     ARRAY['Technical Director','Switcher Operator','UI/UX Engineer','Lead Editor'],
+     ARRAY['FOH_SWITCHER','TECHNICAL_DIRECTOR','LEAD_EDITOR'],
+     'BCA','0000000000','Muhammad Rayyan Nufail',500000,5.0,true),
+    ('f0000000-0000-0000-0000-000000000002','CRW-EL','El (Partner / Creative Lead)','081234567891','el@elts.id','CORE_TEAM',
+     ARRAY['Director of Photography','Creative Director','Camera Operator'],
+     ARRAY['CAM_MASTER','CAM_ROVING','CREATIVE_DIRECTOR'],
+     'BCA','0000000000','El Partner Studio',450000,5.0,true),
+    ('f0000000-0000-0000-0000-000000000003','CRW-CYO','Cahyo (Partner / Operations)','081234567892','cahyo@elts.id','CORE_TEAM',
+     ARRAY['Operations Manager','Audio Engineer','Camera Operator'],
+     ARRAY['AUDIO_ENGINEER','CAM_STEADY','FIELD_OPERATIONS'],
+     'Mandiri','0000000000000','Cahyo Operations',400000,5.0,true),
+    ('f0000000-0000-0000-0000-000000000004','CRW-AZR','Azrian (Production Crew)','081399887766','azrian.crew@gmail.com','FREELANCE',
+     ARRAY['Camera Operator','Lighting Technician','Gaffer'],
+     ARRAY['CAM_ROVING','GAFFER','GRIP'],
+     'BCA','0000000000','Azrian',350000,4.9,true),
+    ('f0000000-0000-0000-0000-000000000005','CRW-FAT','Fatteh (Field Support)','081399887755','fatteh.tech@gmail.com','FREELANCE',
+     ARRAY['Audio Assistant','Broadcast Cable Routing','Stream Runner'],
+     ARRAY['AUDIO_ASSISTANT','RUNNER','CABLE_TECH'],
+     'BRI','000000000000000','Fatteh',300000,4.8,true)
+  ON CONFLICT (crew_code) DO UPDATE SET
+    full_name = EXCLUDED.full_name,
+    member_type = EXCLUDED.member_type,
+    primary_skills = EXCLUDED.primary_skills,
+    jobdesk_specialties = EXCLUDED.jobdesk_specialties,
+    standard_day_rate = EXCLUDED.standard_day_rate;
+ELSE
+  /* Post-0024 shape: assignment facts only. */
+  INSERT INTO public.crew_members (
+    id, crew_code, full_name, member_type,
+    primary_skills, jobdesk_specialties, standard_day_rate, rating, is_active
+  ) VALUES
+    ('f0000000-0000-0000-0000-000000000001','CRW-RAY','Rayyan Nufail (Ray)','CORE_TEAM',
+     ARRAY['Technical Director','Switcher Operator','UI/UX Engineer','Lead Editor'],
+     ARRAY['FOH_SWITCHER','TECHNICAL_DIRECTOR','LEAD_EDITOR'],500000,5.0,true),
+    ('f0000000-0000-0000-0000-000000000002','CRW-EL','El (Partner / Creative Lead)','CORE_TEAM',
+     ARRAY['Director of Photography','Creative Director','Camera Operator'],
+     ARRAY['CAM_MASTER','CAM_ROVING','CREATIVE_DIRECTOR'],450000,5.0,true),
+    ('f0000000-0000-0000-0000-000000000003','CRW-CYO','Cahyo (Partner / Operations)','CORE_TEAM',
+     ARRAY['Operations Manager','Audio Engineer','Camera Operator'],
+     ARRAY['AUDIO_ENGINEER','CAM_STEADY','FIELD_OPERATIONS'],400000,5.0,true),
+    ('f0000000-0000-0000-0000-000000000004','CRW-AZR','Azrian (Production Crew)','FREELANCE',
+     ARRAY['Camera Operator','Lighting Technician','Gaffer'],
+     ARRAY['CAM_ROVING','GAFFER','GRIP'],350000,4.9,true),
+    ('f0000000-0000-0000-0000-000000000005','CRW-FAT','Fatteh (Field Support)','FREELANCE',
+     ARRAY['Audio Assistant','Broadcast Cable Routing','Stream Runner'],
+     ARRAY['AUDIO_ASSISTANT','RUNNER','CABLE_TECH'],300000,4.8,true)
+  ON CONFLICT (id) DO UPDATE SET
+    full_name = EXCLUDED.full_name,
+    member_type = EXCLUDED.member_type,
+    primary_skills = EXCLUDED.primary_skills,
+    jobdesk_specialties = EXCLUDED.jobdesk_specialties,
+    standard_day_rate = EXCLUDED.standard_day_rate;
+END IF;
+END $$;
 
 -- ── 20.2 Equipment presets (13) ────────────────────────────────────────────
 INSERT INTO public.equipment_presets (name, category, default_rental_rate, ownership_type)

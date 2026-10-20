@@ -130,11 +130,14 @@ export function DispatchMicroModal({
           id: worker.id,
           crew_code: worker.crew_code,
           full_name: worker.full_name,
-          phone: worker.phone,
           primary_skills: worker.primary_skills || [],
-          bank_name: worker.bank_name,
-          bank_account_number: worker.bank_account_number,
-          bank_account_holder: worker.bank_account_holder,
+          /*
+           * Contact and payout are NOT part of the optimistic row: migration
+           * 0024 moved them out of crew_members, and this client only received
+           * assignment-safe fields. The authoritative values arrive when the
+           * server refreshes the workspace, so omitting them here is correct
+           * rather than a missing-data bug.
+           */
         },
       });
 

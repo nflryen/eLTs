@@ -166,19 +166,33 @@ export async function getPayrollLineItems(
   const rows = (data ?? []) as RawLine[];
   if (rows.length === 0) return [];
 
-  // Resolve display names in two batched lookups rather than N+1.
+  /*
+   * Resolve display names in two batched lookups rather than N+1.
+   *
+   * Crew names come from `v_crew_identity`, not `crew_members`: the view
+   * resolves linked crew to `user_profiles.full_name` (the name they edit
+   * themselves in /settings/profile) and unlinked crew to their own crew row,
+   * so this ledger and the payslip PDF cannot disagree about who is being paid.
+   * `crew_members` still holds `full_name`/`crew_code` — assignment facts — but
+   * reading the name from there would silently override a self-edited profile.
+   */
   const userIds = [...new Set(rows.map((r) => r.payee_user_id).filter(Boolean))] as string[];
   const crewIds = [...new Set(rows.map((r) => r.payee_crew_id).filter(Boolean))] as string[];
   const projectIds = [...new Set(rows.map((r) => r.project_id).filter(Boolean))] as string[];
   const slipIds = [...new Set(rows.map((r) => r.payslip_id).filter(Boolean))] as string[];
+
+  type CrewLabel = { crew_member_id: string; crew_code: string; display_full_name: string | null };
 
   const [adminsRes, crewRes, projectsRes, slipsRes] = await Promise.all([
     userIds.length
       ? supabase.from("admins").select("user_id, display_name").in("user_id", userIds)
       : Promise.resolve({ data: [] as { user_id: string; display_name: string }[] }),
     crewIds.length
-      ? supabase.from("crew_members").select("id, full_name, crew_code").in("id", crewIds)
-      : Promise.resolve({ data: [] as { id: string; full_name: string; crew_code: string }[] }),
+      ? supabase
+          .from("v_crew_identity")
+          .select("crew_member_id, crew_code, display_full_name")
+          .in("crew_member_id", crewIds)
+      : Promise.resolve({ data: [] as CrewLabel[] }),
     projectIds.length
       ? supabase.from("projects").select("id, name").in("id", projectIds)
       : Promise.resolve({ data: [] as { id: string; name: string }[] }),
@@ -188,7 +202,9 @@ export async function getPayrollLineItems(
   ]);
 
   const adminMap = new Map((adminsRes.data ?? []).map((a) => [a.user_id, a.display_name]));
-  const crewMap = new Map((crewRes.data ?? []).map((c) => [c.id, c]));
+  const crewMap = new Map<string, CrewLabel>(
+    ((crewRes.data ?? []) as CrewLabel[]).map((c) => [c.crew_member_id, c]),
+  );
   const projectMap = new Map((projectsRes.data ?? []).map((p) => [p.id, p.name]));
   const slipMap = new Map((slipsRes.data ?? []).map((s) => [s.id, s.slip_number]));
 
@@ -196,7 +212,7 @@ export async function getPayrollLineItems(
     const crew = r.payee_crew_id ? crewMap.get(r.payee_crew_id) : undefined;
     const payeeName =
       (r.payee_user_id ? adminMap.get(r.payee_user_id) : undefined) ??
-      crew?.full_name ??
+      crew?.display_full_name ??
       "Tanpa nama";
 
     return {

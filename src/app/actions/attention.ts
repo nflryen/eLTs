@@ -78,9 +78,19 @@ export async function getAttentionQueue(): Promise<AttentionQueue> {
     { data: editorTasks },
   ] = await Promise.all([
     projectQuery,
+    /*
+     * No `crew_members(...)` embed.
+     *
+     * Migration 0024 dropped phone/email/bank_* from crew_members, so the old
+     * `crew_members(full_name, phone)` embed fails the whole query with 42703
+     * once the columns are gone. Nothing in this engine ever read the embed —
+     * the queue counts assignment rows and links to the project, it never names
+     * or messages a crew member — so the join is removed rather than rewired to
+     * `v_crew_identity`. A future crew-facing action should query the view.
+     */
     supabase
       .from("project_crew_assignments")
-      .select("id, project_id, role_title, acceptance_status, created_at, offer_expires_at, crew_members(full_name, phone)")
+      .select("id, project_id, role_title, acceptance_status, created_at, offer_expires_at")
       .in("acceptance_status", ["PENDING_OFFER", "DECLINED"]),
     supabase
       .from("project_expenses")

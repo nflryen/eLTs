@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createServerSupabase } from "@/lib/supabase/server";
+import { createServiceSupabase } from "@/lib/supabase/service";
 import { loadPayslipData } from "@/lib/pdf/load-payslip";
 import { renderPayslipPdf } from "@/lib/pdf/payslip-document";
 import {
@@ -82,12 +83,23 @@ export async function GET(
 
     let isRecipient = data.payeeUserId === user.id;
 
+    /*
+     * Ownership check: does this login own the crew row this slip is addressed
+     * to? Matched on BOTH ids so neither column alone can grant access.
+     *
+     * Read through the service client, like the sibling admin page does.
+     * `crew_members` is RLS-gated on `has_role_rank(80)`, so a FREELANCER
+     * reading their own row with their own session gets nothing — which used to
+     * make every freelancer's own slip a 403. Only the link columns are read;
+     * no contact or bank data crosses this query, and the payout destination
+     * itself comes from `v_crew_identity` via loadPayslipData.
+     */
     if (!isRecipient && data.payeeCrewId) {
-      const { data: crew } = await supabase
-        .from("crew_members")
-        .select("id")
+      const { data: crew } = await createServiceSupabase()
+        .from("v_crew_identity")
+        .select("crew_member_id")
+        .eq("crew_member_id", data.payeeCrewId)
         .eq("auth_user_id", user.id)
-        .eq("id", data.payeeCrewId)
         .maybeSingle();
       isRecipient = Boolean(crew);
     }

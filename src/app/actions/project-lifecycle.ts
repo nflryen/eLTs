@@ -136,9 +136,15 @@ export async function getAssignableCrew(projectId: string): Promise<{
     const { supabase } = await requireOps();
 
     const [{ data: members, error: memberError }, { data: project }] = await Promise.all([
+      /*
+       * `v_crew_identity`, not `crew_members`: 0024 removed the contact columns
+       * from the table and the view resolves them per linked/unlinked crew.
+       */
       supabase
-        .from("crew_members")
-        .select("id, full_name, crew_code, member_type, phone, standard_day_rate, is_active")
+        .from("v_crew_identity")
+        .select(
+          "crew_member_id, full_name, crew_code, member_type, phone, standard_day_rate, is_active",
+        )
         .eq("is_active", true)
         .order("full_name", { ascending: true }),
       supabase.from("projects").select("id, shoot_date").eq("id", projectId).maybeSingle(),
@@ -165,14 +171,14 @@ export async function getAssignableCrew(projectId: string): Promise<{
     return {
       ok: true,
       crew: members.map((m) => ({
-        id: m.id as string,
+        id: m.crew_member_id as string,
         full_name: m.full_name as string,
         crew_code: m.crew_code as string,
         member_type: m.member_type as string,
         phone: (m.phone as string | null) ?? null,
         standard_day_rate: Number(m.standard_day_rate ?? 0),
-        assignedToThisProject: assignedHere.has(m.id as string),
-        busySameDay: busy.has(m.id as string),
+        assignedToThisProject: assignedHere.has(m.crew_member_id as string),
+        busySameDay: busy.has(m.crew_member_id as string),
       })),
     };
   } catch {

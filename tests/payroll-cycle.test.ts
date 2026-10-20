@@ -80,10 +80,15 @@ async function bootstrap() {
     [CREW_A, "CRW-AA", "Alpha Crew", "111"],
     [CREW_B, "CRW-BB", "Beta Crew", "222"],
   ]) {
+    /* 0024: identity lives in crew_contact_details for crew without a login. */
     await db.query(
-      `insert into public.crew_members (id, crew_code, full_name, phone, bank_name, bank_account_number, bank_account_holder)
-       values ($1,$2,$3,'081234567890','BCA',$4,$3)`,
-      [id, code, name, acct],
+      `insert into public.crew_members (id, crew_code, full_name) values ($1,$2,$3)`,
+      [id, code, name],
+    );
+    await db.query(
+      `insert into public.crew_contact_details (crew_member_id, phone, bank_name, bank_account_number, bank_account_holder)
+       values ($1,'081234567890','BCA',$2,$3)`,
+      [id, acct, name],
     );
   }
 
