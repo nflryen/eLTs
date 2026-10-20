@@ -204,7 +204,30 @@ export async function getGlobalInvoicesList(): Promise<{
         };
       }
 
-      const lineItems = (Array.isArray(inv.line_items) ? inv.line_items : []) as GlobalInvoiceListItem["lineItems"];
+      /*
+       * Normalise line items on READ.
+       *
+       * `subtotal` is derived data: quantity x unit_price. The write path
+       * persists it, but a row created before that field existed (or by an
+       * importer) has no `subtotal`, and the renderer calls `idr(li.subtotal)`.
+       * Deriving it here means the DTO is always complete regardless of what
+       * is stored, instead of pushing a null into a formatter.
+       */
+      const rawLineItems = (Array.isArray(inv.line_items) ? inv.line_items : []) as unknown as Record<string, unknown>[];
+      const lineItems = rawLineItems.map((li: Record<string, unknown>) => {
+        const quantity = Number(li.quantity ?? 0);
+        const unitPrice = Number(li.unit_price ?? 0);
+        const stored = Number(li.subtotal);
+        return {
+          ...li,
+          description: String(li.description ?? ""),
+          quantity: Number.isFinite(quantity) ? quantity : 0,
+          unit_price: Number.isFinite(unitPrice) ? unitPrice : 0,
+          subtotal: Number.isFinite(stored)
+            ? stored
+            : Math.round((Number.isFinite(quantity) ? quantity : 0) * (Number.isFinite(unitPrice) ? unitPrice : 0)),
+        };
+      }) as GlobalInvoiceListItem["lineItems"];
 
       return {
         id: inv.id,

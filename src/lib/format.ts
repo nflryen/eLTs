@@ -9,9 +9,25 @@
  * and the WhatsApp message they receive — and then the vendor queries the total.
  */
 
-/** Rupiah with thousands separators, no decimals: `Rp 15.000.000`. */
-export function idr(amount: number): string {
-  return `Rp ${amount.toLocaleString("id-ID")}`;
+/**
+ * Rupiah with thousands separators, no decimals: `Rp 15.000.000`.
+ *
+ * ACCEPTS `number | null | undefined` ON PURPOSE.
+ *
+ * A monetary value that is absent is a real state — a line item persisted
+ * before `subtotal` existed, a receipt with no recorded amount, a view column
+ * that came back null. Calling `.toLocaleString()` on it threw
+ * "Cannot read properties of undefined (reading 'toLocaleString')" and took the
+ * entire invoice page down with an error boundary, because this function is
+ * called directly from render.
+ *
+ * A formatter must never be able to crash a page. Absent money renders as
+ * "Rp 0" rather than "Rp NaN" or a stack trace: the page stays usable and the
+ * zero is visibly a zero, not a silently wrong number.
+ */
+export function idr(amount: number | null | undefined): string {
+  const value = typeof amount === "number" && Number.isFinite(amount) ? amount : 0;
+  return `Rp ${value.toLocaleString("id-ID")}`;
 }
 
 /**
