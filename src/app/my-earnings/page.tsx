@@ -13,6 +13,15 @@ export const metadata: Metadata = {
   robots: { index: false, follow: false },
 };
 
+/*
+ * Per-user page: reads the caller's session and renders THEIR earnings. There
+ * is no dynamic route parameter, so without this directive Next.js prerenders
+ * it at build time — which both fails the build (env unavailable during
+ * prerender) and, when it succeeds, would cache one misleading artifact for a
+ * page that must be unique per person.
+ */
+export const dynamic = "force-dynamic";
+
 /**
  * Personal earnings for staff and freelancers who have a login.
  *

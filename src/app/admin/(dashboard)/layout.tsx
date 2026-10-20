@@ -6,6 +6,28 @@ export const metadata: Metadata = {
   robots: { index: false, follow: false },
 };
 
+/*
+ * FORCE DYNAMIC — not an optimisation, a CORRECTNESS requirement.
+ *
+ * Every route under this layout is per-user: it reads cookies, resolves the
+ * caller's role from the database, and renders a sidebar that differs by rank.
+ * Without this directive Next.js attempts to prerender it at build time, which
+ * has two failure modes:
+ *
+ *   1. BUILD FAILURE. `createServerSupabase()` validates the environment before
+ *      it ever awaits `cookies()`. During prerender there is no request, the
+ *      config is unavailable on some build environments, and the throw surfaces
+ *      as "Error occurred prerendering page /admin".
+ *
+ *   2. SILENTLY WRONG OUTPUT — worse than the build error. On a build WITH env
+ *      vars present, prerendering succeeds and captures the render of an
+ *      unauthenticated request: a page whose only content is "redirect to
+ *      /admin/login". That static artifact could then be served to a signed-in
+ *      operator. An authenticated surface must never be prerendered, regardless
+ *      of whether the build happens to succeed.
+ */
+export const dynamic = "force-dynamic";
+
 /**
  * Admin dashboard layout.
  *

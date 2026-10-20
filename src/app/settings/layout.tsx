@@ -10,6 +10,13 @@ export const metadata: Metadata = {
   robots: { index: false, follow: false },
 };
 
+/*
+ * Per-user settings: reads cookies, resolves rank, and conditionally mounts the
+ * SUPER_ADMIN tab. Must never be prerendered — see the equivalent note in
+ * `src/app/admin/(dashboard)/layout.tsx` for the two failure modes.
+ */
+export const dynamic = "force-dynamic";
+
 /**
  * Settings Hub layout.
  *
