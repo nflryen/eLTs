@@ -3,7 +3,6 @@ import Link from "next/link";
 import {
   LayoutDashboard, FolderKanban, Calendar, Users, Package,
   Coins, Building2, Settings, LogOut, Clock, Receipt, Wallet,
-  User, ShieldCheck,
 } from "lucide-react";
 import { adminLogout } from "@/app/actions/admin-auth";
 import { requireStaff } from "@/lib/auth/roles";
@@ -94,19 +93,38 @@ export default async function AdminLayout({ children }: { children: React.ReactN
 
   const footer = (
     <div className="space-y-3">
-      <div className="px-2">
-        <p className="truncate text-sm font-semibold text-[#09090b]">
-          {admin.display_name}
-        </p>
-        <p className="text-xs font-medium text-[#71717a]">
-          {role ? (ROLE_LABEL[role] ?? role) : "Tanpa peran"}
-        </p>
-      </div>
+      {/*
+        * Minimal footer: profile card (clickable), role switcher, one settings
+        * entry point, sign out.
+        *
+        * The loose "Profil & Pembayaran" / "Keamanan Akun" links that used to
+        * sit here were removed. They duplicated destinations that now live as
+        * tabs inside the Settings Hub, and three account links stacked above a
+        * fourth "Pengaturan" button read as four competing entry points to the
+        * same place.
+        */}
+      <Link
+        href="/settings/profile"
+        className="flex items-center gap-2.5 rounded-lg px-2 py-2 transition-colors hover:bg-[#f4f4f5]"
+      >
+        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#18181b] text-[11px] font-semibold text-white">
+          {(admin.display_name || "?").slice(0, 2).toUpperCase()}
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="block truncate text-sm font-semibold text-[#09090b]">
+            {admin.display_name}
+          </span>
+          <span className="block truncate text-[11px] font-medium text-[#71717a]">
+            {role ? (ROLE_LABEL[role] ?? role) : "Tanpa peran"}
+            {rank > 0 ? ` · ${rank}` : ""}
+          </span>
+        </span>
+      </Link>
+
       {/*
         * Authority-bearing switcher. Downgrades apply instantly; escalations
-        * require the account password. The previous preview-only dropdown was
-        * a SUPER_ADMIN presentation toy and could not change authority, so it
-        * is deliberately gone rather than kept alongside this one.
+        * require the account password. Renders nothing for single-role
+        * accounts, so the footer stays quiet for most users.
         */}
       <ActiveRoleSwitcher
         roles={switchableRoles}
@@ -116,25 +134,20 @@ export default async function AdminLayout({ children }: { children: React.ReactN
       />
 
       {/*
-        * Self-service routes. These pages existed but had NO inbound link
-        * anywhere in the UI, which made them unreachable in practice. Every
-        * staff member needs them: a WORKER must be able to set a payout
-        * destination or their payslip has nowhere to go.
+        * ONE settings entry point for every staff rank.
+        *
+        * Previously this was ADMIN+ only, which meant a WORKER or EDITOR could
+        * not reach their own payout or password settings at all — the very
+        * pages that had been orphaned. The hub is safe for all ranks: the
+        * SUPER_ADMIN tab inside it is filtered server-side.
         */}
-      <div className="space-y-1 px-1">
-        <Link
-          href="/settings/profile"
-          className="flex items-center gap-2 rounded-lg px-2 py-1.5 text-xs font-medium text-[#52525b] hover:bg-[#f4f4f5]"
-        >
-          <User size={14} /> Profil & Pembayaran
-        </Link>
-        <Link
-          href="/settings/security"
-          className="flex items-center gap-2 rounded-lg px-2 py-1.5 text-xs font-medium text-[#52525b] hover:bg-[#f4f4f5]"
-        >
-          <ShieldCheck size={14} /> Keamanan Akun
-        </Link>
-      </div>
+      <Link
+        href="/settings"
+        className="flex min-h-11 items-center gap-3 rounded-[10000px] px-3 text-sm font-medium text-[#3f3f46] transition-colors hover:bg-[#fafafa]"
+      >
+        <Settings size={18} className="text-[#a1a1aa]" />
+        Pengaturan
+      </Link>
 
       <form action={adminLogout}>
         <Button
@@ -145,16 +158,6 @@ export default async function AdminLayout({ children }: { children: React.ReactN
           <LogOut size={16} className="mr-2" /> Keluar
         </Button>
       </form>
-      {/* Settings is ADMIN+ only; WORKER must not see the entry point either. */}
-      {rank >= RANKS.ADMIN ? (
-        <Link
-          href="/admin/settings"
-          className="flex min-h-11 items-center gap-3 rounded-[10000px] px-3 text-sm font-medium text-[#3f3f46] transition-colors hover:bg-[#fafafa]"
-        >
-          <Settings size={18} className="text-[#a1a1aa]" />
-          Pengaturan
-        </Link>
-      ) : null}
     </div>
   );
 

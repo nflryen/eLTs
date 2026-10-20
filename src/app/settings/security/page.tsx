@@ -1,15 +1,17 @@
-import { requireStaff } from "@/lib/auth/roles";
+import { requirePageStaff } from "@/lib/auth/roles";
 import { listMySessionsAction } from "@/app/actions/profile";
 import { SecurityForm } from "@/components/settings/security-form";
 
 /**
  * Security tab: password change and active-session revocation.
  *
- * Both actions verify the current password or the session owner server-side.
- * Nothing on this page is authorized by its presence in the UI.
+ * The guard lives in the /settings layout, but this page re-checks with the
+ * PAGE variant. `requireStaff()` is an alias for `requireRole()`, which THROWS
+ * — calling it here produced an uncaught UnauthorizedError and an HTTP 500
+ * instead of a login redirect.
  */
 export default async function SecuritySettingsPage() {
-  await requireStaff();
+  await requirePageStaff("/settings/security");
   const sessions = await listMySessionsAction();
 
   return (

@@ -57,7 +57,18 @@ export async function middleware(request: NextRequest) {
   const pathname = request.nextUrl.pathname;
   const isAdminUi = pathname === '/admin' || pathname.startsWith('/admin/');
   const isAdminApi = pathname.startsWith('/api/admin/');
-  if (pathname === '/admin/login' || (!isAdminUi && !isAdminApi)) {
+  /*
+   * /settings is a guarded staff surface too.
+   *
+   * It sits OUTSIDE /admin, so the previous matcher never ran here. That meant
+   * the Supabase auth cookie was never refreshed on these routes: a session
+   * close to expiry could pass on /admin (refreshed) and then read as
+   * unauthenticated on /settings/security, which surfaced as an UnauthorizedError
+   * even though the user was signed in. Refreshing here keeps one session state
+   * across the whole app.
+   */
+  const isSettings = pathname === '/settings' || pathname.startsWith('/settings/');
+  if (pathname === '/admin/login' || (!isAdminUi && !isAdminApi && !isSettings)) {
     return NextResponse.next();
   }
 
@@ -102,6 +113,7 @@ export async function middleware(request: NextRequest) {
   if (!user) {
     const redirectUrl = request.nextUrl.clone();
     redirectUrl.pathname = '/admin/login';
+    redirectUrl.search = '';
     redirectUrl.searchParams.set('redirectedFrom', pathname);
     return NextResponse.redirect(redirectUrl);
   }
@@ -143,5 +155,5 @@ export async function middleware(request: NextRequest) {
 
 export const config = {
   // `:path*` matches one or more segments, so the bare `/admin` is listed too.
-  matcher: ['/admin', '/admin/:path*', '/api/admin/:path*'],
+  matcher: ['/admin', '/admin/:path*', '/api/admin/:path*', '/settings', '/settings/:path*'],
 };

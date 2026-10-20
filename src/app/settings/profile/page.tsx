@@ -1,4 +1,4 @@
-import { requireStaff } from "@/lib/auth/roles";
+import { requirePageStaff } from "@/lib/auth/roles";
 import { getMyProfileAction } from "@/app/actions/profile";
 import { PAYOUT_PROVIDERS } from "@/lib/payout-providers";
 import { ProfileForm } from "@/components/settings/profile-form";
@@ -10,7 +10,7 @@ import { ProfileForm } from "@/components/settings/profile-form";
  * able to set a payout destination or their payslip has nowhere to go.
  */
 export default async function ProfileSettingsPage() {
-  await requireStaff();
+  await requirePageStaff("/settings/profile");
   const profile = await getMyProfileAction();
 
   if (!profile) {

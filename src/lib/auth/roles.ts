@@ -303,15 +303,49 @@ const DENIED_PATH = "/admin?denied=unauthorized";
  * The denied target is a FIXED string: it cannot echo caller-controlled text,
  * and it does not disclose which tier the surface actually requires.
  */
-export async function requirePageRole(minimum: RoleKey): Promise<RoleSession> {
+export async function requirePageRole(
+  minimum: RoleKey,
+  /**
+   * Where to send the caller after signing in.
+   *
+   * Without this, an expired session on /settings/security dumped the user on
+   * the dashboard after login and they had to navigate back. Only same-origin
+   * admin/settings paths are honoured; anything else falls back to /admin.
+   */
+  returnTo?: string,
+  /**
+   * Where a rank refusal sends the caller.
+   *
+   * Defaults to the admin dashboard notice. Settings surfaces pass their own
+   * target so a refused tab returns the user to a screen they can actually use,
+   * carrying a machine-readable reason for the banner.
+   */
+  deniedTo?: string,
+): Promise<RoleSession> {
   const session = await getRoleSession();
   if (!session) {
-    redirect("/admin/login");
+    const target = safeReturnPath(returnTo);
+    redirect(target ? `/admin/login?redirectedFrom=${encodeURIComponent(target)}` : "/admin/login");
   }
   if (session.rank < ROLE_RANK[minimum]) {
-    redirect(DENIED_PATH);
+    redirect(safeReturnPath(deniedTo) ?? DENIED_PATH);
   }
   return session;
+}
+
+/**
+ * Only same-origin paths under /admin or /settings may be used as a return
+ * target. This is the same open-redirect defence as `safeRedirectTarget` in
+ * admin-auth.ts: protocol-relative ("//evil.com") and absolute URLs are
+ * rejected so `?redirectedFrom=` cannot become a phishing hop.
+ */
+function safeReturnPath(raw: string | undefined): string | null {
+  if (!raw) return null;
+  if (!raw.startsWith("/")) return null;
+  if (raw.startsWith("//")) return null;
+  if (raw.includes("://")) return null;
+  if (!raw.startsWith("/admin") && !raw.startsWith("/settings")) return null;
+  return raw;
 }
 
 /**
@@ -337,7 +371,8 @@ export async function requirePagePermission(key: string): Promise<RoleSession> {
 }
 
 /** Named page guards. Keep in step with the action guards above. */
-export const requirePageSuperAdmin = () => requirePageRole("SUPER_ADMIN");
-export const requirePageFounder = () => requirePageRole("FOUNDER");
-export const requirePageOps = () => requirePageRole("ADMIN");
-export const requirePageStaff = () => requirePageRole("WORKER");
+export const requirePageSuperAdmin = (returnTo?: string, deniedTo?: string) =>
+  requirePageRole("SUPER_ADMIN", returnTo, deniedTo);
+export const requirePageFounder = (returnTo?: string) => requirePageRole("FOUNDER", returnTo);
+export const requirePageOps = (returnTo?: string) => requirePageRole("ADMIN", returnTo);
+export const requirePageStaff = (returnTo?: string) => requirePageRole("WORKER", returnTo);
