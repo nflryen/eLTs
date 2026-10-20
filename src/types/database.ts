@@ -614,6 +614,83 @@ client_reminders_log: Table<
         },
         "user_id" | "role_key"
       >;
+      pricelist_categories: Table<
+        {
+          id: string;
+          slug: string;
+          name: string;
+          description: string | null;
+          sort_order: number;
+          is_active: boolean;
+          created_at: string;
+          updated_at: string;
+        },
+        "slug" | "name"
+      >;
+      pricelist_packages: Table<
+        {
+          id: string;
+          category_id: string;
+          slug: string;
+          name: string;
+          price_idr: number;
+          duration: string | null;
+          max_persons: number | null;
+          crew: string[];
+          includes: string[];
+          badge: string | null;
+          notes: string | null;
+          sort_order: number;
+          is_active: boolean;
+          created_at: string;
+          updated_at: string;
+        },
+        "category_id" | "slug" | "name" | "price_idr"
+      >;
+      pricelist_addons: Table<
+        {
+          id: string;
+          slug: string;
+          name: string;
+          price_idr: number;
+          unit: string | null;
+          description: string | null;
+          sort_order: number;
+          is_active: boolean;
+          created_at: string;
+          updated_at: string;
+        },
+        "slug" | "name" | "price_idr"
+      >;
+      portfolio_pages: Table<
+        {
+          id: string;
+          slug: string;
+          title: string;
+          summary: string | null;
+          seo_title: string | null;
+          seo_description: string | null;
+          cover_url: string | null;
+          status: "draft" | "published";
+          published_at: string | null;
+          sort_order: number;
+          created_at: string;
+          updated_at: string;
+        },
+        "slug" | "title"
+      >;
+      portfolio_sections: Table<
+        {
+          id: string;
+          page_id: string;
+          kind: "canvas" | "hero" | "text" | "gallery";
+          layout: Record<string, unknown>;
+          sort_order: number;
+          created_at: string;
+          updated_at: string;
+        },
+        "page_id"
+      >;
       role_management_audit: Table<
         {
           id: number;
