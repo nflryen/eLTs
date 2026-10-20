@@ -174,7 +174,13 @@ export default async function ProjectsPage(props: {
   };
 
   return (
-    <div className="max-w-5xl">
+    <div className="mx-auto max-w-6xl py-2">
+      {/*
+        `max-w-6xl` (1152px), a step up from the 5xl used by text-led
+        directories. Four folder cards need ~232px each plus gutters; at 5xl the
+        fourth column was squeezed and the sleeves looked cramped beside the
+        table view, which has no such constraint.
+      */}
       {/* Page Header */}
       <div className="flex items-center justify-between mb-8">
         <div>
@@ -223,7 +229,19 @@ export default async function ProjectsPage(props: {
       {view === "cards" ? (
         projects && projects.length > 0 ? (
           <div
-            className="grid grid-cols-2 gap-3 md:grid-cols-3 md:gap-4 lg:grid-cols-4 xl:grid-cols-5 xl:gap-5"
+            /*
+             * FOUR columns maximum, not five.
+             *
+             * At `xl` the container is `max-w-5xl` (1024px). Five columns there
+             * gave each card ~180px, so a 9-project studio rendered 5 + 4 with a
+             * lonely trailing card and conspicuously narrow sleeves (the folder
+             * geometry is width-proportional). Four columns hold ~232px each.
+             *
+             * `auto-rows-fr` equalises row heights so a two-line title cannot
+             * stretch its row and leave the grid ragged beside a one-line
+             * neighbour.
+             */
+            className="grid auto-rows-fr grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4 lg:grid-cols-3 lg:gap-4 xl:grid-cols-4 xl:gap-5"
             aria-label="Proyek sebagai folder"
           >
             {cardProjects.map((p) => (
