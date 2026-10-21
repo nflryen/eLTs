@@ -6,7 +6,6 @@ import { ArrowLeft, ArrowRight, X, Expand } from "lucide-react";
 import { useRef, useState } from "react";
 import { featuredWorks } from "@/content/photography";
 import { Button } from "@/components/ui/button";
-import { SectionTitle } from "@/components/shared/section-title";
 
 export function FeaturedWorks() {
   const rail = useRef<HTMLDivElement>(null);
@@ -24,9 +23,10 @@ export function FeaturedWorks() {
   return (
     <section id="portfolio" className="section-space overflow-hidden">
       <div className="site-container mb-9 flex items-end justify-between gap-5">
-        <SectionTitle eyebrow="Through our lens">
-          Featured <span className="italic">Works.</span>
-        </SectionTitle>
+        <div>
+          <p className="eyebrow">Through our lens</p>
+          <h2 className="section-title mt-4">Featured works</h2>
+        </div>
         <div className="flex gap-2">
           <Button
             size="icon"
@@ -68,7 +68,7 @@ export function FeaturedWorks() {
                 opener.current = event.currentTarget;
                 setSelected(index);
               }}
-              className={`portfolio-item group relative shrink-0 snap-start overflow-hidden text-left ${index % 3 === 1 ? "portfolio-wide" : ""}`}
+              className={`portfolio-item group relative shrink-0 snap-start overflow-hidden rounded-[var(--radius-cards)] border border-[var(--color-cloud)] text-left ${index % 3 === 1 ? "portfolio-wide" : ""}`}
               aria-haspopup="dialog"
               aria-label={`View ${work.title}`}
             >
@@ -82,10 +82,10 @@ export function FeaturedWorks() {
               <div className="absolute inset-0 bg-gradient-to-t from-black/55 via-transparent to-transparent opacity-70 transition-opacity group-hover:opacity-100" />
               <div className="absolute right-5 bottom-5 left-5 flex items-end justify-between text-white">
                 <div>
-                  <p className="mb-2 text-[12px] tracking-[.15em] uppercase">
+                  <p className="mb-2 text-[12px] tracking-[0.14em] uppercase">
                     {work.category}
                   </p>
-                  <h3 className="font-serif text-2xl">{work.title}</h3>
+                  <h3 className="text-[20px] font-semibold leading-[1.5]">{work.title}</h3>
                 </div>
                 <Expand size={17} />
               </div>
@@ -93,7 +93,7 @@ export function FeaturedWorks() {
           ))}
         </div>
         <Dialog.Portal>
-          <Dialog.Overlay className="fixed inset-0 z-60 bg-[#171715]/97" />
+          <Dialog.Overlay className="fixed inset-0 z-60 bg-[var(--color-obsidian)]/97" />
           <Dialog.Content
             className="fixed inset-0 z-60 flex flex-col p-4 text-white outline-none sm:p-8"
             onCloseAutoFocus={(event) => {
@@ -124,7 +124,7 @@ export function FeaturedWorks() {
           >
             <div className="flex items-start justify-between gap-6">
               <div>
-                <Dialog.Title className="font-serif text-3xl">
+                <Dialog.Title className="text-3xl">
                   {active?.title}
                 </Dialog.Title>
                 <Dialog.Description className="mt-2 text-sm text-white/60">

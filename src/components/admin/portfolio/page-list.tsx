@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { ExternalLink, FileText, Plus, Rocket, Trash2 } from "lucide-react";
+import { ExternalLink, FileText, Plus, Rocket, Tag, Trash2 } from "lucide-react";
 import {
   deletePortfolioPage,
   publishPortfolioPage,
@@ -11,6 +11,12 @@ import {
   unpublishPortfolioPage,
   type PortfolioPageRow,
 } from "@/app/actions/portfolio";
+import {
+  PORTFOLIO_CATEGORIES,
+  PORTFOLIO_CATEGORY_LABELS,
+  isPortfolioCategory,
+  normalisePortfolioTags,
+} from "@/lib/portfolio/category";
 
 const slugify = (value: string) =>
   value
@@ -27,6 +33,8 @@ export function PortfolioPageList({ pages }: { pages: PortfolioPageRow[] }) {
   const [title, setTitle] = useState("");
   const [slug, setSlug] = useState("");
   const [slugTouched, setSlugTouched] = useState(false);
+  const [category, setCategory] = useState("");
+  const [tags, setTags] = useState("");
 
   const run = (fn: () => Promise<{ ok: boolean; error?: string; data?: { id?: string } }>, after?: (id?: string) => void) => {
     setError(null);
@@ -49,12 +57,16 @@ export function PortfolioPageList({ pages }: { pages: PortfolioPageRow[] }) {
         savePortfolioPage({
           slug: slug || slugify(title),
           title: title.trim(),
+          category: category === "" ? "" : (category as (typeof PORTFOLIO_CATEGORIES)[number]),
+          tags: normalisePortfolioTags(tags.split(",")),
         }) as Promise<{ ok: boolean; error?: string; data?: { id?: string } }>,
       (id) => {
         setCreating(false);
         setTitle("");
         setSlug("");
         setSlugTouched(false);
+        setCategory("");
+        setTags("");
         if (id) router.push(`/admin/portfolio/${id}`);
       },
     );
@@ -101,6 +113,44 @@ export function PortfolioPageList({ pages }: { pages: PortfolioPageRow[] }) {
             />
             <p className="mt-1 text-[11px] text-[#a1a1aa]">/portfolio/{slug || "…"}</p>
           </div>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div>
+              <label htmlFor="p-category" className="mb-1 block text-xs font-medium text-[#3f3f46]">
+                Kategori
+              </label>
+              {/*
+               * Options come from PORTFOLIO_CATEGORIES, the same list the zod
+               * enum and the public filter read. A hardcoded <option> list here
+               * is how the CMS and the filter drift apart.
+               */}
+              <select
+                id="p-category"
+                value={category}
+                onChange={(e) => setCategory(e.target.value)}
+                className="w-full rounded-lg border border-[#ececee] bg-white px-3 py-2 text-sm outline-none focus:border-[#18181b]"
+              >
+                <option value="">Tanpa kategori</option>
+                {PORTFOLIO_CATEGORIES.map((value) => (
+                  <option key={value} value={value}>
+                    {PORTFOLIO_CATEGORY_LABELS[value]}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label htmlFor="p-tags" className="mb-1 block text-xs font-medium text-[#3f3f46]">
+                Tag
+              </label>
+              <input
+                id="p-tags"
+                value={tags}
+                onChange={(e) => setTags(e.target.value)}
+                placeholder="outdoor, intimate, golden hour"
+                className="w-full rounded-lg border border-[#ececee] px-3 py-2 text-sm outline-none focus:border-[#18181b]"
+              />
+              <p className="mt-1 text-[11px] text-[#a1a1aa]">Pisahkan dengan koma.</p>
+            </div>
+          </div>
           <div className="flex gap-2">
             <button
               type="submit"
@@ -139,6 +189,7 @@ export function PortfolioPageList({ pages }: { pages: PortfolioPageRow[] }) {
             <thead className="border-b border-[#ececee] bg-[#fafafa] text-[11px] uppercase tracking-wide text-[#71717a]">
               <tr>
                 <th className="px-4 py-3 font-medium">Halaman</th>
+                <th className="px-4 py-3 font-medium">Kategori</th>
                 <th className="px-4 py-3 font-medium">Status</th>
                 <th className="px-4 py-3 text-right font-medium">Aksi</th>
               </tr>
@@ -154,6 +205,27 @@ export function PortfolioPageList({ pages }: { pages: PortfolioPageRow[] }) {
                       {page.title}
                     </Link>
                     <p className="font-mono text-[11px] text-[#a1a1aa]">/portfolio/{page.slug}</p>
+                  </td>
+                  <td className="px-4 py-3">
+                    {/*
+                     * The stored value is `text` with a CHECK constraint, so it
+                     * is narrowed with the shared type guard rather than cast:
+                     * a row written before 0028 (or by a future vocabulary) must
+                     * not crash the label lookup.
+                     */}
+                    {isPortfolioCategory(page.category) ? (
+                      <span className="rounded-full border border-[#ececee] bg-[#f4f4f5] px-2 py-0.5 text-[10px] font-medium text-[#3f3f46]">
+                        {PORTFOLIO_CATEGORY_LABELS[page.category]}
+                      </span>
+                    ) : (
+                      <span className="text-[11px] text-[#a1a1aa]">—</span>
+                    )}
+                    {page.tags.length > 0 && (
+                      <p className="mt-1 flex items-center gap-1 text-[10px] text-[#a1a1aa]">
+                        <Tag size={10} aria-hidden />
+                        <span className="truncate">{page.tags.join(", ")}</span>
+                      </p>
+                    )}
                   </td>
                   <td className="px-4 py-3">
                     <span

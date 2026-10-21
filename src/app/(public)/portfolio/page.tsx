@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
-import Link from "next/link";
-import { ArrowUpRight } from "lucide-react";
 import { PortfolioGrid } from "@/components/portfolio/portfolio-grid";
+import { ShowcaseFilter } from "@/components/public/portfolio/showcase-filter";
 import { BookingCta } from "@/components/home/booking-cta";
 import { listPublishedPortfolioPages } from "@/app/actions/portfolio";
 
@@ -31,72 +30,45 @@ export default async function PortfolioPage() {
       {/* Page Header */}
       <section className="site-container pt-20 pb-14">
         <p className="eyebrow">Through our lens</p>
-        <h1 className="section-heading mt-5">
-          Stories in
-          <br />
-          <span className="italic">Every Frame.</span>
+        <h1 className="mt-5 text-[clamp(40px,5.2vw,64px)] font-semibold leading-[1.12] tracking-[-0.02em] text-[var(--color-obsidian)]">
+          Stories in Every Frame.
         </h1>
-        <p className="mt-6 max-w-md leading-relaxed text-muted-foreground">
+        <p className="mt-6 max-w-md leading-relaxed text-[var(--color-fog)]">
           A collection of moments, emotions, and genuine stories captured
           through our lens.
         </p>
       </section>
 
       {/*
-       * CMS showcases render only when at least one page is published. An empty
-       * heading over an empty grid would be worse than no section at all.
+       * CMS showcases. The category chips are derived from the published rows,
+       * so the filter can never advertise a category with nothing behind it —
+       * the whole reason the vocabulary moved out of a hardcoded array.
        */}
-      {showcases.length > 0 && (
-        <section
-          className="site-container pb-20"
-          aria-label="Portfolio showcases"
-        >
-          <h2 className="eyebrow">Kisah pilihan</h2>
-          <ul className="mt-6 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-            {showcases.map((page) => (
-              <li key={page.id}>
-                <Link
-                  href={`/portfolio/${page.slug}`}
-                  className="group block overflow-hidden rounded-sm border border-border/60 transition-colors hover:border-foreground/30"
-                >
-                  <div className="relative aspect-[4/3] overflow-hidden bg-muted">
-                    {page.cover_url ? (
-                      /* eslint-disable-next-line @next/next/no-img-element */
-                      <img
-                        src={page.cover_url}
-                        alt=""
-                        loading="lazy"
-                        className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.03]"
-                      />
-                    ) : (
-                      <div className="flex h-full items-center justify-center text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
-                        Elts.
-                      </div>
-                    )}
-                  </div>
-                  <div className="flex items-start justify-between gap-3 p-5">
-                    <div>
-                      <h3 className="font-serif text-xl tracking-tight">
-                        {page.title}
-                      </h3>
-                      {page.summary && (
-                        <p className="mt-1.5 line-clamp-2 text-sm text-muted-foreground">
-                          {page.summary}
-                        </p>
-                      )}
-                    </div>
-                    <ArrowUpRight
-                      size={16}
-                      aria-hidden
-                      className="mt-1 shrink-0 text-muted-foreground transition-transform group-hover:-translate-y-0.5 group-hover:translate-x-0.5"
-                    />
-                  </div>
-                </Link>
-              </li>
-            ))}
-          </ul>
-        </section>
-      )}
+      <section className="site-container pb-20" aria-labelledby="showcase-heading">
+        <h2 id="showcase-heading" className="eyebrow">
+          Kisah pilihan
+        </h2>
+
+        {showcases.length === 0 ? (
+          /*
+           * Honest empty state. The gallery below still renders, so this says
+           * "no showcases yet" rather than pretending the page is broken.
+           */
+          <div className="mt-6 rounded-[var(--radius-cards)] border border-dashed border-[var(--color-cloud)] px-6 py-16 text-center">
+            <p className="text-sm font-semibold text-[var(--color-obsidian)]">
+              Belum ada kisah yang diterbitkan.
+            </p>
+            <p className="mx-auto mt-1.5 max-w-sm text-xs leading-relaxed text-[var(--color-fog)]">
+              Koleksi pilihan sedang disiapkan. Sementara itu, jelajahi galeri di
+              bawah.
+            </p>
+          </div>
+        ) : (
+          <div className="mt-6">
+            <ShowcaseFilter pages={showcases} />
+          </div>
+        )}
+      </section>
 
       {/* Gallery */}
       <section className="site-container pb-24" aria-label="Portfolio gallery">

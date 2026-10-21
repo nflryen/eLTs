@@ -139,18 +139,18 @@ export function ContactForm({ prefill }: { prefill?: ContactPrefill }) {
   if (sent) {
     return (
       <div className="flex flex-col items-center py-12 text-center">
-        <div className="mb-6 flex size-16 items-center justify-center rounded-full bg-secondary">
+        <div className="mb-6 flex size-16 items-center justify-center rounded-full bg-[var(--color-paper)]">
           <CheckCircle2 size={28} />
         </div>
         <h2 className="font-serif text-3xl">Thank you.</h2>
-        <p className="mt-4 max-w-sm text-muted-foreground">
+        <p className="mt-4 max-w-sm text-[var(--color-fog)]">
           Your inquiry has reached our studio and someone will follow up within
           24 hours.
         </p>
 
         {sent.reference && (
           <div className="mt-6 rounded-lg border border-border bg-secondary/40 px-5 py-3">
-            <p className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
+            <p className="text-[11px] uppercase tracking-[0.18em] text-[var(--color-fog)]">
               Reference
             </p>
             <p className="mt-1 font-mono text-lg font-semibold tracking-wide">
@@ -168,7 +168,7 @@ export function ContactForm({ prefill }: { prefill?: ContactPrefill }) {
           <MessageCircle size={16} />
           Continue on WhatsApp
         </a>
-        <p className="mt-3 max-w-xs text-xs text-muted-foreground">
+        <p className="mt-3 max-w-xs text-xs text-[var(--color-fog)]">
           Faster replies — your message is pre-filled, just hit send.
         </p>
 
@@ -178,7 +178,7 @@ export function ContactForm({ prefill }: { prefill?: ContactPrefill }) {
             setForm(EMPTY);
             setTimeout(() => firstInput.current?.focus(), 50);
           }}
-          className="mt-6 text-sm underline underline-offset-4 text-muted-foreground hover:text-foreground transition-colors"
+          className="mt-6 text-sm underline underline-offset-4 text-[var(--color-fog)] hover:text-foreground transition-colors"
         >
           Send another message
         </button>
@@ -196,12 +196,12 @@ export function ContactForm({ prefill }: { prefill?: ContactPrefill }) {
       */}
       {prefill?.packageName && (
         <div className="rounded-lg border border-border bg-secondary/40 px-4 py-3">
-          <p className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
+          <p className="text-[11px] uppercase tracking-[0.18em] text-[var(--color-fog)]">
             Paket dipilih
           </p>
           <p className="mt-1 text-sm font-medium">{prefill.packageName}</p>
           {addons.length > 0 && (
-            <p className="mt-0.5 text-[12px] text-muted-foreground">
+            <p className="mt-0.5 text-[12px] text-[var(--color-fog)]">
               Add-on: {addons.map((a) => prettySlug(a.id)).join(", ")}
             </p>
           )}
@@ -247,7 +247,7 @@ export function ContactForm({ prefill }: { prefill?: ContactPrefill }) {
       {/* Email — optional, but the studio needs it for a formal quote. */}
       <div className="space-y-2">
         <label htmlFor="contact-email" className="text-sm font-medium">
-          Email <span className="text-muted-foreground">(optional)</span>
+          Email <span className="text-[var(--color-fog)]">(optional)</span>
         </label>
         <input
           id="contact-email"
@@ -336,7 +336,7 @@ export function ContactForm({ prefill }: { prefill?: ContactPrefill }) {
           </>
         )}
       </Button>
-      <p className="text-xs text-muted-foreground">
+      <p className="text-xs text-[var(--color-fog)]">
         We&apos;ll save your inquiry and give you a reference number. You can
         also continue the conversation on WhatsApp straight away.
       </p>

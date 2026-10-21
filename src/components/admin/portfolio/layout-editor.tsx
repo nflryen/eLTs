@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
+  Check,
   Grid3x3,
   Image as ImageIcon,
   LayoutTemplate,
@@ -22,7 +23,13 @@ import {
   type LayoutBlock,
   type LayoutDoc,
 } from "@/lib/portfolio/layout";
-import { savePortfolioSection } from "@/app/actions/portfolio";
+import { savePortfolioPage, savePortfolioSection } from "@/app/actions/portfolio";
+import {
+  PORTFOLIO_CATEGORIES,
+  PORTFOLIO_CATEGORY_LABELS,
+  normalisePortfolioTags,
+  type PortfolioCategory,
+} from "@/lib/portfolio/category";
 
 /**
  * Drag-and-drop portfolio layout editor.
@@ -47,7 +54,10 @@ import { savePortfolioSection } from "@/app/actions/portfolio";
 type Props = {
   pageId: string;
   slug: string;
+  title: string;
   status: "draft" | "published";
+  category: PortfolioCategory | null;
+  tags: string[];
   sections: Array<{ id: string; layout: unknown; sort_order: number }>;
 };
 
@@ -72,7 +82,7 @@ type DragState =
   | { mode: "resize"; id: string; startX: number; startY: number; originW: number; originH: number }
   | null;
 
-export function LayoutEditor({ pageId, slug, status, sections }: Props) {
+export function LayoutEditor({ pageId, slug, title, status, category, tags, sections }: Props) {
   const router = useRouter();
   const canvasRef = useRef<HTMLDivElement>(null);
   const dragRef = useRef<DragState>(null);
@@ -93,6 +103,50 @@ export function LayoutEditor({ pageId, slug, status, sections }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [savedAt, setSavedAt] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
+
+  /*
+   * Page METADATA is a separate save from the layout, deliberately.
+   *
+   * The layout button persists the canvas document; folding category and tags
+   * into it would mean an operator who only wanted to recategorise a page also
+   * rewrites its geometry, and a stale canvas would then be committed by a
+   * metadata edit. Two concerns, two writes, two dirty flags.
+   */
+  const [pageCategory, setPageCategory] = useState<PortfolioCategory | "">(category ?? "");
+  const [pageTags, setPageTags] = useState(tags.join(", "));
+  const [settingsDirty, setSettingsDirty] = useState(false);
+  const [settingsError, setSettingsError] = useState<string | null>(null);
+  const [settingsSaved, setSettingsSaved] = useState(false);
+
+  const saveSettings = () => {
+    setSettingsError(null);
+    setSettingsSaved(false);
+    startTransition(async () => {
+      const res = await savePortfolioPage({
+        id: pageId,
+        slug,
+        title,
+        category: pageCategory,
+        tags: normalisePortfolioTags(pageTags.split(",")),
+      });
+
+      if (!res.ok) {
+        setSettingsError(res.error);
+        return;
+      }
+
+      /*
+       * Re-seed from the RETURNED row, not from local state: the server
+       * normalises tags, so the field must show what was actually stored or the
+       * next save would submit a value the operator never saw.
+       */
+      setPageCategory(res.data?.category ?? "");
+      setPageTags((res.data?.tags ?? []).join(", "));
+      setSettingsDirty(false);
+      setSettingsSaved(true);
+      router.refresh();
+    });
+  };
 
   const selected = useMemo(
     () => layout.blocks.find((b) => b.id === selectedId) ?? null,
@@ -502,6 +556,66 @@ export function LayoutEditor({ pageId, slug, status, sections }: Props) {
             </button>
           </div>
         )}
+
+        {/* ── Page settings ─────────────────────────────────────────────── */}
+        <div className="space-y-2 border-t border-[#f4f4f5] pt-3">
+          <h2 className="text-sm font-semibold text-[#18181b]">Pengaturan Halaman</h2>
+
+          <label htmlFor="page-category" className="block text-[11px] text-[#71717a]">
+            Kategori
+            <select
+              id="page-category"
+              value={pageCategory}
+              onChange={(e) => {
+                setPageCategory(e.target.value as PortfolioCategory | "");
+                setSettingsDirty(true);
+                setSettingsSaved(false);
+              }}
+              className="mt-0.5 w-full rounded border border-[#ececee] bg-white px-2 py-1 text-xs"
+            >
+              <option value="">Tanpa kategori</option>
+              {PORTFOLIO_CATEGORIES.map((value) => (
+                <option key={value} value={value}>
+                  {PORTFOLIO_CATEGORY_LABELS[value]}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label htmlFor="page-tags" className="block text-[11px] text-[#71717a]">
+            Tag
+            <input
+              id="page-tags"
+              value={pageTags}
+              placeholder="outdoor, intimate, golden hour"
+              onChange={(e) => {
+                setPageTags(e.target.value);
+                setSettingsDirty(true);
+                setSettingsSaved(false);
+              }}
+              className="mt-0.5 w-full rounded border border-[#ececee] px-2 py-1 text-xs"
+            />
+            <span className="mt-0.5 block text-[10px] text-[#a1a1aa]">
+              Pisahkan dengan koma. Kategori menentukan filter di halaman publik.
+            </span>
+          </label>
+
+          {settingsError && (
+            <p className="rounded border border-red-200 bg-red-50 px-2 py-1 text-[11px] text-red-700">
+              {settingsError}
+            </p>
+          )}
+
+          <button
+            type="button"
+            onClick={saveSettings}
+            disabled={pending || !settingsDirty}
+            className="flex w-full items-center justify-center gap-1.5 rounded-lg bg-[#18181b] px-3 py-1.5 text-xs font-medium text-white disabled:opacity-40"
+          >
+            {settingsSaved && !settingsDirty ? <Check size={13} /> : <Save size={13} />}
+            {pending ? "Menyimpan…" : settingsSaved && !settingsDirty ? "Tersimpan" : "Simpan Pengaturan"}
+          </button>
+        </div>
 
         <div className="border-t border-[#f4f4f5] pt-3 text-[11px] text-[#a1a1aa]">
           <p>

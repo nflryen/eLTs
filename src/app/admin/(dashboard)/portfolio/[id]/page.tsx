@@ -44,7 +44,10 @@ export default async function PortfolioEditorPage({ params }: Props) {
       <LayoutEditor
         pageId={bundle.page.id}
         slug={bundle.page.slug}
+        title={bundle.page.title}
         status={bundle.page.status}
+        category={bundle.page.category}
+        tags={bundle.page.tags}
         sections={bundle.sections.map((s) => ({ id: s.id, layout: s.layout, sort_order: s.sort_order }))}
       />
     </div>

@@ -267,7 +267,7 @@ export function BookingWizard() {
         <div className="space-y-6">
           <div className="border-b border-border pb-5">
             <p className="eyebrow text-xs">Langkah 1 dari 3</p>
-            <h2 className="font-serif text-2xl sm:text-3xl mt-1 text-foreground">
+            <h2 className="text-2xl sm:text-3xl mt-1 text-foreground">
               Pilih Jenis Pertemuan Studio
             </h2>
             <p className="mt-2 text-sm text-muted-foreground">
@@ -317,7 +317,7 @@ export function BookingWizard() {
                     </div>
                   </div>
 
-                  <h3 className="mt-4 font-serif text-xl text-foreground">
+                  <h3 className="mt-4 text-xl text-foreground">
                     {option.title}
                   </h3>
 
@@ -375,7 +375,7 @@ export function BookingWizard() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="eyebrow text-xs">Langkah 2 dari 3</p>
-                <h2 className="font-serif text-2xl sm:text-3xl mt-1 text-foreground">
+                <h2 className="text-2xl sm:text-3xl mt-1 text-foreground">
                   Pilih Tanggal & Jam Pertemuan
                 </h2>
               </div>
@@ -413,7 +413,7 @@ export function BookingWizard() {
                     <span className="text-[11px] font-medium opacity-80">
                       {item.label}
                     </span>
-                    <span className="text-lg font-serif font-bold mt-0.5">
+                    <span className="text-lg font-bold mt-0.5">
                       {item.dayNum}
                     </span>
                     <span className="text-[10px] opacity-75">
@@ -525,7 +525,7 @@ export function BookingWizard() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="eyebrow text-xs">Langkah 3 dari 3</p>
-                <h2 className="font-serif text-2xl sm:text-3xl mt-1 text-foreground">
+                <h2 className="text-2xl sm:text-3xl mt-1 text-foreground">
                   Informasi Kontak & Kebutuhan
                 </h2>
               </div>
@@ -714,7 +714,7 @@ export function BookingWizard() {
             <p className="eyebrow text-xs text-emerald-700">
               Reservasi Berhasil
             </p>
-            <h2 className="font-serif text-3xl sm:text-4xl mt-1 text-foreground">
+            <h2 className="text-3xl sm:text-4xl mt-1 text-foreground">
               Jadwal Pertemuan Terkonfirmasi
             </h2>
             <p className="mt-2 max-w-lg text-sm text-muted-foreground">

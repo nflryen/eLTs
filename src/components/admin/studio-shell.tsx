@@ -2,7 +2,7 @@ import Link from "next/link";
 import {
   LayoutDashboard, FolderKanban, Calendar, Package,
   Coins, Building2, Settings, LogOut, Clock, Receipt, Wallet,
-  Clapperboard, LayoutTemplate, Inbox,
+  Clapperboard, LayoutTemplate, Inbox, ClipboardList, Tags,
 } from "lucide-react";
 import { adminLogout } from "@/app/actions/admin-auth";
 import { requireStaff } from "@/lib/auth/roles";
@@ -40,6 +40,12 @@ const NAV_GROUPS: NavGroup[] = [
     label: "Operate",
     items: [
       { href: "/admin", label: "Hari Ini", icon: <LayoutDashboard size={18} />, minRank: RANKS.WORKER },
+      /*
+       * A crew member's own assignments. Rank WORKER so a freelancer with a
+       * login can reach it; the page and every action resolve the crew row from
+       * auth.uid() and never accept an id from the client.
+       */
+      { href: "/admin/my-assignments", label: "Penugasan Saya", icon: <ClipboardList size={18} />, minRank: RANKS.WORKER },
       { href: "/admin/calendar", label: "Kalender", icon: <Calendar size={18} />, minRank: RANKS.WORKER },
       { href: "/admin/projects", label: "Proyek", icon: <FolderKanban size={18} />, minRank: RANKS.WORKER },
       { href: "/admin/editor-queue", label: "Post-Produksi", icon: <Clock size={18} />, minRank: RANKS.WORKER },
@@ -77,6 +83,7 @@ const NAV_GROUPS: NavGroup[] = [
     items: [
       { href: "/admin/leads", label: "Lead & Konsultasi", icon: <Inbox size={18} />, minRank: RANKS.ADMIN },
       { href: "/admin/portfolio", label: "Portofolio & CMS", icon: <LayoutTemplate size={18} />, minRank: RANKS.ADMIN },
+      { href: "/admin/pricelist", label: "Pricelist", icon: <Tags size={18} />, minRank: RANKS.ADMIN },
     ],
   },
 ];

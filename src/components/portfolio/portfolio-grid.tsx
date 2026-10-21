@@ -67,16 +67,16 @@ export function PortfolioGrid() {
               setFilter(f.value);
               setSelected(null);
             }}
-            className={`rounded-sm px-4 py-2 text-sm transition-colors ${
+            className={`rounded-[var(--radius-badges)] border px-3 py-1.5 text-[13px] transition-colors ${
               filter === f.value
-                ? "bg-primary text-primary-foreground"
-                : "text-muted-foreground hover:text-foreground"
+                ? "border-[var(--color-graphite)] bg-[var(--color-graphite)] text-white"
+                : "border-[var(--color-cloud)] text-[var(--color-graphite)] hover:border-[var(--color-mist)]"
             }`}
           >
             {f.label}
           </button>
         ))}
-        <span className="ml-auto text-xs text-muted-foreground">
+        <span className="ml-auto text-[12px] text-[var(--color-fog)]">
           {visible.length} {visible.length === 1 ? "photo" : "photos"}
         </span>
       </div>
@@ -117,7 +117,7 @@ export function PortfolioGrid() {
                   <p className="text-[10px] tracking-[.18em] uppercase text-white/70">
                     {img.category}
                   </p>
-                  <h3 className="mt-1 font-serif text-lg leading-tight text-white">
+                  <h3 className="mt-1 text-lg leading-tight text-white">
                     {img.title}
                   </h3>
                 </div>
@@ -163,7 +163,7 @@ export function PortfolioGrid() {
             {/* Top bar */}
             <div className="flex items-start justify-between gap-6">
               <div>
-                <Dialog.Title className="font-serif text-3xl">
+                <Dialog.Title className="text-3xl">
                   {active?.title}
                 </Dialog.Title>
                 <Dialog.Description className="mt-1 text-xs tracking-[.15em] uppercase text-white/50">
@@ -229,7 +229,7 @@ export function PortfolioGrid() {
       {/* Empty state */}
       {visible.length === 0 && (
         <div className="flex flex-col items-center py-24 text-center">
-          <p className="font-serif text-2xl text-muted-foreground">
+          <p className="text-[20px] font-semibold text-[var(--color-fog)]">
             No photos in this category yet.
           </p>
           <p className="mt-2 text-sm text-muted-foreground">

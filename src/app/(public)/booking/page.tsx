@@ -30,12 +30,10 @@ export default function BookingPage() {
     <main id="main-content" className="min-h-screen pb-24 pt-16 sm:pt-20">
       <div className="site-container">
         {/* Hero Section */}
-        <div className="max-w-2xl mx-auto text-center mb-12 sm:mb-16">
+        <div className="mx-auto mb-12 max-w-2xl text-center sm:mb-16">
           <p className="eyebrow text-xs">ELTs. Studio Scheduling</p>
-          <h1 className="section-heading mt-4 text-3xl sm:text-5xl text-foreground font-serif">
-            Schedule Your
-            <br />
-            <span className="italic">Creative Session.</span>
+          <h1 className="mt-4 text-[clamp(32px,4.6vw,56px)] font-semibold leading-[1.12] tracking-[-0.02em] text-[var(--color-obsidian)]">
+            Schedule your creative session.
           </h1>
           <p className="mt-4 text-sm sm:text-base text-muted-foreground leading-relaxed">
             Pilih waktu konsultasi langsung dengan tim kreatif dan teknis ELTs.

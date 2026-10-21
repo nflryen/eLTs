@@ -4,23 +4,46 @@ import { AboutPreview } from "@/components/home/about-preview";
 import { Services } from "@/components/home/services";
 import { FeaturedWorks } from "@/components/portfolio/featured-works";
 import { BookingCta } from "@/components/home/booking-cta";
+import { getPricelist } from "@/lib/pricelist";
 
 export const metadata: Metadata = { alternates: { canonical: "/" } };
 
-export default function HomePage() {
+/*
+ * Reads the live pricelist so the stats row reports numbers that are actually
+ * true. Hardcoding "500+ sessions" would be an invented claim on a page whose
+ * whole argument is transparent pricing.
+ */
+export const dynamic = "force-dynamic";
+
+export default async function HomePage() {
+  const pricelist = await getPricelist().catch(() => ({ categories: [], addons: [] }));
+  const packageCount = pricelist.categories.reduce((n, c) => n + c.packages.length, 0);
+  const categoryCount = pricelist.categories.length;
   return (
     <main id="main-content">
       <Hero />
-      <div className="border-b border-border">
-        <div className="site-container flex flex-col items-center justify-between gap-5 py-8 sm:flex-row">
-          <p className="text-sm text-muted-foreground">
-            Trusted for meaningful moments.
-          </p>
-          <div className="flex gap-7 font-serif text-xl text-[#817c72] sm:gap-10">
-            <span>Real connection.</span>
-            <span>Honest stories.</span>
-            <span className="hidden italic sm:inline">Lasting memories.</span>
-          </div>
+      {/*
+        Stats row — Awesomic pattern: large number at 40–56px weight 600 in
+        obsidian, descriptor at 14px in steel on the same baseline.
+      */}
+      <div className="site-container">
+        <div className="grid gap-8 border-y border-[var(--color-cloud)] py-10 sm:grid-cols-3">
+          {[
+            { value: String(categoryCount), label: "Service categories" },
+            { value: String(packageCount), label: "Packages published" },
+            { value: String(pricelist.addons.length), label: "Add-ons available" },
+          ]
+            .filter((stat) => stat.value !== "0")
+            .map((stat) => (
+            <div key={stat.label} className="flex items-baseline gap-3">
+              <span className="text-[40px] font-semibold leading-none tracking-[-0.02em] text-[var(--color-obsidian)]">
+                {stat.value}
+              </span>
+              <span className="text-[14px] leading-[1.45] text-[var(--color-steel)]">
+                {stat.label}
+              </span>
+            </div>
+          ))}
         </div>
       </div>
       <AboutPreview />

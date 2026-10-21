@@ -38,10 +38,8 @@ export default async function ContactPage({ searchParams }: Props) {
         {/* Left column — copy + details */}
         <div>
           <p className="eyebrow">Get in touch</p>
-          <h1 className="section-heading mt-5">
-            Let&apos;s Tell
-            <br />
-            <span className="italic">Your Story.</span>
+          <h1 className="mt-5 text-[clamp(36px,4.6vw,56px)] font-semibold leading-[1.12] tracking-[-0.02em] text-[var(--color-obsidian)]">
+            Let&apos;s tell your story.
           </h1>
           <p className="mt-6 leading-relaxed text-muted-foreground">
             Whether you have a date in mind or you&apos;re just exploring the
@@ -93,8 +91,8 @@ export default async function ContactPage({ searchParams }: Props) {
         </div>
 
         {/* Right column — form */}
-        <div className="border border-border bg-white p-8 sm:p-10 lg:sticky lg:top-32">
-          <h2 className="font-serif text-3xl">Send an Inquiry</h2>
+        <div className="rounded-[var(--radius-cards)] border border-[var(--color-cloud)] bg-[var(--color-snow)] p-[var(--card-padding)] sm:p-8 lg:sticky lg:top-24">
+          <h2 className="text-[20px] font-semibold leading-[1.5] text-[var(--color-obsidian)]">Send an inquiry</h2>
           <p className="mt-2 text-sm text-muted-foreground">
             Usually responds within 24 hours.
           </p>

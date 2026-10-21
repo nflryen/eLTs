@@ -21,14 +21,56 @@
  */
 
 import { revalidatePath } from "next/cache";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { z } from "zod";
 import { requireOps } from "@/lib/auth/roles";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { normaliseLayout } from "@/lib/portfolio/layout";
+import {
+  PORTFOLIO_CATEGORIES,
+  normalisePortfolioTags,
+  type PortfolioCategory,
+} from "@/lib/portfolio/category";
 import type { Database } from "@/types/database";
 
-export type PortfolioPageRow = Database["public"]["Tables"]["portfolio_pages"]["Row"];
+type GeneratedPageRow = Database["public"]["Tables"]["portfolio_pages"]["Row"];
+
+/*
+ * `category` and `tags` were added by migration 0028 and ARE live in the
+ * database, but `src/types/database.ts` has not been regenerated yet. Widening
+ * the generated row here — instead of pretending the columns do not exist —
+ * keeps every reader of this module honest. When the types are regenerated this
+ * intersection collapses to the generated row and can be deleted; the two write
+ * casts below become unnecessary with it.
+ */
+export type PortfolioPageRow = GeneratedPageRow & {
+  category: PortfolioCategory | null;
+  tags: string[];
+};
 export type PortfolioSectionRow = Database["public"]["Tables"]["portfolio_sections"]["Row"];
+
+/*
+ * A `from()` generic, not a cast at every call site. `RejectExcessProperties`
+ * in postgrest-js turns an unknown key in a write payload into `never`, so a
+ * stale generated type does not merely hide `category` from reads — it makes
+ * writing it a compile error. Declaring the widened relation once is the only
+ * version of this that does not need `as never` scattered through the module.
+ */
+type PortfolioPagesRelation = {
+  Row: PortfolioPageRow;
+  Insert: Database["public"]["Tables"]["portfolio_pages"]["Insert"] & {
+    category?: PortfolioCategory | null;
+    tags?: string[];
+  };
+  Update: Database["public"]["Tables"]["portfolio_pages"]["Update"] & {
+    category?: PortfolioCategory | null;
+    tags?: string[];
+  };
+  Relationships: [];
+};
+
+const portfolioPages = <T extends SupabaseClient<Database>>(supabase: T) =>
+  supabase.from<"portfolio_pages", PortfolioPagesRelation>("portfolio_pages");
 
 export type PortfolioPageBundle = {
   page: PortfolioPageRow;
@@ -63,6 +105,18 @@ const pageInputSchema = z.object({
   seoTitle: z.string().max(200).nullable().optional(),
   seoDescription: z.string().max(400).nullable().optional(),
   coverUrl: z.string().max(2048).nullable().optional(),
+  /*
+   * Empty string is the "Tanpa kategori" option in the admin select, and it
+   * means NULL — not a sixth category. Validating against the same five values
+   * as `portfolio_pages_category_check` turns a stale client bundle into a
+   * message the operator can act on instead of a raw check_violation.
+   */
+  category: z
+    .union([z.enum(PORTFOLIO_CATEGORIES), z.literal("")], {
+      error: "Kategori tidak dikenal.",
+    })
+    .nullish(),
+  tags: z.array(z.string(), { error: "Tag tidak valid." }).optional(),
   sortOrder: z.number().int().min(0).max(9999).optional(),
 });
 
@@ -87,8 +141,7 @@ function nullable(value: string | null | undefined): string | null {
 export async function listPortfolioPages(): Promise<PortfolioPageRow[]> {
   const { supabase } = await requireOps();
 
-  const { data, error } = await supabase
-    .from("portfolio_pages")
+  const { data, error } = await portfolioPages(supabase)
     .select("*")
     .order("sort_order", { ascending: true })
     .order("created_at", { ascending: false });
@@ -107,8 +160,7 @@ export async function getPortfolioPage(id: string): Promise<PortfolioPageBundle 
   const { supabase } = await requireOps();
   if (!uuidSchema.safeParse(id).success) return null;
 
-  const { data: page, error: pageError } = await supabase
-    .from("portfolio_pages")
+  const { data: page, error: pageError } = await portfolioPages(supabase)
     .select("*")
     .eq("id", id)
     .maybeSingle();
@@ -143,8 +195,7 @@ export async function getPublishedPortfolioPage(
 
   const supabase = await createServerSupabase();
 
-  const { data: page } = await supabase
-    .from("portfolio_pages")
+  const { data: page } = await portfolioPages(supabase)
     .select("*")
     .eq("slug", slug)
     .eq("status", "published")
@@ -168,18 +219,38 @@ export async function getPublishedPortfolioPage(
  * published rows, and the explicit filter keeps a signed-in admin's wider
  * predicate from leaking drafts into the public list. Returns only the columns
  * the index actually renders — no SEO fields, no layout blobs.
+ *
+ * `category` is what the public filter keys on, so it is part of this contract
+ * rather than a detail the page re-derives.
  */
-export async function listPublishedPortfolioPages(): Promise<
-  Pick<PortfolioPageRow, "id" | "slug" | "title" | "summary" | "cover_url" | "sort_order">[]
-> {
+export type PublishedPortfolioPage = Pick<
+  PortfolioPageRow,
+  "id" | "slug" | "title" | "summary" | "cover_url" | "sort_order" | "category" | "tags"
+>;
+
+export async function listPublishedPortfolioPages(): Promise<PublishedPortfolioPage[]> {
   const supabase = await createServerSupabase();
 
-  const { data } = await supabase
-    .from("portfolio_pages")
-    .select("id, slug, title, summary, cover_url, sort_order")
+  const { data, error } = await portfolioPages(supabase)
+    .select("id, slug, title, summary, cover_url, sort_order, category, tags")
     .eq("status", "published")
     .order("sort_order", { ascending: true })
     .order("published_at", { ascending: false });
+
+  /*
+   * Returned as an empty list, not thrown: the public index keeps its static
+   * gallery when the CMS read fails, and a thrown error there would take the
+   * whole page down.
+   *
+   * But it is LOGGED. This used to swallow the error entirely, which is how a
+   * broken RLS predicate on `portfolio_pages` stayed invisible for so long: the
+   * public page rendered "nothing published yet" — a plausible, confident zero
+   * — while every anonymous request was actually being refused.
+   */
+  if (error) {
+    console.error("portfolio_published_list_failed", { code: error.code });
+    return [];
+  }
 
   return data ?? [];
 }
@@ -204,19 +275,46 @@ export async function savePortfolioPage(
   }
   const value = parsed.data;
 
+  /*
+   * EVERY optional column is written only when the caller sent it.
+   *
+   * WHY NOT `summary: nullable(value.summary)` UNCONDITIONALLY
+   * --------------------------------------------------------
+   * That was fine while the only caller was the full metadata form, but this
+   * action is now also the "save category and tags" path from the layout
+   * editor. `nullable(undefined)` returns `null`, so a settings-only save would
+   * have silently erased the page's summary, SEO fields and cover image — the
+   * exact data the public card renders.
+   *
+   * The rule is now uniform and explicit: absent key = leave the column alone,
+   * `null` or `""` = clear it. That distinction is what makes a partial update
+   * safe, and it is why `category: ""` (the "Tanpa kategori" option) can clear
+   * the column while an omitted category cannot.
+   */
   const patch = {
     slug: value.slug,
     title: value.title,
-    summary: nullable(value.summary),
-    seo_title: nullable(value.seoTitle),
-    seo_description: nullable(value.seoDescription),
-    cover_url: nullable(value.coverUrl),
+    ...(value.summary === undefined ? {} : { summary: nullable(value.summary) }),
+    ...(value.seoTitle === undefined ? {} : { seo_title: nullable(value.seoTitle) }),
+    ...(value.seoDescription === undefined
+      ? {}
+      : { seo_description: nullable(value.seoDescription) }),
+    ...(value.coverUrl === undefined ? {} : { cover_url: nullable(value.coverUrl) }),
+    ...(value.category === undefined
+      ? {}
+      : { category: value.category === "" ? null : value.category }),
+    /*
+     * Normalised here, not in the form. The admin field is one comma-separated
+     * string, and two operators typing "Outdoor" and "outdoor" must not become
+     * two tags; doing it server-side means the rule holds for any caller.
+     */
+    ...(value.tags === undefined ? {} : { tags: normalisePortfolioTags(value.tags) }),
     ...(value.sortOrder === undefined ? {} : { sort_order: value.sortOrder }),
   };
 
   const query = value.id
-    ? supabase.from("portfolio_pages").update(patch).eq("id", value.id).select("*").maybeSingle()
-    : supabase.from("portfolio_pages").insert(patch).select("*").maybeSingle();
+    ? portfolioPages(supabase).update(patch).eq("id", value.id).select("*").maybeSingle()
+    : portfolioPages(supabase).insert(patch).select("*").maybeSingle();
 
   const { data, error } = await query;
 
@@ -309,8 +407,7 @@ export async function savePortfolioSection(
 export async function publishPortfolioPage(id: string): Promise<PortfolioResult<PortfolioPageRow>> {
   const { supabase } = await requireOps();
   if (!uuidSchema.safeParse(id).success) return { ok: false, error: "ID halaman tidak valid." };
-  const { data: current, error: readError } = await supabase
-    .from("portfolio_pages")
+  const { data: current, error: readError } = await portfolioPages(supabase)
     .select("published_at, slug")
     .eq("id", id)
     .maybeSingle();
@@ -318,8 +415,7 @@ export async function publishPortfolioPage(id: string): Promise<PortfolioResult<
   if (readError) return { ok: false, error: `Gagal membaca halaman: ${readError.message}` };
   if (!current) return { ok: false, error: "Halaman tidak ditemukan." };
 
-  const { data, error } = await supabase
-    .from("portfolio_pages")
+  const { data, error } = await portfolioPages(supabase)
     .update({
       status: "published",
       /*
@@ -354,8 +450,7 @@ export async function unpublishPortfolioPage(
   const { supabase } = await requireOps();
   if (!uuidSchema.safeParse(id).success) return { ok: false, error: "ID halaman tidak valid." };
 
-  const { data, error } = await supabase
-    .from("portfolio_pages")
+  const { data, error } = await portfolioPages(supabase)
     .update({ status: "draft", published_at: null })
     .eq("id", id)
     .select("*")

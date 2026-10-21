@@ -117,7 +117,7 @@ export default function AboutPage() {
                 className="object-cover"
               />
             </div>
-            <p className="rotate-[-3deg] font-serif text-xl italic text-[#706b63] text-center leading-tight">
+            <p className="rotate-[-3deg] text-xl italic text-[#706b63] text-center leading-tight">
               for the real<br />moments.
             </p>
           </div>
@@ -136,8 +136,8 @@ export default function AboutPage() {
           <div className="grid gap-x-8 gap-y-10 sm:grid-cols-2 lg:grid-cols-4">
             {values.map((v) => (
               <div key={v.number} className="border-t border-border pt-6">
-                <p className="font-serif text-3xl text-[#b3aea6]">{v.number}</p>
-                <h3 className="mt-4 font-serif text-2xl">{v.title}</h3>
+                <p className="text-3xl text-[#b3aea6]">{v.number}</p>
+                <h3 className="mt-4 text-2xl">{v.title}</h3>
                 <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
                   {v.description}
                 </p>
@@ -209,7 +209,7 @@ export default function AboutPage() {
                 { stat: "100%", label: "Client satisfaction" },
               ].map((item) => (
                 <div key={item.label}>
-                  <p className="font-serif text-4xl leading-none">{item.stat}</p>
+                  <p className="text-4xl leading-none">{item.stat}</p>
                   <p className="mt-2 text-xs text-muted-foreground">{item.label}</p>
                 </div>
               ))}

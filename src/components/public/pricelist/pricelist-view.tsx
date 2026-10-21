@@ -269,7 +269,7 @@ export function PricelistView({ data }: Props) {
                 aria-controls="pricelist-panel"
                 onClick={() => setActiveSlug(category.slug)}
                 className={cn(
-                  "shrink-0 rounded-xl border px-4 py-2.5 text-sm font-medium transition-colors",
+                  "shrink-0 rounded-[var(--radius-badges)] border px-4 py-2.5 text-sm font-medium transition-colors",
                   isActive
                     ? "border-[#18181b] bg-[#18181b] text-white"
                     : "border-[#ececee] bg-white text-[#3f3f46] hover:bg-[#fafafa]",
@@ -300,7 +300,7 @@ export function PricelistView({ data }: Props) {
           <div
             role="group"
             aria-label="Tampilan"
-            className="flex items-center gap-1 rounded-xl border border-[#ececee] bg-white p-1"
+            className="flex items-center gap-1 rounded-[var(--radius-badges)] border border-[#ececee] bg-white p-1"
           >
             <button
               type="button"
@@ -354,7 +354,7 @@ export function PricelistView({ data }: Props) {
                   <article
                     key={pkg.id}
                     className={cn(
-                      "flex flex-col rounded-xl border bg-white p-5 transition-colors",
+                      "flex flex-col rounded-[var(--radius-cards)] border bg-white p-[var(--card-padding)] transition-colors",
                       isSelected
                         ? "border-[#18181b] ring-1 ring-[#18181b]"
                         : "border-[#ececee]",

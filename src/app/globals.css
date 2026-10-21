@@ -117,13 +117,35 @@
   --text-body: 15px;
   --text-body-lg: 18px;
   --text-subheading: 20px;
+  /*
+   * Named radii — the three that repeat everywhere in the system.
+   * Without these, `rounded-[var(--radius-cards)]` resolves to 0px and every
+   * card renders with square corners, which reads as broken rather than plain.
+   */
+  --radius-cards: 36px;
+  --radius-icons: 40px;
+  --radius-pills: 10000px;
+  --radius-badges: 12px;
+  --radius-inputs: 14px;
+  --radius-buttons: 14px;
+
   --text-heading-sm: 32px;
   --text-heading: 40px;
   --text-heading-lg: 56px;
   --text-display: 64px;
 
-  --font-sans: "Inter Variable", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-  --font-serif: "Inter Variable", ui-sans-serif, system-ui, sans-serif;
+  /*
+   * AWESOMIC — single-family type system.
+   *
+   * Cosmica is not licensed for this project; DM Sans is the documented
+   * substitute and matches its geometric-humanist skeleton. The whole public
+   * surface uses ONE family: `--font-serif` is aliased to the same stack rather
+   * than removed, so the ~40 existing `font-serif` call sites keep working
+   * instead of silently falling back to Times.
+   */
+  --font-cosmica: "DM Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-sans: var(--font-cosmica);
+  --font-serif: var(--font-cosmica);
 }
 
 @layer base {
@@ -197,41 +219,52 @@
 }
 
 .site-container {
-  width: min(1200px, calc(100% - 96px));
+  /* Awesomic layout: 1200px max, 24px gutter on phones. */
+  width: min(var(--page-max-width), calc(100% - 48px));
   margin-inline: auto;
 }
 .site-header {
+  /*
+   * Sticky SNOW header floating on the PAPER canvas — no visible border, per
+   * the reference. The hairline is replaced by the surface contrast itself.
+   */
   position: sticky;
   top: 0;
   z-index: 40;
-  background: #f7f7f5ed;
-  backdrop-filter: blur(18px);
-  border-bottom: 1px solid #deddd850;
+  background: var(--color-snow);
+  border-bottom: 1px solid transparent;
+  transition: border-color 160ms ease;
+}
+.site-header[data-scrolled="true"] {
+  border-bottom-color: var(--color-cloud);
 }
 .wordmark {
-  font-family: var(--font-serif);
-  font-weight: 600;
-  font-size: 46px;
+  font-family: var(--font-cosmica);
+  font-weight: 700;
+  font-size: 24px;
   line-height: 1;
-  letter-spacing: -0.06em;
+  letter-spacing: -0.03em;
+  color: var(--color-obsidian);
 }
 .nav-link {
-  font-size: 13px;
-  color: #494842;
+  font-family: var(--font-cosmica);
+  font-size: 14px;
+  font-weight: 400;
+  color: var(--color-graphite);
   transition: color 160ms;
 }
 .nav-link:hover {
-  color: #000;
-  text-decoration: underline;
-  text-underline-offset: 5px;
+  color: var(--color-obsidian);
+  /* No underline: the reference relies on weight/colour, not decoration. */
 }
 .eyebrow {
-  font-size: 11px;
-  line-height: 1.6;
+  font-family: var(--font-cosmica);
+  font-size: var(--text-caption);
+  line-height: var(--leading-caption);
   font-weight: 500;
-  letter-spacing: 0.22em;
+  letter-spacing: 0.14em;
   text-transform: uppercase;
-  color: #67665f;
+  color: var(--color-fog);
 }
 .hero {
   height: min(720px, calc(100svh - 88px));
@@ -267,11 +300,31 @@
   padding-block: 108px;
 }
 .section-heading {
-  font-family: var(--font-serif);
-  font-size: clamp(43px, 4.2vw, 61px);
-  line-height: 1.02;
-  font-weight: 400;
-  letter-spacing: -0.035em;
+  /*
+   * Display headlines: 56–64px, weight 600, line-height 1.12–1.28.
+   * Never below weight 600 — the bold weight is what reads as authoritative.
+   */
+  font-family: var(--font-cosmica);
+  font-size: clamp(40px, 5.2vw, 64px);
+  line-height: 1.12;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  color: var(--color-obsidian);
+}
+
+/* Section headings sit one step below the display scale. */
+.section-title {
+  font-family: var(--font-cosmica);
+  font-size: clamp(28px, 3vw, 40px);
+  line-height: 1.28;
+  font-weight: 600;
+  letter-spacing: -0.015em;
+  color: var(--color-obsidian);
+}
+
+/* 80px vertical rhythm between major sections. */
+.section-space {
+  padding-block: var(--section-gap);
 }
 .portfolio-rail {
   padding-inline: max(48px, calc((100vw - 1200px) / 2));

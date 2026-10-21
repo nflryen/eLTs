@@ -52,7 +52,7 @@ export default function ServicesPage() {
                 className="object-cover"
               />
               {/* Service index label */}
-              <span className="absolute top-5 left-5 font-serif text-5xl font-light text-white/30 leading-none select-none">
+              <span className="absolute top-5 left-5 text-5xl font-light text-white/30 leading-none select-none">
                 {String(index + 1).padStart(2, "0")}
               </span>
             </div>
@@ -64,7 +64,7 @@ export default function ServicesPage() {
               <p className="mt-6 leading-relaxed text-muted-foreground">
                 {service.description}
               </p>
-              <blockquote className="mt-6 border-l-2 border-border pl-4 font-serif text-lg italic text-[#706b63] leading-snug">
+              <blockquote className="mt-6 border-l-2 border-border pl-4 text-lg italic text-[#706b63] leading-snug">
                 {service.philosophy}
               </blockquote>
 
