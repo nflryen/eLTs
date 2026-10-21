@@ -175,7 +175,11 @@ Kredensial PIN memiliki entropy rendah, sehingga hashing saja tidak cukup; peppe
 | ------------------------------------------------------ | ---------------------------------------------------- | ---------------------------------------------- |
 | `/`                                                    | Public                                               | Tersedia, homepage                             |
 | `/client`                                              | Public                                               | Tersedia, informasi persiapan                  |
-| `/portfolio`                                           | Public                                               | Berikutnya: filter/masonry/lightbox            |
+| `/portfolio`                                           | Public                                               | Tersedia, daftar halaman terbit                |
+| `/portfolio/[slug]`                                    | Public                                               | Tersedia, canvas CMS (grid 12 kolom)           |
+| `/pricelist`                                           | Public                                               | Tersedia, paket 2026 + konfigurator add-on     |
+| `/admin/portfolio`                                     | Admin (ops)                                          | Tersedia, daftar halaman + publikasi           |
+| `/admin/portfolio/[id]`                                | Admin (ops)                                          | Tersedia, editor grid drag/resize              |
 | `/services`, `/about`, `/contact`                      | Public                                               | Berikutnya: konten detail/form WhatsApp        |
 | `/admin/login`                                         | Public entry                                         | Berikutnya: Supabase email/password, no signup |
 | `/admin`                                               | Admin                                                | Dashboard                                      |
@@ -200,6 +204,8 @@ Kredensial PIN memiliki entropy rendah, sehingga hashing saja tidak cukup; peppe
 | `GET, POST, PATCH /api/customers...`                   | Admin                                                | Customer lifecycle                             |
 
 Client project_id harus cocok dengan session dan project pada media. Knowing media ID atau URL token tidak melewati pemeriksaan ini. Daftar API tidak diekspos sebelum implementasi dan negative tests selesai.
+
+**Media portofolio publik.** Blok foto pada canvas CMS menyimpan `publicUrl` (URL delivery Cloudinary yang sudah publik), **bukan** `mediaId`. `public.media` dibatasi RLS ke rank >= 60 dan route preview-nya mewajibkan cookie sesi galeri, sehingga `mediaId` akan 401 bagi pengunjung anonim — dan melonggarkan gate itu akan mengekspos seluruh galeri privat klien. Lihat komentar `PhotoBlock` di `src/components/public/portfolio/canvas-renderer.tsx`.
 
 ## 9. Reusable UI architecture
 

@@ -6,12 +6,7 @@ import { ArrowRight, Check, Clock, Info, LayoutGrid, Table2 } from "lucide-react
 import { Button } from "@/components/ui/button";
 import { idr } from "@/lib/format";
 import { cn } from "@/lib/utils";
-import type {
-  Pricelist,
-  PricelistAddon,
-  PricelistCategory,
-  PricelistPackage,
-} from "@/lib/pricelist";
+import type { Pricelist, PricelistCategory, PricelistPackage } from "@/lib/pricelist";
 
 /**
  * The public pricelist surface.
@@ -130,10 +125,31 @@ export function PricelistView({ data }: Props) {
    */
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
-  /* A slug-keyed quantity map: 0/absent means unchecked. Keeping the quantity
-     with the selection means a re-checked add-on keeps the value the visitor
-     dialled in, instead of resetting to 1. */
-  const [quantities, setQuantities] = useState<Record<string, number>>({});
+  /*
+   * Selection and quantity are SEPARATE state, and the quantity is stored as
+   * the raw string the visitor typed.
+   *
+   * Storing a parsed number conflated "unchecked" (0) with "field is being
+   * edited" (also parses to 0), so clearing the input to retype it unmounted
+   * the input on the spot and the visitor could never enter a new value. Keeping
+   * the text means an empty field is a legitimate in-progress state, and
+   * `selected` alone decides whether the row counts toward the total.
+   */
+  const [selected, setSelected] = useState<Record<string, true>>({});
+  const [qtyText, setQtyText] = useState<Record<string, string>>({});
+
+  /*
+   * The numeric quantity for one add-on. An empty or unparseable field falls
+   * back to 1 — the `min` the input advertises — so the running total stays
+   * stable mid-edit instead of flickering to zero.
+   */
+  const qtyOf = (slug: string): number => {
+    const parsed = Number.parseInt(qtyText[slug] ?? "", 10);
+    if (!Number.isFinite(parsed)) return 1;
+    /* 99 is a sanity cap, not a business rule — it stops a paste of 99999 from
+       producing a total that reads as a bug. */
+    return Math.max(1, Math.min(99, parsed));
+  };
 
   const activeCategory: PricelistCategory | undefined =
     data.categories.find((category) => category.slug === activeSlug) ??
@@ -155,7 +171,7 @@ export function PricelistView({ data }: Props) {
   });
 
   const addonsTotal = data.addons.reduce(
-    (sum, addon) => sum + (quantities[addon.slug] ?? 0) * addon.priceIdr,
+    (sum, addon) => sum + (selected[addon.slug] ? qtyOf(addon.slug) * addon.priceIdr : 0),
     0,
   );
   const packagePrice = activePackage?.priceIdr ?? 0;
@@ -181,34 +197,27 @@ export function PricelistView({ data }: Props) {
      * desynchronise the moment one add-on is dropped, silently pricing the
      * wrong unit count.
      */
-    const selected = data.addons
-      .filter((addon) => (quantities[addon.slug] ?? 0) > 0)
-      .map((addon) => {
-        const qty = quantities[addon.slug] ?? 0;
-        return qty > 1 ? `${addon.slug}:${qty}` : addon.slug;
-      });
-    if (selected.length > 0) params.set("addons", selected.join(","));
+    const chosen = data.addons.filter((addon) => selected[addon.slug]);
+    if (chosen.length > 0) {
+      params.set(
+        "addons",
+        chosen
+          .map((addon) => {
+            const qty = qtyOf(addon.slug);
+            return qty > 1 ? `${addon.slug}:${qty}` : addon.slug;
+          })
+          .join(","),
+      );
+    }
     params.set("total", String(total));
     return `/booking?${params.toString()}`;
   })();
 
-  const toggleAddon = (addon: PricelistAddon) => {
-    setQuantities((prev) => {
+  const toggleAddon = (slug: string) => {
+    setSelected((prev) => {
       const next = { ...prev };
-      if ((next[addon.slug] ?? 0) > 0) delete next[addon.slug];
-      else next[addon.slug] = 1;
-      return next;
-    });
-  };
-
-  const setQuantity = (slug: string, raw: number) => {
-    setQuantities((prev) => {
-      const next = { ...prev };
-      /* 99 is a sanity cap, not a business rule — it stops a paste of 99999 from
-         producing a total that reads as a bug. */
-      const qty = Math.max(0, Math.min(99, Math.trunc(raw)));
-      if (qty <= 0) delete next[slug];
-      else next[slug] = qty;
+      if (next[slug]) delete next[slug];
+      else next[slug] = true;
       return next;
     });
   };
@@ -537,8 +546,8 @@ export function PricelistView({ data }: Props) {
               </legend>
               <ul className="mt-2 divide-y divide-[#f4f4f5]">
                 {data.addons.map((addon) => {
-                  const qty = quantities[addon.slug] ?? 0;
-                  const checked = qty > 0;
+                  const checked = Boolean(selected[addon.slug]);
+                  const qty = qtyOf(addon.slug);
                   /* Any add-on with a unit is priced per unit, so it gets a
                      quantity input instead of a flat checkbox price. Driven by
                      the `unit` column rather than a hardcoded overtime slug so a
@@ -550,7 +559,7 @@ export function PricelistView({ data }: Props) {
                         <input
                           type="checkbox"
                           checked={checked}
-                          onChange={() => toggleAddon(addon)}
+                          onChange={() => toggleAddon(addon.slug)}
                           className="mt-0.5 size-4 shrink-0 cursor-pointer rounded border-[#d4d4d8] accent-[#18181b]"
                         />
                         <span className="min-w-0 flex-1">
@@ -590,9 +599,12 @@ export function PricelistView({ data }: Props) {
                             min={1}
                             max={99}
                             inputMode="numeric"
-                            value={qty}
+                            value={qtyText[addon.slug] ?? String(qty)}
                             onChange={(event) =>
-                              setQuantity(addon.slug, Number(event.target.value))
+                              setQtyText((prev) => ({
+                                ...prev,
+                                [addon.slug]: event.target.value,
+                              }))
                             }
                             className="h-8 w-16 rounded-lg border border-[#ececee] bg-white px-2 text-center text-[12px] tabular-nums text-[#18181b] focus-visible:ring-2 focus-visible:ring-[#3f3f46] focus-visible:outline-none"
                           />

@@ -21,6 +21,7 @@ export function bookingUrl(service?: string) {
 export const navigation = [
   { label: "Home", href: "/" },
   { label: "Portfolio", href: "/portfolio" },
+  { label: "Pricelist", href: "/pricelist" },
   { label: "Services", href: "/services" },
   { label: "About", href: "/about" },
   { label: "Contact", href: "/contact" },

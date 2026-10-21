@@ -28,7 +28,18 @@ export interface LayoutBlock {
   w: number;
   h: number;
   z: number;
-  /** photo only */
+  /**
+   * Photo source. `publicUrl` is what the PUBLIC renderer uses.
+   *
+   * WHY NOT mediaId: `public.media` is RLS-gated to rank >= 60 and its preview
+   * route requires a client gallery session, so a mediaId would 401 for every
+   * anonymous visitor viewing a published page. Weakening that policy to make
+   * portfolios work would expose every client's private gallery. Instead a
+   * portfolio photo points at an already-public asset (Cloudinary delivery URL).
+   *
+   * `mediaId` is retained for internal reference/traceability only.
+   */
+  publicUrl?: string | null;
   mediaId?: string | null;
   fit?: "cover" | "contain";
   /** text only — sanitised by the caller before render */
@@ -95,7 +106,7 @@ export function resizeBlock(
 /** Appends a block at the first free row, defaulting to half-width. */
 export function addBlock(
   layout: LayoutDoc,
-  init: { type: BlockType; mediaId?: string | null; html?: string },
+  init: { type: BlockType; publicUrl?: string | null; mediaId?: string | null; html?: string },
 ): LayoutDoc {
   const cols = layout.grid.cols;
   const w = Math.max(1, Math.floor(cols / 2));
@@ -116,6 +127,7 @@ export function addBlock(
       w,
       h,
       z: layout.blocks.length + 1,
+      publicUrl: init.publicUrl ?? null,
       mediaId: init.mediaId ?? null,
       ...(init.type === "photo" ? { fit: "cover" as const } : { html: init.html ?? "" }),
     },
@@ -185,6 +197,7 @@ export function normaliseLayout(raw: unknown): LayoutDoc {
           w: Number.isFinite(Number(candidate.w)) ? Number(candidate.w) : Math.floor(cols / 2),
           h: Number.isFinite(Number(candidate.h)) ? Number(candidate.h) : 2,
           z: Number.isFinite(Number(candidate.z)) ? Number(candidate.z) : index + 1,
+          publicUrl: typeof candidate.publicUrl === "string" ? candidate.publicUrl : null,
           mediaId: typeof candidate.mediaId === "string" ? candidate.mediaId : null,
           fit: candidate.fit === "contain" ? "contain" : "cover",
           ...(type === "text" ? { html: typeof candidate.html === "string" ? candidate.html : "" } : {}),

@@ -2,7 +2,7 @@ import Link from "next/link";
 import {
   LayoutDashboard, FolderKanban, Calendar, Package,
   Coins, Building2, Settings, LogOut, Clock, Receipt, Wallet,
-  Clapperboard,
+  Clapperboard, LayoutTemplate,
 } from "lucide-react";
 import { adminLogout } from "@/app/actions/admin-auth";
 import { requireStaff } from "@/lib/auth/roles";
@@ -65,6 +65,17 @@ const NAV_GROUPS: NavGroup[] = [
       { href: "/admin/finance", label: "Treasury", icon: <Coins size={18} />, minRank: RANKS.FOUNDER },
       { href: "/admin/customers", label: "Klien", icon: <Building2 size={18} />, minRank: RANKS.ADMIN },
       { href: "/admin/payroll", label: "Payroll", icon: <Wallet size={18} />, minRank: RANKS.ADMIN },
+    ],
+  },
+  {
+    /*
+     * Marketing is its own group: publishing a portfolio is a studio-facing
+     * activity, not an operational or financial one, and burying it under
+     * Resource made it invisible to the people who actually use it.
+     */
+    label: "Marketing",
+    items: [
+      { href: "/admin/portfolio", label: "Portofolio & CMS", icon: <LayoutTemplate size={18} />, minRank: RANKS.ADMIN },
     ],
   },
 ];
