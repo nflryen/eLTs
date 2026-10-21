@@ -20,7 +20,8 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { requireOps } from "@/lib/auth/roles";
-import type { InquiryRow, InquiryStatus, PhotographyType } from "@/types/database";
+import type { InquiryAddon, InquiryRow, InquiryStatus, PhotographyType } from "@/types/database";
+import { sumAddons } from "@/lib/leads/pricing";
 import {
   generateGalleryCode,
   generateAccessToken,
@@ -32,7 +33,32 @@ export type LeadRow = InquiryRow & {
   /** Resolved package name, joined for display. Null when none was chosen. */
   package_name: string | null;
   package_price_idr: number | null;
+  /**
+   * package price + Σ(add-on price). Computed from the SERVER-RESOLVED values
+   * stored at submission time, never from anything the browser sent.
+   */
+  estimate_total_idr: number | null;
 };
+
+/**
+ * Jakarta-local calendar date (YYYY-MM-DD) for invoice columns.
+ *
+ * `project_invoices.issue_date`/`due_date` are DATE, not timestamptz — sending
+ * a UTC timestamp shifts every evening issue back a day.
+ */
+function jakartaDateString(d = new Date()): string {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Jakarta",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(d);
+}
+
+/** YYYY-MM period key for `next_document_number`. */
+function jakartaPeriodKey(d = new Date()): string {
+  return jakartaDateString(d).slice(0, 7);
+}
 
 export type LeadResult<T = undefined> =
   | { ok: true; data?: T }
@@ -97,11 +123,19 @@ export async function listLeads(): Promise<LeadRow[]> {
 
   return (leads ?? []).map((lead) => {
     const pkg = lead.selected_package_id ? packages.get(lead.selected_package_id) : null;
+    const addons = Array.isArray(lead.selected_addons)
+      ? (lead.selected_addons as InquiryAddon[])
+      : [];
+    const addonsTotal = sumAddons(addons);
+    const pkgPrice = pkg?.price ?? null;
+
     return {
       ...lead,
-      selected_addons: Array.isArray(lead.selected_addons) ? lead.selected_addons : [],
+      selected_addons: addons,
       package_name: pkg?.name ?? null,
-      package_price_idr: pkg?.price ?? null,
+      package_price_idr: pkgPrice,
+      estimate_total_idr:
+        pkgPrice === null && addonsTotal === 0 ? null : (pkgPrice ?? 0) + addonsTotal,
     };
   });
 }
@@ -195,7 +229,7 @@ export async function updateLeadNotes(
  */
 export async function convertLeadToBooking(
   id: string,
-): Promise<LeadResult<{ projectId: string; customerId: string }>> {
+): Promise<LeadResult<{ projectId: string; customerId: string; invoiceId: string | null }>> {
   const { supabase } = await requireOps();
 
   const { data: lead, error: leadError } = await supabase
@@ -213,6 +247,7 @@ export async function convertLeadToBooking(
       data: {
         projectId: lead.converted_project_id,
         customerId: lead.converted_customer_id ?? "",
+        invoiceId: null,
       },
     };
   }
@@ -318,7 +353,89 @@ export async function convertLeadToBooking(
     return { ok: false, error: `Gagal membuat proyek: ${projectError?.message ?? "tidak diketahui"}` };
   }
 
-  // ── 3. Link back ──────────────────────────────────────────────────────────
+  // ── 3. Invoice with inherited, server-resolved line items ─────────────────
+  /*
+   * The line items are built from `inquiries.selected_addons`, which was priced
+   * by `resolveLeadPricing` at submission time. Nothing here re-enters a price
+   * by hand, and nothing reads a client-supplied amount — so the invoice the
+   * studio issues matches the quote the client saw.
+   *
+   * The invoice is created as a DRAFT-grade record with no due date until the
+   * operator sets one; `due_date` is NOT NULL, so we issue it at +14 days, the
+   * studio's standard term. The operator can adjust before sending.
+   */
+  const lineItems: { description: string; quantity: number; unit_price: number; subtotal: number }[] = [];
+
+  if (lead.selected_package_id) {
+    const { data: pkg } = await supabase
+      .from("pricelist_packages")
+      .select("name, price_idr")
+      .eq("id", lead.selected_package_id)
+      .maybeSingle();
+
+    if (pkg) {
+      const price = Number(pkg.price_idr) || 0;
+      lineItems.push({
+        description: pkg.name,
+        quantity: 1,
+        unit_price: price,
+        subtotal: price,
+      });
+    }
+  }
+
+  for (const addon of Array.isArray(lead.selected_addons) ? lead.selected_addons : []) {
+    const price = Number(addon.price_idr) || 0;
+    lineItems.push({
+      description: addon.name,
+      quantity: 1,
+      unit_price: price,
+      subtotal: price,
+    });
+  }
+
+  const grossContractValue = lineItems.reduce((acc, item) => acc + item.subtotal, 0);
+
+  let invoiceId: string | null = null;
+  if (lineItems.length > 0) {
+    const { data: invNum } = await supabase.rpc("next_document_number", {
+      p_doc_type: "INV",
+      p_period_key: jakartaPeriodKey(),
+    });
+
+    if (invNum) {
+      const dueDate = new Date();
+      dueDate.setDate(dueDate.getDate() + 14);
+
+      const { data: invoice, error: invoiceError } = await supabase
+        .from("project_invoices")
+        .insert({
+          project_id: project.id,
+          invoice_number: invNum as string,
+          issue_date: jakartaDateString(),
+          due_date: jakartaDateString(dueDate),
+          line_items: lineItems,
+          gross_contract_value: grossContractValue,
+          minimum_dp_pct: 30,
+          client_notes: lead.notes,
+        })
+        .select("id")
+        .single();
+
+      if (invoiceError) {
+        /*
+         * A missing invoice must not lose the project: the operator can issue
+         * one from /admin/invoices. Surface the reason instead of failing the
+         * whole conversion and orphaning a valid customer.
+         */
+        console.error("lead_convert_invoice_failed", { code: invoiceError.code });
+      } else {
+        invoiceId = invoice?.id ?? null;
+      }
+    }
+  }
+
+  // ── 4. Link back ──────────────────────────────────────────────────────────
   const { error: linkError } = await supabase
     .from("inquiries")
     .update({
@@ -337,7 +454,10 @@ export async function convertLeadToBooking(
 
   revalidatePath("/admin/leads");
   revalidatePath("/admin/projects");
-  return { ok: true, data: { projectId: project.id, customerId: customer.id } };
+  return {
+    ok: true,
+    data: { projectId: project.id, customerId: customer.id, invoiceId },
+  };
 }
 
 export async function deleteLead(id: string): Promise<LeadResult> {

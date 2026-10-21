@@ -255,6 +255,11 @@ export function LeadPipeline({
                         + {addons.map((a) => a.name).join(", ")}
                       </span>
                     )}
+                    {lead.estimate_total_idr != null && (
+                      <span className="ml-auto font-medium tabular-nums text-[#18181b]">
+                        Estimasi {idr(lead.estimate_total_idr)}
+                      </span>
+                    )}
                   </div>
                 )}
 

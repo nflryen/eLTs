@@ -58,28 +58,32 @@ export type ContactPrefill = {
 };
 
 /**
- * Parse the configurator's `addons` param.
+ * Parse the configurator's `addons` param into slug + quantity selections.
  *
- * Format is `slug` or `slug:qty`, comma-separated. The slug is the stable id
- * the pricelist uses; we keep it as the add-on `id` so the lead row can be
- * reconciled against `pricelist_addons` later without a fuzzy name match.
+ * Format is `slug` or `slug:qty`, comma-separated. Nothing else is sent: the
+ * browser never proposes a name or a price. The server resolves both from
+ * `pricelist_addons`, so a tampered URL cannot invent a cheaper add-on.
  */
-function parseAddons(raw: string | undefined): { id: string; name: string; price_idr: number }[] {
+function parseAddons(raw: string | undefined): { id: string; qty?: number }[] {
   if (!raw) return [];
   return raw
     .split(",")
-    .map((token) => token.split(":")[0]?.trim())
-    .filter((slug): slug is string => Boolean(slug))
-    .map((slug) => ({
-      id: slug,
-      name: slug.replace(/-/g, " "),
-      /*
-       * Price is not recoverable from the URL by design — the configurator shows
-       * a live total but the authoritative price is re-read server-side at
-       * quote time. 0 here means "chosen, price to confirm", never "free".
-       */
-      price_idr: 0,
-    }));
+    .map((token) => token.trim())
+    .filter(Boolean)
+    .map((token) => {
+      const [slug, qtyText] = token.split(":");
+      const qty = Number.parseInt(qtyText ?? "", 10);
+      return {
+        id: (slug ?? "").trim(),
+        ...(Number.isFinite(qty) && qty > 0 ? { qty } : {}),
+      };
+    })
+    .filter((item) => item.id.length > 0);
+}
+
+/** Readable slug for the "Paket dipilih" summary before the server answers. */
+function prettySlug(slug: string): string {
+  return slug.replace(/-/g, " ");
 }
 
 export function ContactForm({ prefill }: { prefill?: ContactPrefill }) {
@@ -198,7 +202,7 @@ export function ContactForm({ prefill }: { prefill?: ContactPrefill }) {
           <p className="mt-1 text-sm font-medium">{prefill.packageName}</p>
           {addons.length > 0 && (
             <p className="mt-0.5 text-[12px] text-muted-foreground">
-              Add-on: {addons.map((a) => a.name).join(", ")}
+              Add-on: {addons.map((a) => prettySlug(a.id)).join(", ")}
             </p>
           )}
         </div>

@@ -2,8 +2,9 @@
 
 import { z } from "zod";
 import { createServiceSupabase } from "@/lib/supabase/service";
-import type { InquiryAddon, InquiryRow } from "@/types/database";
+import type { InquiryRow } from "@/types/database";
 import { buildLeadWhatsAppLink } from "@/lib/leads/whatsapp";
+import { resolveLeadPricing } from "@/lib/leads/pricing";
 
 /*
  * Public-facing submission contract.
@@ -14,10 +15,17 @@ import { buildLeadWhatsAppLink } from "@/lib/leads/whatsapp";
  * both, so a lead captured from /pricelist arrives with its commercial context
  * attached and the studio never has to re-ask.
  */
-const addonSchema = z.object({
+/*
+ * A raw add-on selection is a SLUG and a QUANTITY — nothing else.
+ *
+ * `name` and `price_idr` are deliberately absent from this schema: they are
+ * resolved server-side from `pricelist_addons`. Accepting them here would let a
+ * caller post `{ slug: "live-stream-multicam", price_idr: 0 }` and have that
+ * zero survive into the lead and then the invoice.
+ */
+const addonSelectionSchema = z.object({
   id: z.string().min(1).max(64),
-  name: z.string().min(1).max(160),
-  price_idr: z.number().int().min(0).max(1_000_000_000),
+  qty: z.number().int().min(1).max(99).optional(),
 });
 
 const inquirySchema = z.object({
@@ -43,7 +51,7 @@ const inquirySchema = z.object({
     .optional()
     .or(z.literal("")),
   selectedPackageId: z.string().uuid().optional().or(z.literal("")),
-  selectedAddons: z.array(addonSchema).max(20).optional(),
+  selectedAddons: z.array(addonSelectionSchema).max(20).optional(),
 });
 
 export type InquiryFormValues = z.input<typeof inquirySchema>;
@@ -58,6 +66,28 @@ export async function submitInquiryAction(
   try {
     const validated = inquirySchema.parse(data);
     const supabase = createServiceSupabase();
+
+    /*
+     * Resolve prices BEFORE the insert.
+     *
+     * Everything the client sent about money is discarded here: the selection
+     * carries only slugs and quantities, and this call turns them into
+     * authoritative `{ id, name, price_idr }` rows read from the pricelist.
+     * A forged or retired slug is dropped rather than stored at zero.
+     */
+    const pricing = await resolveLeadPricing(supabase, {
+      addons: validated.selectedAddons,
+      packageId: validated.selectedPackageId || null,
+    });
+
+    if (pricing.unknownAddonSlugs.length > 0) {
+      /*
+       * Logged, not rejected: the client picked something that has since been
+       * retired. Their inquiry still deserves to reach the studio — it just
+       * arrives without the phantom line item.
+       */
+      console.warn("inquiry_unknown_addon_slugs", { slugs: pricing.unknownAddonSlugs });
+    }
 
     /*
      * Annotated so `status` stays the enum union rather than widening to
@@ -76,8 +106,13 @@ export async function submitInquiryAction(
       status: "NEW",
       event_type: validated.eventType?.trim() || null,
       event_date: validated.eventDate || null,
-      selected_package_id: validated.selectedPackageId || null,
-      selected_addons: (validated.selectedAddons ?? []) as InquiryAddon[],
+      /*
+       * An unknown package id is not persisted: a lead pointing at a package
+       * that no longer exists would render an empty "Paket dipilih" in the
+       * pipeline and break the price display. The add-ons still stand.
+       */
+      selected_package_id: pricing.unknownPackage ? null : validated.selectedPackageId || null,
+      selected_addons: pricing.addons,
     };
 
     /*
@@ -102,7 +137,8 @@ export async function submitInquiryAction(
         reference: inserted.reference,
         eventType: validated.eventType || null,
         eventDate: validated.eventDate || null,
-        addonNames: (validated.selectedAddons ?? []).map((a) => a.name),
+        packageName: pricing.packageName,
+        addonNames: pricing.addons.map((a) => a.name),
       },
       "client",
     );
