@@ -55,7 +55,7 @@ export function Services() {
                 {service.description}
               </p>
               <span className="mt-4 inline-flex items-center gap-1 rounded-[var(--radius-badges)] border border-[var(--color-cloud)] px-2 py-1 text-[12px] text-[var(--color-graphite)]">
-                Lihat paket <ArrowUpRight size={12} />
+                View packages <ArrowUpRight size={12} />
               </span>
             </div>
           </Link>

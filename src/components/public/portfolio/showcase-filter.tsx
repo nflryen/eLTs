@@ -80,7 +80,7 @@ export function ShowcaseFilter({ pages }: { pages: PublishedPortfolioPage[] }) {
     <div>
       <div
         role="group"
-        aria-label="Filter portofolio berdasarkan kategori"
+        aria-label="Filter portfolio by category"
         className="flex flex-wrap items-center gap-2"
       >
         <button

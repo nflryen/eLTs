@@ -52,14 +52,23 @@ export default function AboutPage() {
           sizes="100vw"
           className="object-cover object-[center_30%]"
         />
-        <div className="absolute inset-0 bg-gradient-to-r from-black/75 via-black/50 to-black/20" />
+        {/*
+          Two layers, not one: a directional gradient for depth plus a flat
+          scrim over the lower third where the headline actually sits. A single
+          left-to-right gradient left the bottom-left corner at 75% opacity over
+          an already-dark photograph, which is fine, but it gave no guarantee
+          once the image is swapped. The scrim makes the text legible for ANY
+          photo, which is the actual requirement.
+        */}
+        <div className="absolute inset-0 bg-gradient-to-r from-[#09090b]/80 via-[#09090b]/55 to-[#09090b]/25" />
+        <div className="absolute inset-x-0 bottom-0 h-2/3 bg-gradient-to-t from-[#09090b]/85 to-transparent" />
         <div className="site-container relative flex items-end pb-16 pt-28 sm:pt-36">
           <div>
-            <p className="eyebrow text-white/70!">About Elts.</p>
-            <h1 className="section-heading mt-5">
+            <p className="eyebrow text-white/80!">About Elts.</p>
+            <h1 className="section-heading mt-5 text-white">
               More Than
               <br />
-              <span className="italic">Just Photos.</span>
+              Just Photos.
             </h1>
           </div>
         </div>

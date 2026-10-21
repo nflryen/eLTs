@@ -46,10 +46,10 @@ const LIVE = /live\s*stream|streaming/i;
 const VIDEO = /aftermovie|highlight|teaser|video/i;
 const INHERITS = /\ball\b.*\b(package|deliverables)\b/i;
 const DASH = "—";
-const INHERITED = "Ikut paket induk";
+const INHERITED = "Included in parent package";
 
 /**
- * Why "Ikut paket induk" exists.
+ * Why "Included in parent package" exists.
  *
  * Platinum's `includes` says "All Gold Package Deliverables" instead of
  * re-listing them. Rendering that column as dashes would read as "not
@@ -91,7 +91,7 @@ function cameraCount(includes: string[]): string {
 }
 
 const COMPARISON_ROWS: ComparisonRow[] = [
-  { label: "Harga", cell: (pkg) => idr(pkg.priceIdr) },
+  { label: "Price", cell: (pkg) => idr(pkg.priceIdr) },
   /* `duration` is null on the customisable event packages: "Fleksibel" is the
      honest reading of an absent duration, not a blank cell. */
   { label: "Durasi", cell: (pkg) => pkg.duration ?? "Fleksibel" },
@@ -238,11 +238,10 @@ export function PricelistView({ data }: Props) {
     return (
       <div className="rounded-xl border border-dashed border-[#d4d4d8] px-6 py-12 text-center">
         <p className="text-sm font-semibold text-[#18181b]">
-          Pricelist sedang tidak dapat ditampilkan
+          Pricing is temporarily unavailable
         </p>
         <p className="mx-auto mt-1 max-w-md text-xs leading-relaxed text-[#71717a]">
-          Daftar harga gagal dimuat. Hubungi kami melalui WhatsApp dan kami
-          kirimkan pricelist terbaru secara langsung.
+          We could not load the pricing. Message us on WhatsApp and we will send you the latest pricelist directly.
         </p>
       </div>
     );
@@ -254,7 +253,7 @@ export function PricelistView({ data }: Props) {
       <div className="border-b border-[#ececee] pb-6">
         <div
           role="tablist"
-          aria-label="Kategori pricelist"
+          aria-label="Pricelist categories"
           className="no-scrollbar -mx-1 flex items-center gap-2 overflow-x-auto px-1 py-1"
         >
           {data.categories.map((category) => {
@@ -292,7 +291,7 @@ export function PricelistView({ data }: Props) {
         <div className="mt-4 flex flex-wrap items-end justify-between gap-4">
           <p className="max-w-lg text-sm leading-relaxed text-[#71717a]">
             {activeCategory.description ??
-              "Pilih paket yang paling dekat dengan kebutuhan Anda."}
+              "Choose the package closest to what you need."}
           </p>
 
           {/* View toggle — the card list answers "how much", the table answers
@@ -326,7 +325,7 @@ export function PricelistView({ data }: Props) {
                   : "text-[#71717a] hover:text-[#18181b]",
               )}
             >
-              <Table2 size={14} /> Bandingkan
+              <Table2 size={14} /> Compare
             </button>
           </div>
         </div>
@@ -422,7 +421,7 @@ export function PricelistView({ data }: Props) {
                       onClick={() => setSelectedId(pkg.id)}
                       className="mt-4 w-full"
                     >
-                      {isSelected ? "Dipilih" : "Pilih paket ini"}
+                      {isSelected ? "Selected" : "Choose this package"}
                     </Button>
                   </article>
                 );
@@ -432,8 +431,7 @@ export function PricelistView({ data }: Props) {
             <div>
               {packages.length < 2 ? (
                 <p className="rounded-xl border border-dashed border-[#d4d4d8] px-6 py-8 text-center text-xs text-[#71717a]">
-                  Kategori ini hanya memiliki satu paket, jadi tidak ada yang
-                  bisa dibandingkan.
+                  This category has only one package, so there is nothing to compare.
                 </p>
               ) : (
                 <div className="no-scrollbar overflow-x-auto rounded-xl border border-[#ececee] bg-white">
@@ -441,7 +439,7 @@ export function PricelistView({ data }: Props) {
                     <thead>
                       <tr className="border-b border-[#ececee] bg-[#fafafa]">
                         <th className="w-36 px-4 py-3 text-[11px] font-medium tracking-wide text-[#71717a] uppercase">
-                          Paket
+                          Package
                         </th>
                         {packages.map((pkg) => (
                           <th
@@ -476,7 +474,7 @@ export function PricelistView({ data }: Props) {
                               key={pkg.id}
                               className={cn(
                                 "px-4 py-3 text-[12px] text-[#3f3f46]",
-                                row.label === "Harga" &&
+                                row.label === "Price" &&
                                   "font-semibold tabular-nums text-[#18181b]",
                                 pkg.id === activePackage?.id && "bg-[#fafafa]",
                               )}
@@ -488,7 +486,7 @@ export function PricelistView({ data }: Props) {
                       ))}
                       <tr>
                         <th scope="row" className="px-4 py-3">
-                          <span className="sr-only">Pilih paket</span>
+                          <span className="sr-only">Choose a package</span>
                         </th>
                         {packages.map((pkg) => {
                           const isSelected = pkg.id === activePackage?.id;
@@ -507,7 +505,7 @@ export function PricelistView({ data }: Props) {
                                 aria-pressed={isSelected}
                                 onClick={() => setSelectedId(pkg.id)}
                               >
-                                {isSelected ? "Dipilih" : "Pilih"}
+                                {isSelected ? "Selected" : "Choose"}
                               </Button>
                             </td>
                           );
@@ -518,7 +516,7 @@ export function PricelistView({ data }: Props) {
                 </div>
               )}
               <p className="mt-3 text-[11px] text-[#a1a1aa]">
-                Hanya baris yang berbeda antar paket yang ditampilkan.
+                Only the rows that differ between packages are shown.
               </p>
             </div>
           )}
@@ -532,16 +530,15 @@ export function PricelistView({ data }: Props) {
         >
           <div className="rounded-xl border border-[#ececee] bg-white p-5">
             <h2 className="text-sm font-semibold text-[#18181b]">
-              Atur pesanan Anda
+              Build your order
             </h2>
             <p className="mt-1 text-[11px] leading-relaxed text-[#71717a]">
-              Tambahkan add-on dan lihat totalnya langsung sebelum mengirim
-              permintaan.
+              Add extras and see the running total before you send your inquiry.
             </p>
 
             <div className="mt-4 rounded-lg border border-[#ececee] bg-[#fafafa] px-3 py-2.5">
               <p className="text-[10px] font-medium tracking-wide text-[#71717a] uppercase">
-                Paket dipilih
+                Selected package
               </p>
               <p className="mt-0.5 text-sm font-medium text-[#18181b]">
                 {activePackage?.name ?? "—"}
@@ -633,7 +630,7 @@ export function PricelistView({ data }: Props) {
 
             <dl className="mt-4 space-y-1.5 border-t border-[#ececee] pt-4 text-[12px]">
               <div className="flex items-center justify-between gap-2">
-                <dt className="text-[#71717a]">Paket</dt>
+                <dt className="text-[#71717a]">Package</dt>
                 <dd className="tabular-nums text-[#3f3f46]">{idr(packagePrice)}</dd>
               </div>
               <div className="flex items-center justify-between gap-2">
@@ -645,7 +642,7 @@ export function PricelistView({ data }: Props) {
                 className="mt-2 flex items-baseline justify-between gap-2 border-t border-[#ececee] pt-2"
               >
                 <dt className="text-[11px] font-medium tracking-wide text-[#71717a] uppercase">
-                  Total estimasi
+                  Estimated total
                 </dt>
                 <dd className="text-lg font-semibold tabular-nums text-[#18181b]">
                   {idr(total)}
@@ -655,12 +652,11 @@ export function PricelistView({ data }: Props) {
 
             <Button asChild className="mt-4 w-full">
               <Link href={bookingHref}>
-                Pesan paket ini <ArrowRight />
+                Inquire about this package <ArrowRight />
               </Link>
             </Button>
             <p className="mt-2 text-[10px] leading-relaxed text-[#a1a1aa]">
-              Total estimasi belum termasuk penyesuaian kebutuhan khusus. Tim
-              kami mengonfirmasi harga final saat konsultasi.
+              The estimate excludes adjustments for special requirements. Our team confirms the final price during consultation.
             </p>
           </div>
         </aside>

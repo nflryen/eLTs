@@ -81,7 +81,7 @@ function parseAddons(raw: string | undefined): { id: string; qty?: number }[] {
     .filter((item) => item.id.length > 0);
 }
 
-/** Readable slug for the "Paket dipilih" summary before the server answers. */
+/** Readable slug for the "Selected package" summary before the server answers. */
 function prettySlug(slug: string): string {
   return slug.replace(/-/g, " ");
 }
@@ -197,7 +197,7 @@ export function ContactForm({ prefill }: { prefill?: ContactPrefill }) {
       {prefill?.packageName && (
         <div className="rounded-lg border border-border bg-secondary/40 px-4 py-3">
           <p className="text-[11px] uppercase tracking-[0.18em] text-[var(--color-fog)]">
-            Paket dipilih
+            Selected package
           </p>
           <p className="mt-1 text-sm font-medium">{prefill.packageName}</p>
           {addons.length > 0 && (

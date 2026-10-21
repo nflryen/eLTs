@@ -56,11 +56,10 @@ export default async function PortfolioPage() {
            */
           <div className="mt-6 rounded-[var(--radius-cards)] border border-dashed border-[var(--color-cloud)] px-6 py-16 text-center">
             <p className="text-sm font-semibold text-[var(--color-obsidian)]">
-              Belum ada kisah yang diterbitkan.
+              No stories published yet.
             </p>
             <p className="mx-auto mt-1.5 max-w-sm text-xs leading-relaxed text-[var(--color-fog)]">
-              Koleksi pilihan sedang disiapkan. Sementara itu, jelajahi galeri di
-              bawah.
+              The curated collection is being prepared. In the meantime, browse the gallery below.
             </p>
           </div>
         ) : (

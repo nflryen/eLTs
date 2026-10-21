@@ -12,16 +12,16 @@ import { Calendar, Video, MessageCircle } from "lucide-react";
  * media is referenced.
  */
 const PROOF_SHOTS = [
-  { src: "/images/wedding.webp", alt: "Dokumentasi upacara pernikahan" },
-  { src: "/images/graduation.webp", alt: "Sesi foto wisuda" },
-  { src: "/images/event.webp", alt: "Liputan acara dan broadcast" },
-  { src: "/images/prewedding.webp", alt: "Sesi prewedding" },
+  { src: "/images/wedding.webp", alt: "Wedding ceremony coverage" },
+  { src: "/images/graduation.webp", alt: "Graduation portrait session" },
+  { src: "/images/event.webp", alt: "Event and broadcast coverage" },
+  { src: "/images/prewedding.webp", alt: "Prewedding session" },
 ] as const;
 
 export const metadata: Metadata = {
   title: "Book a Consultation — Elts. Studio Scheduler",
   description:
-    "Jadwalkan sesi Discovery Call atau Creative Briefing bersama ELTs. Studio Purwokerto secara online melalui Google Meet.",
+    "Schedule a Discovery Call or Creative Briefing with the ELTs. Studio team in Purwokerto, online via Google Meet.",
   alternates: { canonical: "/booking" },
 };
 
@@ -36,9 +36,9 @@ export default function BookingPage() {
             Schedule your creative session.
           </h1>
           <p className="mt-4 text-sm sm:text-base text-muted-foreground leading-relaxed">
-            Pilih waktu konsultasi langsung dengan tim kreatif dan teknis ELTs.
-            Studio Purwokerto. Jadwal tersinkronisasi otomatis dengan Google
-            Calendar dan Google Meet.
+            Pick a time to talk directly with the ELTs. creative and technical
+            team in Purwokerto. Your booking syncs automatically to Google
+            Calendar and Google Meet.
           </p>
         </div>
 
@@ -79,8 +79,7 @@ export default function BookingPage() {
                 Live Google Calendar Sync
               </h3>
               <p className="mt-1 text-xs text-muted-foreground leading-relaxed">
-                Jadwal yang dipilih otomatis diproteksi untuk menghindari bentrok
-                atau double-booking dengan agenda studio.
+                Your chosen slot is automatically protected to avoid conflicts or double-booking with the studio calendar.
               </p>
             </div>
           </div>
@@ -94,8 +93,7 @@ export default function BookingPage() {
                 Instant Google Meet Link
               </h3>
               <p className="mt-1 text-xs text-muted-foreground leading-relaxed">
-                Tautan ruang konferensi video dibuat seketika saat reservasi
-                selesai sehingga Anda dapat langsung bergabung saat waktu tiba.
+                A video conference room link is created the moment your booking completes, so you can join as soon as it starts.
               </p>
             </div>
           </div>
@@ -109,8 +107,7 @@ export default function BookingPage() {
                 WhatsApp Confirmation
               </h3>
               <p className="mt-1 text-xs text-muted-foreground leading-relaxed">
-                Terhubung langsung dengan tim operational WhatsApp ELTs. Studio
-                untuk asistensi cepat dan pengingat jadwal.
+                Connected directly to the ELTs. Studio operations team on WhatsApp for quick assistance and schedule reminders.
               </p>
             </div>
           </div>

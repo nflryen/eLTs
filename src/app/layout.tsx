@@ -36,7 +36,7 @@ export default function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="id">
+    <html lang="en">
       <body>
         <a
           href="#main-content"

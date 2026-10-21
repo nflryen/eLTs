@@ -33,7 +33,7 @@ const BOOKING_OPTIONS: BookingOption[] = [
     title: "15-min Discovery Call",
     durationMinutes: 15,
     description:
-      "Sesi konsultasi cepat untuk mendiskusikan kebutuhan visual event, paket layanan, estimasi anggaran, dan timeline secara santai namun terarah.",
+      "A quick consultation to discuss your visual needs, service packages, budget estimate and timeline — relaxed but focused.",
     badge: "Eksplorasi Awal",
     mode: "Online via Google Meet",
   },
@@ -42,7 +42,7 @@ const BOOKING_OPTIONS: BookingOption[] = [
     title: "45-min Technical & Creative Briefing",
     durationMinutes: 45,
     description:
-      "Sesi mendalam bersama tim kreatif ELTs. untuk membedah breakdown konsep, moodboard, rundown teknis live streaming, atau rancangan digital lab.",
+      "A deep-dive with the ELTs. creative team covering concept breakdown, moodboard, live-stream technical rundown or digital lab planning.",
     badge: "Perencanaan Matang",
     mode: "Online via Google Meet",
   },
@@ -52,7 +52,7 @@ const SERVICE_PILLARS = [
   {
     id: "Pictures Event/Graduation",
     label: "Pictures (Event & Wisuda)",
-    desc: "Dokumentasi visual, photo session, graduation, dan commercial event.",
+    desc: "Visual documentation, photo sessions, graduation and commercial events.",
   },
   {
     id: "Broadcast Live Stream",
@@ -62,7 +62,7 @@ const SERVICE_PILLARS = [
   {
     id: "Digital Lab",
     label: "Digital Lab & Solutions",
-    desc: "Web platform kustom, interactive displays, dan integrasi digital studio.",
+    desc: "Custom web platforms, interactive displays and studio digital integrations.",
   },
 ] as const;
 
@@ -119,7 +119,7 @@ export function BookingWizard() {
       if (res.success) {
         setAvailableSlots(res.slots);
       } else {
-        setSlotsError(res.error || "Gagal memuat slot jadwal.");
+        setSlotsError(res.error || "Could not load available time slots.");
         setAvailableSlots([]);
       }
     }
@@ -179,7 +179,7 @@ export function BookingWizard() {
 
   function handleProceedToDetails() {
     if (!selectedSlot) {
-      setSlotsError("Silakan pilih jam pertemuan yang tersedia.");
+      setSlotsError("Please choose an available meeting time.");
       return;
     }
     setSlotsError(null);
@@ -191,7 +191,7 @@ export function BookingWizard() {
     setFormError(null);
 
     if (fullName.trim().length < 2) {
-      setFormError("Nama lengkap minimal 2 karakter.");
+      setFormError("Please enter your full name (at least 2 characters).");
       return;
     }
 
@@ -202,7 +202,7 @@ export function BookingWizard() {
     }
 
     if (email && !email.includes("@")) {
-      setFormError("Format email tidak valid.");
+      setFormError("Please enter a valid email address.");
       return;
     }
 
@@ -222,7 +222,7 @@ export function BookingWizard() {
         setConfirmation(res.confirmation);
         setStep(4);
       } else {
-        setFormError(res.error || "Gagal memesan sesi meeting. Silakan coba lagi.");
+        setFormError(res.error || "Could not book the meeting. Please try again.");
       }
     });
   }
@@ -266,13 +266,12 @@ export function BookingWizard() {
       {step === 1 && (
         <div className="space-y-6">
           <div className="border-b border-border pb-5">
-            <p className="eyebrow text-xs">Langkah 1 dari 3</p>
+            <p className="eyebrow text-xs">Step 1 of 3</p>
             <h2 className="text-2xl sm:text-3xl mt-1 text-foreground">
-              Pilih Jenis Pertemuan Studio
+              Choose your studio session type
             </h2>
             <p className="mt-2 text-sm text-muted-foreground">
-              Tentukan format konsultasi yang paling cocok dengan tahap proyek
-              kreatif Anda.
+              Pick the consultation format that best fits your stage of the creative project.
             </p>
           </div>
 
@@ -348,7 +347,7 @@ export function BookingWizard() {
                         : "text-muted-foreground opacity-70 group-hover:opacity-100"
                     }`}
                   >
-                    {isSelected ? "Terpilih" : "Pilih sesi ini"}
+                    {isSelected ? "Selected" : "Choose this session"}
                     <ArrowRight size={13} />
                   </span>
                 </button>
@@ -361,7 +360,7 @@ export function BookingWizard() {
               onClick={() => setStep(2)}
               className="flex items-center gap-2"
             >
-              Lanjut Pilih Jadwal
+              Continue to scheduling
               <ArrowRight size={16} />
             </Button>
           </div>
@@ -374,9 +373,9 @@ export function BookingWizard() {
           <div className="border-b border-border pb-5">
             <div className="flex items-center justify-between">
               <div>
-                <p className="eyebrow text-xs">Langkah 2 dari 3</p>
+                <p className="eyebrow text-xs">Step 2 of 3</p>
                 <h2 className="text-2xl sm:text-3xl mt-1 text-foreground">
-                  Pilih Tanggal & Jam Pertemuan
+                  Choose a date & time
                 </h2>
               </div>
               <div className="hidden sm:block text-right">
@@ -386,8 +385,7 @@ export function BookingWizard() {
               </div>
             </div>
             <p className="mt-2 text-sm text-muted-foreground">
-              Jadwal disinkronkan secara langsung dengan kalender studio ELTs.
-              Zona waktu: WIB (Waktu Indonesia Barat).
+              Availability is synced live with the ELTs. studio calendar. Time zone: WIB (Western Indonesia Time).
             </p>
           </div>
 
@@ -427,7 +425,7 @@ export function BookingWizard() {
 
           {/* Custom Date Input Fallback */}
           <div className="flex items-center gap-3">
-            <span className="text-xs text-muted-foreground">Atau pilih tanggal lain:</span>
+            <span className="text-xs text-muted-foreground">Or pick another date:</span>
             <input
               type="date"
               value={selectedDate}
@@ -465,8 +463,7 @@ export function BookingWizard() {
               </div>
             ) : availableSlots.length === 0 ? (
               <div className="py-8 text-center text-xs text-muted-foreground">
-                Tidak ada slot jadwal yang aktif untuk tanggal ini. Silakan pilih
-                tanggal lain.
+                No active time slots for this date. Please choose another date.
               </div>
             ) : (
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
@@ -524,7 +521,7 @@ export function BookingWizard() {
           <div className="border-b border-border pb-5">
             <div className="flex items-center justify-between">
               <div>
-                <p className="eyebrow text-xs">Langkah 3 dari 3</p>
+                <p className="eyebrow text-xs">Step 3 of 3</p>
                 <h2 className="text-2xl sm:text-3xl mt-1 text-foreground">
                   Informasi Kontak & Kebutuhan
                 </h2>
@@ -539,8 +536,7 @@ export function BookingWizard() {
               </div>
             </div>
             <p className="mt-2 text-sm text-muted-foreground">
-              Detail ini digunakan untuk membuat tautan Google Meet dan mengirimkan
-              konfirmasi langsung ke WhatsApp Anda.
+              These details are used to create the Google Meet link and send the confirmation straight to your WhatsApp.
             </p>
           </div>
 
@@ -554,7 +550,7 @@ export function BookingWizard() {
             {/* Full Name */}
             <div>
               <label className="block text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-1.5">
-                Nama Lengkap / PIC <span className="text-red-500">*</span>
+                Full name / PIC <span className="text-red-500">*</span>
               </label>
               <div className="relative">
                 <User
@@ -597,7 +593,7 @@ export function BookingWizard() {
           {/* Email */}
           <div>
             <label className="block text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-1.5">
-              Alamat Email (Opsional)
+              Email address (optional)
             </label>
             <div className="relative">
               <Mail
@@ -613,14 +609,14 @@ export function BookingWizard() {
               />
             </div>
             <p className="mt-1 text-[11px] text-muted-foreground">
-              Jika diisi, Google Calendar akan otomatis mengirimkan invite resmi ke inbox Anda.
+              If provided, Google Calendar will send an official invite to your inbox.
             </p>
           </div>
 
           {/* Service Pillar Selection */}
           <div>
             <label className="block text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">
-              Bidang Layanan yang Diminati <span className="text-red-500">*</span>
+              Service you are interested in <span className="text-red-500">*</span>
             </label>
             <div className="grid gap-2.5 sm:grid-cols-3">
               {SERVICE_PILLARS.map((pillar) => {
@@ -661,13 +657,13 @@ export function BookingWizard() {
           {/* Brief Notes */}
           <div>
             <label className="block text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-1.5">
-              Catatan Singkat / Gambaran Kebutuhan
+              Short note / what you need
             </label>
             <textarea
               rows={3}
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
-              placeholder="Ceritakan gambaran singkat acara, tanggal perkiraan, atau pertanyaan utama yang ingin dibahas..."
+              placeholder="Tell us briefly about the event, your approximate date, or the main question you would like to cover..."
               className="w-full resize-none rounded-[var(--radius-inputs)] border border-[var(--color-cloud)] bg-[var(--color-snow)] p-3 text-sm text-[var(--color-graphite)] focus:border-[#09090b] focus:outline-none"
             />
           </div>
@@ -695,7 +691,7 @@ export function BookingWizard() {
                 </>
               ) : (
                 <>
-                  Konfirmasi Jadwal
+                  Confirm your booking
                   <CheckCircle2 size={16} />
                 </>
               )}
@@ -715,7 +711,7 @@ export function BookingWizard() {
               Reservasi Berhasil
             </p>
             <h2 className="text-3xl sm:text-4xl mt-1 text-foreground">
-              Jadwal Pertemuan Terkonfirmasi
+              Your meeting is confirmed
             </h2>
             <p className="mt-2 max-w-lg text-sm text-muted-foreground">
               Terima kasih, <strong>{confirmation.clientName}</strong>. Sesi
@@ -731,31 +727,31 @@ export function BookingWizard() {
               </h3>
               <div className="text-xs space-y-2">
                 <div className="flex justify-between">
-                  <span className="text-muted-foreground">Jenis Sesi:</span>
+                  <span className="text-muted-foreground">Session type:</span>
                   <span className="font-medium text-foreground text-right">
                     {confirmation.title}
                   </span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-muted-foreground">Tanggal:</span>
+                  <span className="text-muted-foreground">Date:</span>
                   <span className="font-medium text-foreground">
                     {formatReadableDate(selectedDate)}
                   </span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-muted-foreground">Waktu:</span>
+                  <span className="text-muted-foreground">Time:</span>
                   <span className="font-medium text-foreground">
                     {selectedSlot} WIB ({activeOption.durationMinutes} menit)
                   </span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-muted-foreground">Layanan:</span>
+                  <span className="text-muted-foreground">Service:</span>
                   <span className="font-medium text-foreground">
                     {confirmation.serviceInterest}
                   </span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-muted-foreground">No. WhatsApp:</span>
+                  <span className="text-muted-foreground">WhatsApp number:</span>
                   <span className="font-medium text-foreground">
                     +{confirmation.clientPhone}
                   </span>
@@ -771,8 +767,8 @@ export function BookingWizard() {
                   <span>Google Meet Video Call</span>
                 </div>
                 <p className="text-xs text-muted-foreground leading-relaxed">
-                  Tautan virtual meeting telah dibuat secara otomatis untuk sesi
-                  ini. Silakan bergabung tepat waktu.
+                  A virtual meeting link has been created automatically for this
+                  session. Please join on time.
                 </p>
 
                 {confirmation.meetLink && (
@@ -792,12 +788,12 @@ export function BookingWizard() {
                       {isCopiedMeet ? (
                         <>
                           <Check size={12} className="text-emerald-600" />
-                          <span>Tersalin</span>
+                          <span>Copied</span>
                         </>
                       ) : (
                         <>
                           <Copy size={12} />
-                          <span>Salin</span>
+                          <span>Copy</span>
                         </>
                       )}
                     </button>
@@ -828,8 +824,7 @@ export function BookingWizard() {
                 <MessageCircle size={18} />
               </span>
               <p className="text-xs text-muted-foreground">
-                Kirim pesan konfirmasi otomatis ke WhatsApp ELTs. Studio untuk
-                tanggapan lebih cepat.
+                Send the automatic confirmation to ELTs. Studio on WhatsApp for a faster reply.
               </p>
             </div>
 

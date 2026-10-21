@@ -325,7 +325,16 @@
   line-height: 1.12;
   font-weight: 600;
   letter-spacing: -0.02em;
-  color: var(--color-obsidian);
+  /*
+   * `inherit`, NOT a hardcoded colour.
+   *
+   * These classes are used both on the paper canvas AND on image-overlay heroes
+   * (`<section className="text-white">`). A hardcoded obsidian won the cascade
+   * against the parent's `text-white`, so "More Than Just Photos" rendered
+   * near-black on a dark photograph. Inheriting lets each context decide, and
+   * the body colour supplies the canvas default.
+   */
+  color: inherit;
 }
 
 /* Section headings sit one step below the display scale. */
@@ -335,7 +344,7 @@
   line-height: 1.28;
   font-weight: 600;
   letter-spacing: -0.015em;
-  color: var(--color-obsidian);
+  color: inherit;
 }
 
 /* 80px vertical rhythm between major sections. */

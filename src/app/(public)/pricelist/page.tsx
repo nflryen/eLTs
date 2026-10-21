@@ -4,9 +4,9 @@ import { BookingCta } from "@/components/home/booking-cta";
 import { getPricelist } from "@/lib/pricelist";
 
 export const metadata: Metadata = {
-  title: "Pricelist — Harga Transparan",
+  title: "Pricelist — Transparent Pricing",
   description:
-    "Daftar harga resmi ELTs. Studio Purwokerto untuk graduation photo & video, event documentation, broadcast live streaming, serta wedding & engagement. Bandingkan paket dan hitung add-on langsung.",
+    "Official ELTs. Studio Purwokerto pricing for graduation photo & video, event documentation, broadcast live streaming, and wedding & engagement. Compare packages and calculate add-ons instantly.",
   alternates: { canonical: "/pricelist" },
 };
 
@@ -26,19 +26,20 @@ export default async function PricelistPage() {
   return (
     <main id="main-content">
       <section className="site-container pt-20 pb-12">
-        <p className="eyebrow">Harga transparan, tanpa kejutan</p>
+        <p className="eyebrow">Transparent pricing, no surprises</p>
         <h1 className="section-heading mt-5">
           Pricelist
           <br />
           <span className="italic">2026.</span>
         </h1>
         <p className="mt-6 max-w-md leading-relaxed text-muted-foreground">
-          Setiap paket ditulis apa adanya: durasi, jumlah kru, dan hasil yang
-          Anda terima. Bandingkan paket berdampingan, lalu susun add-on Anda.
+          Every package is written plainly: duration, crew count, and exactly
+          what you receive. Compare packages side by side, then build your
+          add-ons.
         </p>
       </section>
 
-      <section className="site-container pb-24" aria-label="Daftar harga">
+      <section className="site-container pb-24" aria-label="Pricing list">
         <PricelistView data={data} />
       </section>
 
