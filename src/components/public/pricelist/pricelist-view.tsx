@@ -354,7 +354,7 @@ export function PricelistView({ data }: Props) {
                   <article
                     key={pkg.id}
                     className={cn(
-                      "flex flex-col rounded-[var(--radius-cards)] border bg-white p-[var(--card-padding)] transition-colors",
+                      "flex flex-col rounded-[var(--radius-cards)] border bg-white p-[var(--card-padding)] transition-colors shadow-none",
                       isSelected
                         ? "border-[#18181b] ring-1 ring-[#18181b]"
                         : "border-[#ececee]",

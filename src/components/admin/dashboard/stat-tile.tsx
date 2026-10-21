@@ -69,7 +69,12 @@ export function StatTile({
   const body = (
     <>
       <div className="flex items-start justify-between gap-3">
-        <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[#71717a]">
+        {/*
+          `min-w-0` + `break-words`: these labels are long Indonesian phrases
+          ("Piutang Belum Dibayar") and at 1024px the 0.14em tracking pushed them
+          187px wide inside a 165px tile, so they clipped rather than wrapped.
+        */}
+        <p className="min-w-0 break-words text-[11px] font-semibold uppercase tracking-[0.08em] text-[#71717a]">
           {label}
         </p>
         {href ? (
@@ -81,9 +86,9 @@ export function StatTile({
         ) : null}
       </div>
 
-      <div className="mt-3 flex items-baseline gap-1.5">
+      <div className="mt-3 flex flex-wrap items-baseline gap-x-1.5 gap-y-0.5">
         <span
-          className={`text-[26px] font-semibold leading-none tracking-tight tabular-nums ${
+          className={`text-[22px] font-semibold leading-none tracking-tight tabular-nums xl:text-[26px] ${
             isAttention ? "text-[#ff5a00]" : "text-[#09090b]"
           }`}
         >

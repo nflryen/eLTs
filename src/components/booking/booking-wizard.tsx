@@ -295,9 +295,9 @@ export function BookingWizard() {
                   role="radio"
                   aria-checked={isSelected}
                   onClick={() => setSelectedType(option.type)}
-                  className={`group relative cursor-pointer border p-6 text-left transition-all duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#09090b] focus-visible:ring-offset-2 ${
+                  className={`group relative cursor-pointer rounded-[var(--radius-buttons)] border p-6 text-left transition-colors duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#09090b] focus-visible:ring-offset-2 ${
                     isSelected
-                      ? "border-primary bg-secondary/40 shadow-xs"
+                      ? "border-[#09090b] bg-[#fafafa]"
                       : "border-border bg-white hover:border-muted-foreground/40 hover:bg-secondary/15"
                   }`}
                 >
@@ -406,7 +406,7 @@ export function BookingWizard() {
                     onClick={() => setSelectedDate(item.dateStr)}
                     className={`flex flex-col items-center justify-center p-3 border text-center transition-all ${
                       isSelected
-                        ? "border-primary bg-primary text-primary-foreground shadow-xs"
+                        ? "border-[#09090b] bg-[#09090b] text-white"
                         : "border-border bg-white text-foreground hover:bg-secondary/40"
                     }`}
                   >
@@ -433,12 +433,12 @@ export function BookingWizard() {
               value={selectedDate}
               min={new Date().toISOString().split("T")[0]}
               onChange={(e) => e.target.value && setSelectedDate(e.target.value)}
-              className="border border-border bg-white px-3 py-1.5 text-xs text-foreground focus:border-primary focus:outline-none"
+              className="rounded-[var(--radius-inputs)] border border-[var(--color-cloud)] bg-[var(--color-snow)] px-3 py-1.5 text-xs text-[var(--color-graphite)] focus:border-[#09090b] focus:outline-none"
             />
           </div>
 
           {/* Available Slots Section */}
-          <div className="mt-6 border border-border bg-white p-6">
+          <div className="mt-6 rounded-[var(--radius-cards)] border border-[var(--color-cloud)] bg-[var(--color-snow)] p-[var(--card-padding)]">
             <div className="flex items-center justify-between mb-4 pb-3 border-b border-border/50">
               <div className="flex items-center gap-2">
                 <CalendarIcon size={16} className="text-muted-foreground" />
@@ -482,7 +482,7 @@ export function BookingWizard() {
                         !slot.available
                           ? "border-border/40 bg-secondary/30 text-muted-foreground/50 cursor-not-allowed line-through"
                           : isSelected
-                            ? "border-primary bg-primary text-primary-foreground shadow-xs ring-1 ring-primary"
+                            ? "border-[#09090b] bg-[#09090b] text-white"
                             : "border-border bg-white text-foreground hover:border-primary/60 hover:bg-secondary/20"
                       }`}
                     >
@@ -567,7 +567,7 @@ export function BookingWizard() {
                   value={fullName}
                   onChange={(e) => setFullName(e.target.value)}
                   placeholder="cth. Rayhan Pratama"
-                  className="w-full border border-border bg-white pl-9 pr-3 py-2.5 text-sm text-foreground focus:border-primary focus:outline-none"
+                  className="w-full rounded-[var(--radius-inputs)] border border-[var(--color-cloud)] bg-[var(--color-snow)] pl-9 pr-3 py-2.5 text-sm text-[var(--color-graphite)] focus:border-[#09090b] focus:outline-none"
                 />
               </div>
             </div>
@@ -588,7 +588,7 @@ export function BookingWizard() {
                   value={whatsapp}
                   onChange={(e) => setWhatsapp(e.target.value)}
                   placeholder="cth. 081234567890"
-                  className="w-full border border-border bg-white pl-9 pr-3 py-2.5 text-sm text-foreground focus:border-primary focus:outline-none"
+                  className="w-full rounded-[var(--radius-inputs)] border border-[var(--color-cloud)] bg-[var(--color-snow)] pl-9 pr-3 py-2.5 text-sm text-[var(--color-graphite)] focus:border-[#09090b] focus:outline-none"
                 />
               </div>
             </div>
@@ -609,7 +609,7 @@ export function BookingWizard() {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="nama@perusahaan.com (untuk menerima kalender Google)"
-                className="w-full border border-border bg-white pl-9 pr-3 py-2.5 text-sm text-foreground focus:border-primary focus:outline-none"
+                className="w-full rounded-[var(--radius-inputs)] border border-[var(--color-cloud)] bg-[var(--color-snow)] pl-9 pr-3 py-2.5 text-sm text-[var(--color-graphite)] focus:border-[#09090b] focus:outline-none"
               />
             </div>
             <p className="mt-1 text-[11px] text-muted-foreground">
@@ -668,7 +668,7 @@ export function BookingWizard() {
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
               placeholder="Ceritakan gambaran singkat acara, tanggal perkiraan, atau pertanyaan utama yang ingin dibahas..."
-              className="w-full border border-border bg-white p-3 text-sm text-foreground focus:border-primary focus:outline-none resize-none"
+              className="w-full resize-none rounded-[var(--radius-inputs)] border border-[var(--color-cloud)] bg-[var(--color-snow)] p-3 text-sm text-[var(--color-graphite)] focus:border-[#09090b] focus:outline-none"
             />
           </div>
 
@@ -706,7 +706,7 @@ export function BookingWizard() {
 
       {/* STEP 4: Confirmation Screen */}
       {step === 4 && confirmation && (
-        <div className="border border-border bg-white p-8 sm:p-10 shadow-xs">
+        <div className="rounded-[var(--radius-cards)] border border-[var(--color-cloud)] bg-[var(--color-snow)] p-[var(--card-padding)] sm:p-10">
           <div className="flex flex-col items-center text-center pb-8 border-b border-border">
             <div className="flex size-14 items-center justify-center rounded-full bg-emerald-50 text-emerald-600 mb-4 ring-8 ring-emerald-50/50">
               <CheckCircle2 size={32} />
@@ -787,7 +787,7 @@ export function BookingWizard() {
                       type="button"
                       onClick={handleCopyMeet}
                       title="Salin link Google Meet"
-                      className="flex items-center gap-1 rounded-xs border border-border bg-white px-2 py-1 text-[11px] text-foreground hover:bg-secondary transition-colors"
+                      className="flex items-center gap-1 rounded-[var(--radius-badges)] border border-[var(--color-cloud)] bg-[var(--color-snow)] px-2 py-1 text-[11px] text-[var(--color-graphite)] transition-colors hover:bg-[var(--color-paper)]"
                     >
                       {isCopiedMeet ? (
                         <>

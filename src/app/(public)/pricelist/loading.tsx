@@ -23,7 +23,7 @@ export default function Loading() {
         {Array.from({ length: 5 }).map((_, index) => (
           <Skeleton
             key={index}
-            className="h-10 w-36 rounded-xl"
+            className="h-10 w-36 rounded-[var(--radius-badges)]"
             // Widths vary so the strip reads as five category tabs, not one
             // repeated placeholder.
             style={{ width: `${132 + (index % 3) * 24}px` }}
@@ -36,7 +36,7 @@ export default function Loading() {
           {Array.from({ length: 4 }).map((_, index) => (
             <div
               key={index}
-              className="rounded-xl border border-[#ececee] bg-white p-5"
+              className="rounded-[var(--radius-cards)] border border-[var(--color-cloud)] bg-[var(--color-snow)] p-[var(--card-padding)]"
             >
               <Skeleton className="h-4 w-32" />
               <Skeleton className="mt-3 h-6 w-28" />
@@ -50,22 +50,22 @@ export default function Loading() {
                   />
                 ))}
               </div>
-              <Skeleton className="mt-4 h-10 w-full rounded-xl" />
+              <Skeleton className="mt-4 h-10 w-full rounded-[var(--radius-buttons)]" />
             </div>
           ))}
         </div>
 
         <div className="lg:col-span-4">
-          <div className="rounded-xl border border-[#ececee] bg-white p-5">
+          <div className="rounded-[var(--radius-cards)] border border-[var(--color-cloud)] bg-[var(--color-snow)] p-[var(--card-padding)]">
             <Skeleton className="h-4 w-40" />
             <Skeleton className="mt-2 h-3 w-full" />
-            <Skeleton className="mt-4 h-16 w-full rounded-lg" />
+            <Skeleton className="mt-4 h-16 w-full rounded-[var(--radius-badges)]" />
             <div className="mt-4 space-y-3">
               {Array.from({ length: 5 }).map((_, index) => (
                 <Skeleton key={index} className="h-8 w-full" />
               ))}
             </div>
-            <Skeleton className="mt-4 h-12 w-full rounded-xl" />
+            <Skeleton className="mt-4 h-12 w-full rounded-[var(--radius-buttons)]" />
           </div>
         </div>
       </div>

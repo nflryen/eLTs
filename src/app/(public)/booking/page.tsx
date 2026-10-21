@@ -64,7 +64,7 @@ export default function BookingPage() {
         </div>
 
         {/* Booking Wizard Interactive Container */}
-        <div className="border border-border bg-white p-6 sm:p-10 shadow-xs">
+        <div className="rounded-[var(--radius-cards)] border border-[var(--color-cloud)] bg-[var(--color-snow)] p-[var(--card-padding)] sm:p-10">
           <BookingWizard />
         </div>
 

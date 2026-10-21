@@ -188,7 +188,7 @@ export function InvoicesHubClient({
       </div>
 
       {/* ── KPI Metrics Overview ─────────────────────────────────────────── */}
-      <div className="grid gap-4 sm:grid-cols-3">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {/* Total Invoiced */}
         <Card className="p-5 sm:p-6">
           <div className="flex items-center justify-between">
@@ -199,7 +199,7 @@ export function InvoicesHubClient({
               <Receipt size={15} />
             </span>
           </div>
-          <p className="mt-2 text-2xl font-bold tracking-tight text-[#09090b] tabular-nums font-mono">
+          <p className="mt-2 text-xl font-bold tracking-tight text-[#09090b] tabular-nums font-mono sm:text-2xl">
             {formatIDR(data.metrics.totalInvoiced)}
           </p>
           <p className="mt-1 text-xs text-[#71717a]">
@@ -217,7 +217,7 @@ export function InvoicesHubClient({
               <TrendingUp size={15} />
             </span>
           </div>
-          <p className="mt-2 text-2xl font-bold tracking-tight text-[#09090b] tabular-nums font-mono">
+          <p className="mt-2 text-xl font-bold tracking-tight text-[#09090b] tabular-nums font-mono sm:text-2xl">
             {formatIDR(data.metrics.totalCollected)}
           </p>
           <p className="mt-1 text-xs text-[#09090b] font-medium">
@@ -235,7 +235,7 @@ export function InvoicesHubClient({
               <Coins size={15} />
             </span>
           </div>
-          <p className="mt-2 text-2xl font-bold tracking-tight text-[#ff5a00] tabular-nums font-mono">
+          <p className="mt-2 text-xl font-bold tracking-tight text-[#ff5a00] tabular-nums font-mono sm:text-2xl">
             {formatIDR(data.metrics.totalOutstanding)}
           </p>
           <p className="mt-1 text-xs text-[#ff5a00] font-medium">
@@ -331,7 +331,7 @@ export function InvoicesHubClient({
           </div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs">
+            <table className="w-full min-w-[880px] text-left text-xs">
               <thead>
                 <tr className="border-b border-[#ececee] text-[#71717a] font-semibold text-[11px] uppercase tracking-wider">
                   <th className="py-3 px-3">No. Invoice</th>
@@ -402,7 +402,7 @@ export function InvoicesHubClient({
                       </td>
 
                       {/* Gross Amount */}
-                      <td className="py-3.5 px-3 text-right font-mono font-semibold text-[#09090b] tabular-nums">
+                      <td className="whitespace-nowrap py-3.5 px-3 text-right font-mono font-semibold text-[#09090b] tabular-nums">
                         {formatIDR(inv.grossAmount)}
                       </td>
 

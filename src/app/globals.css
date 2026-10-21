@@ -114,9 +114,25 @@
 
   /* Type scale */
   --text-caption: 12px;
+  --leading-caption: 1.64;
   --text-body: 15px;
   --text-body-lg: 18px;
   --text-subheading: 20px;
+  /*
+   * ── Layout tokens ───────────────────────────────────────────────────
+   *
+   * These were REFERENCED but never DEFINED, which is worse than a missing
+   * style: `width: min(var(--page-max-width), calc(100% - 48px))` is invalid at
+   * computed-value time when the custom property is empty, so the entire
+   * `width` declaration is dropped and `.site-container` collapses to the full
+   * viewport. That is what made the hero headline span 940px of a 1440px screen
+   * and collide with the right-hand column. Defining them is the fix.
+   */
+  --page-max-width: 1200px;
+  --section-gap: 80px;
+  --card-padding: 28px;
+  --element-gap: 8px;
+
   /*
    * Named radii — the three that repeat everywhere in the system.
    * Without these, `rounded-[var(--radius-cards)]` resolves to 0px and every
