@@ -28,7 +28,19 @@ export type MediaType = "image" | "video";
 export type InvoiceMilestone = "DP_50" | "FINAL_BALANCE" | "ADDON";
 export type InvoiceStatus = "DRAFT" | "PENDING" | "PAID" | "CANCELLED";
 export type EditorTaskStatus = "PENDING" | "IN_PROGRESS" | "REVIEW" | "COMPLETED";
-export type InquiryStatus = "NEW" | "CONTACTED" | "QUOTED" | "CONVERTED" | "ARCHIVED";
+/*
+ * `QUOTED` and `ARCHIVED` are legacy values retained so rows written before
+ * 0027 still typecheck. The studio pipeline is NEW → CONTACTED → SCHEDULED →
+ * CONVERTED, with LOST as the terminal outcome for a dead lead.
+ */
+export type InquiryStatus =
+  | "NEW"
+  | "CONTACTED"
+  | "SCHEDULED"
+  | "CONVERTED"
+  | "LOST"
+  | "QUOTED"
+  | "ARCHIVED";
 
 export type MoodboardCardType = "IMAGE_REF" | "COLOR_SWATCH" | "SHOT_LIST" | "TECH_NOTE";
 export type AuthorRole = "CLIENT" | "STUDIO";
@@ -173,6 +185,13 @@ export type EditorTaskRow = {
   updated_at: string;
 };
 
+/** One add-on the client picked in the pricelist configurator. */
+export type InquiryAddon = {
+  id: string;
+  name: string;
+  price_idr: number;
+};
+
 export type InquiryRow = {
   id: string;
   name: string;
@@ -184,6 +203,15 @@ export type InquiryRow = {
   message: string;
   status: InquiryStatus;
   source_page: string | null;
+  event_type: string | null;
+  event_date: string | null;
+  selected_package_id: string | null;
+  selected_addons: InquiryAddon[];
+  notes: string | null;
+  reference: string | null;
+  contacted_at: string | null;
+  converted_customer_id: string | null;
+  converted_project_id: string | null;
   created_at: string;
 };
 

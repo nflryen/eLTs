@@ -210,7 +210,19 @@ export function PricelistView({ data }: Props) {
       );
     }
     params.set("total", String(total));
-    return `/booking?${params.toString()}`;
+    /*
+     * The CTA lands on /contact, NOT /booking.
+     *
+     * /booking schedules a Google Meet slot into `studio_events` and discards
+     * the package entirely, so a client who picked Gold + 2 add-ons arrived as
+     * an anonymous 15-minute call with no record of what they wanted. /contact
+     * writes a real `inquiries` row, and these params carry the package and
+     * add-ons into it — so the lead lands in the pipeline with its commercial
+     * context attached.
+     */
+    params.set("package_id", activePackage.id);
+    params.set("package_name", activePackage.name);
+    return `/contact?${params.toString()}`;
   })();
 
   const toggleAddon = (slug: string) => {

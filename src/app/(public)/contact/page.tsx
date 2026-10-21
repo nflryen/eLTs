@@ -11,7 +11,26 @@ export const metadata: Metadata = {
   alternates: { canonical: "/contact" },
 };
 
-export default function ContactPage() {
+interface Props {
+  /*
+   * The pricelist configurator links here with the package and add-ons the
+   * client picked, so the inquiry row carries its commercial context instead of
+   * arriving as an anonymous "tell us what you need".
+   */
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}
+
+export default async function ContactPage({ searchParams }: Props) {
+  const params = await searchParams;
+  const first = (key: string): string =>
+    typeof params[key] === "string" ? (params[key] as string) : "";
+
+  const prefill = {
+    packageId: first("package_id"),
+    packageName: first("package_name"),
+    addons: first("addons"),
+  };
+
   return (
     <main id="main-content">
       <div className="site-container grid gap-16 pb-24 pt-20 lg:grid-cols-[1fr_1.2fr] lg:items-start lg:gap-24">
@@ -80,7 +99,7 @@ export default function ContactPage() {
             Usually responds within 24 hours.
           </p>
           <div className="mt-8">
-            <ContactForm />
+            <ContactForm prefill={prefill} />
           </div>
         </div>
       </div>
