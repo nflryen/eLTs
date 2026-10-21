@@ -46,7 +46,7 @@ export default async function PortfolioPage() {
        */}
       <section className="site-container pb-20" aria-labelledby="showcase-heading">
         <h2 id="showcase-heading" className="eyebrow">
-          Kisah pilihan
+          Selected stories
         </h2>
 
         {showcases.length === 0 ? (
