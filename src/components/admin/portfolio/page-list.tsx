@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { ExternalLink, FileText, Plus, Rocket, Tag, Trash2 } from "lucide-react";
+import { ExternalLink, FileText, Loader2, Plus, Rocket, Tag, Trash2, Upload } from "lucide-react";
 import {
   deletePortfolioPage,
   publishPortfolioPage,
@@ -17,6 +17,7 @@ import {
   isPortfolioCategory,
   normalisePortfolioTags,
 } from "@/lib/portfolio/category";
+import { uploadImageToCloudinary } from "@/lib/upload-client";
 
 const slugify = (value: string) =>
   value
@@ -35,6 +36,8 @@ export function PortfolioPageList({ pages }: { pages: PortfolioPageRow[] }) {
   const [slugTouched, setSlugTouched] = useState(false);
   const [category, setCategory] = useState("");
   const [tags, setTags] = useState("");
+  const [coverUrl, setCoverUrl] = useState("");
+  const [uploadingCover, setUploadingCover] = useState(false);
 
   const run = (fn: () => Promise<{ ok: boolean; error?: string; data?: { id?: string } }>, after?: (id?: string) => void) => {
     setError(null);
@@ -59,6 +62,7 @@ export function PortfolioPageList({ pages }: { pages: PortfolioPageRow[] }) {
           title: title.trim(),
           category: category === "" ? "" : (category as (typeof PORTFOLIO_CATEGORIES)[number]),
           tags: normalisePortfolioTags(tags.split(",")),
+          coverUrl: coverUrl.trim() || undefined,
         }) as Promise<{ ok: boolean; error?: string; data?: { id?: string } }>,
       (id) => {
         setCreating(false);
@@ -67,6 +71,7 @@ export function PortfolioPageList({ pages }: { pages: PortfolioPageRow[] }) {
         setSlugTouched(false);
         setCategory("");
         setTags("");
+        setCoverUrl("");
         if (id) router.push(`/admin/portfolio/${id}`);
       },
     );
@@ -151,6 +156,69 @@ export function PortfolioPageList({ pages }: { pages: PortfolioPageRow[] }) {
               <p className="mt-1 text-[11px] text-[#a1a1aa]">Pisahkan dengan koma.</p>
             </div>
           </div>
+          <div>
+            <label htmlFor="p-cover" className="mb-1 block text-xs font-medium text-[#3f3f46]">
+              Gambar Sampul (Thumbnail)
+            </label>
+            <div className="flex gap-2">
+              <input
+                id="p-cover"
+                type="url"
+                value={coverUrl}
+                placeholder="https://res.cloudinary.com/... (atau kosongkan)"
+                onChange={(e) => setCoverUrl(e.target.value)}
+                className="w-full rounded-lg border border-[#ececee] px-3 py-2 text-sm outline-none focus:border-[#18181b]"
+              />
+              <label className="flex shrink-0 cursor-pointer items-center gap-1.5 rounded-lg border border-[#ececee] bg-[#fafafa] px-3 py-2 text-xs font-medium text-[#3f3f46] hover:bg-[#f4f4f5]">
+                {uploadingCover ? (
+                  <Loader2 size={14} className="animate-spin text-[#71717a]" />
+                ) : (
+                  <Upload size={14} className="text-[#71717a]" />
+                )}
+                <span>{uploadingCover ? "Mengunggah…" : "Unggah"}</span>
+                <input
+                  type="file"
+                  accept="image/*"
+                  disabled={uploadingCover}
+                  className="sr-only"
+                  onChange={async (e) => {
+                    const file = e.target.files?.[0];
+                    if (!file) return;
+                    try {
+                      setUploadingCover(true);
+                      const url = await uploadImageToCloudinary(file, "portfolio/covers");
+                      setCoverUrl(url);
+                    } catch (err) {
+                      setError(err instanceof Error ? err.message : "Gagal mengunggah gambar");
+                    } finally {
+                      setUploadingCover(false);
+                    }
+                  }}
+                />
+              </label>
+            </div>
+            {coverUrl ? (
+              <div className="mt-2 flex items-center gap-3">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={coverUrl}
+                  alt="Preview sampul"
+                  className="h-12 w-16 rounded-md border border-[#ececee] object-cover"
+                />
+                <button
+                  type="button"
+                  onClick={() => setCoverUrl("")}
+                  className="text-xs text-red-600 hover:underline"
+                >
+                  Hapus gambar
+                </button>
+              </div>
+            ) : (
+              <p className="mt-1 text-[11px] text-[#a1a1aa]">
+                Opsional. Jika dikosongkan, thumbnail otomatis diambil dari foto pertama pada editor kanvas.
+              </p>
+            )}
+          </div>
           <div className="flex gap-2">
             <button
               type="submit"
@@ -198,13 +266,29 @@ export function PortfolioPageList({ pages }: { pages: PortfolioPageRow[] }) {
               {pages.map((page) => (
                 <tr key={page.id} className="hover:bg-[#fafafa]">
                   <td className="px-4 py-3">
-                    <Link
-                      href={`/admin/portfolio/${page.id}`}
-                      className="font-medium text-[#18181b] hover:underline"
-                    >
-                      {page.title}
-                    </Link>
-                    <p className="font-mono text-[11px] text-[#a1a1aa]">/portfolio/{page.slug}</p>
+                    <div className="flex items-center gap-3">
+                      {page.cover_url ? (
+                        /* eslint-disable-next-line @next/next/no-img-element */
+                        <img
+                          src={page.cover_url}
+                          alt=""
+                          className="size-11 shrink-0 rounded-lg border border-[#ececee] object-cover"
+                        />
+                      ) : (
+                        <div className="flex size-11 shrink-0 items-center justify-center rounded-lg border border-dashed border-[#d4d4d8] bg-[#fafafa] text-[10px] font-semibold uppercase text-[#a1a1aa]">
+                          Elts.
+                        </div>
+                      )}
+                      <div>
+                        <Link
+                          href={`/admin/portfolio/${page.id}`}
+                          className="font-medium text-[#18181b] hover:underline"
+                        >
+                          {page.title}
+                        </Link>
+                        <p className="font-mono text-[11px] text-[#a1a1aa]">/portfolio/{page.slug}</p>
+                      </div>
+                    </div>
                   </td>
                   <td className="px-4 py-3">
                     {/*

@@ -36,14 +36,16 @@ export interface CloudinaryUploadResult {
 export async function uploadToCloudinary(
   buffer: Buffer,
   fileName: string,
-  projectSlug: string,
+  projectSlug: string = "portfolio",
   resourceType: "image" | "video" = "image",
 ): Promise<CloudinaryUploadResult> {
   const cld = getConfiguredCloudinary();
   const { cloudName } = getCloudinaryConfig();
 
-  const folder = `elts/${projectSlug}`;
-
+  const cleanSlug = projectSlug.replace(/^\/+|\/+$/g, "") || "portfolio";
+  const folder = cleanSlug.startsWith("elts/")
+    ? cleanSlug
+    : `elts/${cleanSlug}`;
   const result = await new Promise<ReturnType<typeof cloudinary.uploader.upload> extends Promise<infer T> ? T : never>(
     (resolve, reject) => {
       const stream = cld.uploader.upload_stream(

@@ -25,7 +25,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { z } from "zod";
 import { requireOps } from "@/lib/auth/roles";
 import { createServerSupabase } from "@/lib/supabase/server";
-import { normaliseLayout } from "@/lib/portfolio/layout";
+import { normaliseLayout, findFirstPhotoUrl } from "@/lib/portfolio/layout";
 import {
   PORTFOLIO_CATEGORIES,
   normalisePortfolioTags,
@@ -76,6 +76,27 @@ export type PortfolioPageBundle = {
   page: PortfolioPageRow;
   sections: PortfolioSectionRow[];
 };
+
+/**
+ * Finds the first photo block's public URL across all sections of a page.
+ * Used as automatic fallback when an admin leaves cover_url empty.
+ */
+async function findPageCoverFallback(
+  supabase: SupabaseClient<Database>,
+  pageId: string,
+): Promise<string | null> {
+  const { data: sections } = await supabase
+    .from("portfolio_sections")
+    .select("layout")
+    .eq("page_id", pageId)
+    .order("sort_order", { ascending: true });
+
+  for (const s of sections ?? []) {
+    const photo = findFirstPhotoUrl(s.layout);
+    if (photo) return photo;
+  }
+  return null;
+}
 
 /**
  * Shared result shape. Failures are RETURNED, not thrown, for anything the
@@ -291,6 +312,24 @@ export async function savePortfolioPage(
    * safe, and it is why `category: ""` (the "Tanpa kategori" option) can clear
    * the column while an omitted category cannot.
    */
+  /*
+   * Automatic Fallback Logic:
+   * If coverUrl is provided as a non-empty string, use it.
+   * If coverUrl is provided as empty/null and the page already has sections,
+   * fall back to the first photo block across its sections.
+   */
+  let resolvedCoverUrl: string | null | undefined = undefined;
+  if (value.coverUrl !== undefined) {
+    const cleaned = nullable(value.coverUrl);
+    if (cleaned) {
+      resolvedCoverUrl = cleaned;
+    } else if (value.id) {
+      resolvedCoverUrl = await findPageCoverFallback(supabase, value.id);
+    } else {
+      resolvedCoverUrl = null;
+    }
+  }
+
   const patch = {
     slug: value.slug,
     title: value.title,
@@ -299,7 +338,7 @@ export async function savePortfolioPage(
     ...(value.seoDescription === undefined
       ? {}
       : { seo_description: nullable(value.seoDescription) }),
-    ...(value.coverUrl === undefined ? {} : { cover_url: nullable(value.coverUrl) }),
+    ...(resolvedCoverUrl === undefined ? {} : { cover_url: resolvedCoverUrl }),
     ...(value.category === undefined
       ? {}
       : { category: value.category === "" ? null : value.category }),
@@ -399,6 +438,32 @@ export async function savePortfolioSection(
   if (error) return { ok: false, error: `Gagal menyimpan bagian: ${error.message}` };
   if (!data) return { ok: false, error: "Bagian tidak ditemukan." };
 
+  // Fallback: If page has no cover_url, populate it from the first photo block
+  try {
+    const { data: pageRow } = await portfolioPages(supabase)
+      .select("cover_url, slug")
+      .eq("id", value.pageId)
+      .maybeSingle();
+
+    if (pageRow && !pageRow.cover_url) {
+      let photoUrl = findFirstPhotoUrl(layout);
+      if (!photoUrl) {
+        photoUrl = await findPageCoverFallback(supabase, value.pageId);
+      }
+      if (photoUrl) {
+        await portfolioPages(supabase)
+          .update({ cover_url: photoUrl })
+          .eq("id", value.pageId);
+        revalidatePath("/admin/portfolio");
+        revalidatePath(`/admin/portfolio/${value.pageId}`);
+        revalidatePath(`/portfolio/${pageRow.slug}`);
+        revalidatePath("/portfolio");
+      }
+    }
+  } catch (err) {
+    console.warn("cover_url_fallback_check_failed", { err });
+  }
+
   revalidatePath(`/admin/portfolio/${value.pageId}`);
   return { ok: true, data };
 }
@@ -408,12 +473,17 @@ export async function publishPortfolioPage(id: string): Promise<PortfolioResult<
   const { supabase } = await requireOps();
   if (!uuidSchema.safeParse(id).success) return { ok: false, error: "ID halaman tidak valid." };
   const { data: current, error: readError } = await portfolioPages(supabase)
-    .select("published_at, slug")
+    .select("published_at, slug, cover_url")
     .eq("id", id)
     .maybeSingle();
 
   if (readError) return { ok: false, error: `Gagal membaca halaman: ${readError.message}` };
   if (!current) return { ok: false, error: "Halaman tidak ditemukan." };
+
+  let coverUrlToSet = current.cover_url;
+  if (!coverUrlToSet) {
+    coverUrlToSet = await findPageCoverFallback(supabase, id);
+  }
 
   const { data, error } = await portfolioPages(supabase)
     .update({
@@ -424,6 +494,7 @@ export async function publishPortfolioPage(id: string): Promise<PortfolioResult<
        * silently reorder any feed that sorts by it.
        */
       published_at: current.published_at ?? new Date().toISOString(),
+      ...(coverUrlToSet ? { cover_url: coverUrlToSet } : {}),
     })
     .eq("id", id)
     .select("*")

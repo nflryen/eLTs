@@ -275,3 +275,20 @@ export const LAYOUT_TEMPLATES: ReadonlyArray<{ id: string; label: string; build:
     }),
   },
 ];
+
+/**
+ * Scans a layout document for the first photo block that has a non-empty `publicUrl`.
+ * Blocks are evaluated in visual reading order (y ascending, then x ascending).
+ * Returns the public URL or null if no photo block has an image.
+ */
+export function findFirstPhotoUrl(layout: unknown): string | null {
+  const doc = normaliseLayout(layout);
+  const sorted = [...doc.blocks].sort((a, b) => a.y - b.y || a.x - b.x);
+  for (const block of sorted) {
+    if (block.type === "photo" && typeof block.publicUrl === "string") {
+      const trimmed = block.publicUrl.trim();
+      if (trimmed.length > 0) return trimmed;
+    }
+  }
+  return null;
+}

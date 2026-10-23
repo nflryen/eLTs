@@ -121,13 +121,26 @@ export function getServiceRoleKey() {
 }
 
 export function getCloudinaryConfig() {
-  const cloudName = process.env.CLOUDINARY_CLOUD_NAME;
-  const apiKey = process.env.CLOUDINARY_API_KEY;
-  const apiSecret = process.env.CLOUDINARY_API_SECRET;
-  if (!cloudName || !apiKey || !apiSecret)
+  let cloudName = process.env.CLOUDINARY_CLOUD_NAME;
+  let apiKey = process.env.CLOUDINARY_API_KEY;
+  let apiSecret = process.env.CLOUDINARY_API_SECRET;
+
+  if ((!cloudName || !apiKey || !apiSecret) && process.env.CLOUDINARY_URL) {
+    try {
+      const parsed = new URL(process.env.CLOUDINARY_URL);
+      apiKey = decodeURIComponent(parsed.username);
+      apiSecret = decodeURIComponent(parsed.password);
+      cloudName = parsed.hostname;
+    } catch {
+      // Malformed CLOUDINARY_URL, fall through to error check
+    }
+  }
+
+  if (!cloudName || !apiKey || !apiSecret) {
     throw new Error(
-      "Cloudinary is not configured. Set CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY, CLOUDINARY_API_SECRET.",
+      "Cloudinary is not configured. Set CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY, CLOUDINARY_API_SECRET (or CLOUDINARY_URL).",
     );
+  }
   return { cloudName, apiKey, apiSecret };
 }
 

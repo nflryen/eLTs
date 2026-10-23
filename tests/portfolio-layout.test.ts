@@ -4,6 +4,7 @@ import {
   addBlock,
   clampBlock,
   EMPTY_LAYOUT,
+  findFirstPhotoUrl,
   LAYOUT_TEMPLATES,
   layoutToGridStyle,
   moveBlock,
@@ -173,4 +174,67 @@ test("every shipped template is valid for the default grid", () => {
       }
     }
   }
+});
+
+test("findFirstPhotoUrl returns the first photo with publicUrl in reading order", () => {
+  assert.equal(findFirstPhotoUrl(null), null);
+  assert.equal(findFirstPhotoUrl({}), null);
+  assert.equal(findFirstPhotoUrl({ blocks: [{ type: "text", html: "hello" }] }), null);
+
+  const doc = {
+    version: 1,
+    grid: { cols: 12, rows: 8 },
+    blocks: [
+      { id: "t1", type: "text", x: 0, y: 0, w: 12, h: 2, z: 1, html: "<h1>Title</h1>" },
+      {
+        id: "p2",
+        type: "photo",
+        x: 6,
+        y: 2,
+        w: 6,
+        h: 4,
+        z: 2,
+        publicUrl: "https://res.cloudinary.com/demo/image/upload/second.webp",
+      },
+      {
+        id: "p1",
+        type: "photo",
+        x: 0,
+        y: 2,
+        w: 6,
+        h: 4,
+        z: 1,
+        publicUrl: "https://res.cloudinary.com/demo/image/upload/first.webp",
+      },
+    ],
+  };
+
+  // In visual reading order (y=2 x=0 comes before y=2 x=6):
+  assert.equal(
+    findFirstPhotoUrl(doc),
+    "https://res.cloudinary.com/demo/image/upload/first.webp",
+  );
+
+  // Empty or whitespace-only publicUrls are ignored:
+  const docWithEmpty = {
+    version: 1,
+    grid: { cols: 12, rows: 8 },
+    blocks: [
+      { id: "p0", type: "photo", x: 0, y: 0, w: 6, h: 4, z: 1, publicUrl: "   " },
+      {
+        id: "p1",
+        type: "photo",
+        x: 6,
+        y: 0,
+        w: 6,
+        h: 4,
+        z: 2,
+        publicUrl: "https://res.cloudinary.com/demo/image/upload/valid.webp",
+      },
+    ],
+  };
+  assert.equal(
+    findFirstPhotoUrl(docWithEmpty),
+    "https://res.cloudinary.com/demo/image/upload/valid.webp",
+  );
 });

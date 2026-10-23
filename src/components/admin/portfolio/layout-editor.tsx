@@ -7,9 +7,11 @@ import {
   Grid3x3,
   Image as ImageIcon,
   LayoutTemplate,
+  Loader2,
   Save,
   Trash2,
   Type,
+  Upload,
 } from "lucide-react";
 import {
   addBlock,
@@ -30,6 +32,7 @@ import {
   normalisePortfolioTags,
   type PortfolioCategory,
 } from "@/lib/portfolio/category";
+import { uploadImageToCloudinary } from "@/lib/upload-client";
 
 /**
  * Drag-and-drop portfolio layout editor.
@@ -58,6 +61,7 @@ type Props = {
   status: "draft" | "published";
   category: PortfolioCategory | null;
   tags: string[];
+  coverUrl?: string | null;
   sections: Array<{ id: string; layout: unknown; sort_order: number }>;
 };
 
@@ -82,7 +86,7 @@ type DragState =
   | { mode: "resize"; id: string; startX: number; startY: number; originW: number; originH: number }
   | null;
 
-export function LayoutEditor({ pageId, slug, title, status, category, tags, sections }: Props) {
+export function LayoutEditor({ pageId, slug, title, status, category, tags, coverUrl, sections }: Props) {
   const router = useRouter();
   const canvasRef = useRef<HTMLDivElement>(null);
   const dragRef = useRef<DragState>(null);
@@ -114,10 +118,12 @@ export function LayoutEditor({ pageId, slug, title, status, category, tags, sect
    */
   const [pageCategory, setPageCategory] = useState<PortfolioCategory | "">(category ?? "");
   const [pageTags, setPageTags] = useState(tags.join(", "));
+  const [pageCoverUrl, setPageCoverUrl] = useState<string>(coverUrl ?? "");
+  const [uploadingCover, setUploadingCover] = useState(false);
+  const [uploadingBlockId, setUploadingBlockId] = useState<string | null>(null);
   const [settingsDirty, setSettingsDirty] = useState(false);
   const [settingsError, setSettingsError] = useState<string | null>(null);
   const [settingsSaved, setSettingsSaved] = useState(false);
-
   const saveSettings = () => {
     setSettingsError(null);
     setSettingsSaved(false);
@@ -128,6 +134,7 @@ export function LayoutEditor({ pageId, slug, title, status, category, tags, sect
         title,
         category: pageCategory,
         tags: normalisePortfolioTags(pageTags.split(",")),
+        coverUrl: pageCoverUrl.trim() || "",
       });
 
       if (!res.ok) {
@@ -142,6 +149,9 @@ export function LayoutEditor({ pageId, slug, title, status, category, tags, sect
        */
       setPageCategory(res.data?.category ?? "");
       setPageTags((res.data?.tags ?? []).join(", "));
+      if (res.data?.cover_url !== undefined) {
+        setPageCoverUrl(res.data.cover_url ?? "");
+      }
       setSettingsDirty(false);
       setSettingsSaved(true);
       router.refresh();
@@ -515,21 +525,52 @@ export function LayoutEditor({ pageId, slug, title, status, category, tags, sect
             </div>
 
             {selected.type === "photo" && (
-              <label className="block text-[11px] text-[#71717a]">
-                URL Foto Publik
-                <input
-                  type="url"
-                  value={selected.publicUrl ?? ""}
-                  placeholder="https://res.cloudinary.com/..."
-                  onChange={(e) =>
-                    mutate(updateBlock(layout, selected.id, { publicUrl: e.target.value }))
-                  }
-                  className="mt-0.5 w-full rounded border border-[#ececee] px-2 py-1 text-[11px]"
-                />
-                <span className="mt-0.5 block text-[10px] text-[#a1a1aa]">
-                  Harus URL publik. Galeri klien bersifat privat dan tidak dapat dipakai di sini.
+              <div className="space-y-1">
+                <label className="block text-[11px] text-[#71717a]">
+                  URL Foto Publik
+                  <div className="mt-0.5 flex gap-1.5">
+                    <input
+                      type="url"
+                      value={selected.publicUrl ?? ""}
+                      placeholder="https://res.cloudinary.com/..."
+                      onChange={(e) =>
+                        mutate(updateBlock(layout, selected.id, { publicUrl: e.target.value }))
+                      }
+                      className="w-full rounded border border-[#ececee] px-2 py-1 text-[11px]"
+                    />
+                    <label className="flex shrink-0 cursor-pointer items-center gap-1 rounded border border-[#ececee] bg-[#fafafa] px-2 py-1 text-xs font-medium text-[#3f3f46] hover:bg-[#f4f4f5]">
+                      {uploadingBlockId === selected.id ? (
+                        <Loader2 size={12} className="animate-spin text-[#71717a]" />
+                      ) : (
+                        <Upload size={12} className="text-[#71717a]" />
+                      )}
+                      <span className="text-[11px]">{uploadingBlockId === selected.id ? "…" : "Unggah"}</span>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        disabled={uploadingBlockId === selected.id}
+                        className="sr-only"
+                        onChange={async (e) => {
+                          const file = e.target.files?.[0];
+                          if (!file) return;
+                          try {
+                            setUploadingBlockId(selected.id);
+                            const url = await uploadImageToCloudinary(file, "portfolio/blocks");
+                            mutate(updateBlock(layout, selected.id, { publicUrl: url }));
+                          } catch (err) {
+                            setError(err instanceof Error ? err.message : "Gagal mengunggah foto");
+                          } finally {
+                            setUploadingBlockId(null);
+                          }
+                        }}
+                      />
+                    </label>
+                  </div>
+                </label>
+                <span className="block text-[10px] text-[#a1a1aa]">
+                  Unggah file atau masukkan URL Cloudinary publik.
                 </span>
-              </label>
+              </div>
             )}
 
             {selected.type === "text" && (
@@ -599,6 +640,79 @@ export function LayoutEditor({ pageId, slug, title, status, category, tags, sect
               Pisahkan dengan koma. Kategori menentukan filter di halaman publik.
             </span>
           </label>
+          <div className="space-y-1">
+            <label htmlFor="page-cover" className="block text-[11px] text-[#71717a]">
+              Gambar Sampul (Thumbnail)
+            </label>
+            <div className="flex gap-1.5">
+              <input
+                id="page-cover"
+                type="url"
+                value={pageCoverUrl}
+                placeholder="https://res.cloudinary.com/... (atau kosongkan)"
+                onChange={(e) => {
+                  setPageCoverUrl(e.target.value);
+                  setSettingsDirty(true);
+                  setSettingsSaved(false);
+                }}
+                className="w-full rounded border border-[#ececee] px-2 py-1 text-xs"
+              />
+              <label className="flex shrink-0 cursor-pointer items-center gap-1 rounded border border-[#ececee] bg-[#fafafa] px-2 py-1 text-xs font-medium text-[#3f3f46] hover:bg-[#f4f4f5]">
+                {uploadingCover ? (
+                  <Loader2 size={12} className="animate-spin text-[#71717a]" />
+                ) : (
+                  <Upload size={12} className="text-[#71717a]" />
+                )}
+                <span className="text-[11px]">{uploadingCover ? "…" : "Unggah"}</span>
+                <input
+                  type="file"
+                  accept="image/*"
+                  disabled={uploadingCover}
+                  className="sr-only"
+                  onChange={async (e) => {
+                    const file = e.target.files?.[0];
+                    if (!file) return;
+                    try {
+                      setUploadingCover(true);
+                      const url = await uploadImageToCloudinary(file, "portfolio/covers");
+                      setPageCoverUrl(url);
+                      setSettingsDirty(true);
+                      setSettingsSaved(false);
+                    } catch (err) {
+                      setSettingsError(err instanceof Error ? err.message : "Gagal mengunggah gambar");
+                    } finally {
+                      setUploadingCover(false);
+                    }
+                  }}
+                />
+              </label>
+            </div>
+            {pageCoverUrl ? (
+              <div className="mt-1 flex items-center gap-2">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={pageCoverUrl}
+                  alt="Preview cover"
+                  className="h-10 w-14 rounded border border-[#ececee] object-cover"
+                />
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPageCoverUrl("");
+                    setSettingsDirty(true);
+                    setSettingsSaved(false);
+                  }}
+                  className="text-[10px] text-red-600 hover:underline"
+                >
+                  Hapus
+                </button>
+              </div>
+            ) : (
+              <p className="mt-0.5 text-[10px] text-[#a1a1aa]">
+                Kosongkan untuk otomatis menggunakan foto pertama dari kanvas.
+              </p>
+            )}
+          </div>
 
           {settingsError && (
             <p className="rounded border border-red-200 bg-red-50 px-2 py-1 text-[11px] text-red-700">
