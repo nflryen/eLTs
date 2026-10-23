@@ -8,10 +8,8 @@ import {
   Image as ImageIcon,
   LayoutTemplate,
   Loader2,
-  Monitor,
   Plus,
   Save,
-  Smartphone,
   Trash2,
   Type,
   Upload,
@@ -45,7 +43,6 @@ import {
   type PortfolioCategory,
 } from "@/lib/portfolio/category";
 import { uploadImageToCloudinary } from "@/lib/upload-client";
-import { CanvasRenderer } from "@/components/public/portfolio/canvas-renderer";
 
 type Props = {
   pageId: string;
@@ -92,19 +89,12 @@ export function LayoutEditor({
   // Template combination state
   const [pendingTemplate, setPendingTemplate] = useState<{ id: string; label: string } | null>(null);
 
-  // Independent Desktop vs Mobile Crop & Framing modal state
+  // Interactive Crop & Framing modal state
   const [croppingBlock, setCroppingBlock] = useState<LayoutBlock | null>(null);
-  const [cropViewport, setCropViewport] = useState<"desktop" | "mobile">("desktop");
-  // Desktop crop
   const [cropX, setCropX] = useState<number>(50);
   const [cropY, setCropY] = useState<number>(50);
   const [zoom, setZoom] = useState<number>(1);
   const [fitMode, setFitMode] = useState<"cover" | "contain">("cover");
-  // Mobile crop
-  const [mobileCropX, setMobileCropX] = useState<number>(50);
-  const [mobileCropY, setMobileCropY] = useState<number>(50);
-  const [mobileZoom, setMobileZoom] = useState<number>(1);
-  const [mobileFitMode, setMobileFitMode] = useState<"cover" | "contain">("cover");
 
   // Page metadata settings
   const [pageCategory, setPageCategory] = useState<PortfolioCategory | "">(category ?? "");
@@ -198,7 +188,7 @@ export function LayoutEditor({
           drag.mode === "move"
             ? drag.originY + dy + target.h
             : target.y + drag.originH + dy;
-        const expandedRows = Math.max(prev.grid.rows, targetBottom + 2, 8);
+        const expandedRows = Math.max(prev.grid.rows, targetBottom + 1, 4);
         const dynamicGrid = { cols: prev.grid.cols, rows: expandedRows };
 
         const next =
@@ -256,7 +246,7 @@ export function LayoutEditor({
         const currentBlock = prev.blocks.find((b) => b.id === selectedId);
         if (!currentBlock) return prev;
         const newBottom = currentBlock.y + delta[1] + currentBlock.h;
-        const expandedRows = Math.max(prev.grid.rows, newBottom + 2, 8);
+        const expandedRows = Math.max(prev.grid.rows, newBottom + 1, 4);
         const dynamicGrid = { cols: prev.grid.cols, rows: expandedRows };
 
         return {
@@ -380,20 +370,13 @@ export function LayoutEditor({
     setPendingTemplate(null);
   };
 
-  /* ── Crop & Framing Editor (Independent Desktop vs Mobile) ─────────────── */
+  /* ── Interactive Crop & Framing Editor ──────────────────────────────────── */
   const openCropEditor = (b: LayoutBlock) => {
     setCroppingBlock(b);
-    setCropViewport("desktop");
-    // Initialize desktop crop
     setCropX(b.cropX ?? 50);
     setCropY(b.cropY ?? 50);
     setZoom(b.zoom ?? 1);
     setFitMode(b.fit ?? "cover");
-    // Initialize mobile crop (inherits desktop if unset)
-    setMobileCropX(b.mobileCropX ?? b.cropX ?? 50);
-    setMobileCropY(b.mobileCropY ?? b.cropY ?? 50);
-    setMobileZoom(b.mobileZoom ?? b.zoom ?? 1);
-    setMobileFitMode(b.mobileFit ?? b.fit ?? "cover");
   };
 
   const applyCrop = () => {
@@ -404,22 +387,18 @@ export function LayoutEditor({
         cropY,
         zoom,
         fit: fitMode,
-        mobileCropX,
-        mobileCropY,
-        mobileZoom,
-        mobileFit: mobileFitMode,
       }),
     );
     setCroppingBlock(null);
   };
 
-  // Calculate effective vertical grid height
+  // Calculate effective vertical grid height with zero dead whitespace
   const maxBlockBottom = layout.blocks.reduce((max, b) => Math.max(max, b.y + b.h), 0);
-  const effectiveGridRows = Math.max(layout.grid.rows, maxBlockBottom + 2, 8);
+  const effectiveGridRows = Math.max(layout.grid.rows, maxBlockBottom, 4);
 
   return (
-    <div className="grid gap-6 2xl:grid-cols-[1fr_380px_280px] xl:grid-cols-[1fr_360px_270px]">
-      {/* ── Column 1: Main Desktop Canvas Workspace ───────────────────────── */}
+    <div className="grid gap-6 lg:grid-cols-[1fr_290px]">
+      {/* ── Main Desktop Canvas Workspace (Clean 2-Column Layout) ───────────── */}
       <div className="min-w-0 space-y-3">
         {/* Top Action Toolbar */}
         <div className="flex flex-wrap items-center gap-2">
@@ -630,43 +609,9 @@ export function LayoutEditor({
             Baris kosong di bagian bawah kanvas akan diciutkan otomatis saat disimpan.
           </span>
         </div>
-
-        {/* Mobile Preview beneath canvas on < xl screens */}
-        <div className="xl:hidden mt-6 rounded-2xl border border-[#ececee] bg-[#fafafa] p-6 text-center">
-          <div className="mb-3 flex items-center justify-center gap-1.5 text-xs font-semibold text-[#18181b]">
-            <Smartphone size={14} />
-            <span>Pratinjau Mobile Live (Simulasi 390px)</span>
-          </div>
-          <div className="mx-auto w-[360px] rounded-[44px] border-[6px] border-[#18181b] bg-white p-3.5 shadow-xl">
-            <div className="mx-auto mb-3 h-3.5 w-24 rounded-full bg-[#18181b]" />
-            <div className="max-h-[520px] overflow-y-auto no-scrollbar space-y-4 text-left">
-              <CanvasRenderer layout={layout} />
-            </div>
-          </div>
-        </div>
       </div>
 
-      {/* ── Column 2: Side-by-Side Live Mobile Preview (360-380px) ────────── */}
-      <div className="sticky top-4 hidden h-fit space-y-2 xl:block">
-        <div className="flex items-center justify-between px-1">
-          <div className="flex items-center gap-1.5 text-xs font-semibold text-[#18181b]">
-            <Smartphone size={14} />
-            <span>Pratinjau Mobile Live</span>
-          </div>
-          <span className="font-mono text-[10px] text-[#a1a1aa]">Simulasi 390px</span>
-        </div>
-
-        {/* Real-time Simulated iPhone Frame */}
-        <div className="w-[360px] 2xl:w-[380px] rounded-[44px] border-[6px] border-[#18181b] bg-white p-3.5 shadow-xl">
-          {/* Dynamic Island Notch */}
-          <div className="mx-auto mb-3 h-3.5 w-24 rounded-full bg-[#18181b]" />
-          <div className="max-h-[600px] overflow-y-auto no-scrollbar space-y-4">
-            <CanvasRenderer layout={layout} />
-          </div>
-        </div>
-      </div>
-
-      {/* ── Column 3: Sidebar Inspector & Page Settings ───────────────────── */}
+      {/* ── Sidebar Inspector & Page Settings ─────────────────────────────── */}
       <aside className="sticky top-4 h-fit space-y-4 rounded-xl border border-[#ececee] bg-white p-4">
         {/* Block Inspector */}
         <div>
@@ -749,12 +694,12 @@ export function LayoutEditor({
                       onClick={() => openCropEditor(selected)}
                       className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-[#ececee] bg-[#fafafa] px-2.5 py-1.5 text-xs font-medium text-[#3f3f46] hover:bg-[#f4f4f5]"
                     >
-                      <Crop size={13} /> Atur Framing Desktop &amp; Mobile
+                      <Crop size={13} /> Atur Posisi / Crop Foto
                     </button>
                   )}
 
                   <span className="block text-[10px] text-[#a1a1aa]">
-                    Double-click blok foto pada kanvas untuk mengatur framing desktop &amp; mobile secara independen.
+                    Unggah gambar langsung ke Cloudinary atau masukkan URL publik. Double-click blok foto pada kanvas untuk mengatur framing.
                   </span>
                 </div>
               )}
@@ -980,14 +925,14 @@ export function LayoutEditor({
         </div>
       )}
 
-      {/* ── Interactive Crop & Positioning Modal (Desktop vs Mobile Viewports) ── */}
+      {/* ── Interactive Crop & Positioning Modal ──────────────────────────── */}
       {croppingBlock && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-xs">
           <div className="w-full max-w-lg rounded-2xl border border-[#ececee] bg-white p-5 shadow-2xl">
             <div className="flex items-center justify-between border-b border-[#f4f4f5] pb-3">
               <div className="flex items-center gap-2 text-sm font-semibold text-[#18181b]">
                 <Crop size={16} />
-                <span>Atur Framing Foto ({croppingBlock.w}×{croppingBlock.h} sel)</span>
+                <span>Atur Framing &amp; Posisi Foto ({croppingBlock.w}×{croppingBlock.h} sel)</span>
               </div>
               <button
                 type="button"
@@ -998,57 +943,13 @@ export function LayoutEditor({
               </button>
             </div>
 
-            {/* Viewport Toggle: Desktop vs Mobile Framing */}
-            <div className="mt-3 flex rounded-lg border border-[#ececee] bg-[#fafafa] p-0.5 text-xs">
-              <button
-                type="button"
-                onClick={() => setCropViewport("desktop")}
-                className={`flex flex-1 items-center justify-center gap-1.5 rounded-md py-1.5 font-medium transition-colors ${
-                  cropViewport === "desktop"
-                    ? "bg-[#18181b] text-white shadow-xs"
-                    : "text-[#71717a] hover:text-[#18181b]"
-                }`}
-              >
-                <Monitor size={13} />
-                <span>Desktop Viewport</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => setCropViewport("mobile")}
-                className={`flex flex-1 items-center justify-center gap-1.5 rounded-md py-1.5 font-medium transition-colors ${
-                  cropViewport === "mobile"
-                    ? "bg-[#18181b] text-white shadow-xs"
-                    : "text-[#71717a] hover:text-[#18181b]"
-                }`}
-              >
-                <Smartphone size={13} />
-                <span>Mobile Viewport</span>
-              </button>
-            </div>
-
             {/* Live Interactive Preview Box with Exact Aspect Ratio */}
-            <div className="mt-3 flex flex-col items-center">
-              <div className="mb-1.5 flex w-full items-center justify-between text-[11px] text-[#71717a]">
-                <span>
-                  Pratinjau {cropViewport === "desktop" ? "Desktop (Rasio Asli)" : "Mobile (Layar HP)"}
-                </span>
-                {cropViewport === "mobile" && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setMobileCropX(cropX);
-                      setMobileCropY(cropY);
-                      setMobileZoom(zoom);
-                      setMobileFitMode(fitMode);
-                    }}
-                    className="text-[10px] text-[#18181b] underline hover:text-black"
-                  >
-                    Salin dari Desktop
-                  </button>
-                )}
-              </div>
+            <div className="mt-4 flex flex-col items-center">
+              <p className="mb-1.5 text-[11px] text-[#71717a]">
+                Pratinjau Framing Live (Rasio {croppingBlock.w}:{croppingBlock.h})
+              </p>
               <div
-                className="relative max-h-[240px] w-full overflow-hidden rounded-xl border border-[#ececee] bg-[#f4f4f5]"
+                className="relative max-h-[260px] w-full overflow-hidden rounded-xl border border-[#ececee] bg-[#f4f4f5]"
                 style={{
                   aspectRatio: `${Math.max(1, croppingBlock.w)} / ${Math.max(1, croppingBlock.h)}`,
                 }}
@@ -1057,32 +958,23 @@ export function LayoutEditor({
                 <img
                   src={croppingBlock.publicUrl ?? ""}
                   alt=""
-                  className="h-full w-full select-none transition-all duration-150"
+                  className="h-full w-full select-none"
                   style={{
-                    objectFit: cropViewport === "desktop" ? fitMode : mobileFitMode,
-                    objectPosition:
-                      cropViewport === "desktop"
-                        ? `${cropX}% ${cropY}%`
-                        : `${mobileCropX}% ${mobileCropY}%`,
-                    transform:
-                      (cropViewport === "desktop" ? zoom : mobileZoom) > 1
-                        ? `scale(${cropViewport === "desktop" ? zoom : mobileZoom})`
-                        : undefined,
-                    transformOrigin:
-                      cropViewport === "desktop"
-                        ? `${cropX}% ${cropY}%`
-                        : `${mobileCropX}% ${mobileCropY}%`,
+                    objectFit: fitMode,
+                    objectPosition: `${cropX}% ${cropY}%`,
+                    transform: zoom > 1 ? `scale(${zoom})` : undefined,
+                    transformOrigin: `${cropX}% ${cropY}%`,
                   }}
                 />
               </div>
             </div>
 
-            {/* Sliders & Preset Controls for the active viewport */}
-            <div className="mt-3 space-y-3">
+            {/* Sliders & Preset Controls */}
+            <div className="mt-4 space-y-3">
               {/* Presets */}
               <div>
                 <span className="text-[10px] font-medium uppercase tracking-wide text-[#a1a1aa]">
-                  Preset Cepat ({cropViewport === "desktop" ? "Desktop" : "Mobile"})
+                  Preset Cepat
                 </span>
                 <div className="mt-1 flex flex-wrap gap-1.5">
                   {[
@@ -1092,21 +984,14 @@ export function LayoutEditor({
                     { label: "Kiri", x: 10, y: 50 },
                     { label: "Kanan", x: 90, y: 50 },
                   ].map((p) => {
-                    const activeX = cropViewport === "desktop" ? cropX : mobileCropX;
-                    const activeY = cropViewport === "desktop" ? cropY : mobileCropY;
-                    const isSelected = activeX === p.x && activeY === p.y;
+                    const isSelected = cropX === p.x && cropY === p.y;
                     return (
                       <button
                         key={p.label}
                         type="button"
                         onClick={() => {
-                          if (cropViewport === "desktop") {
-                            setCropX(p.x);
-                            setCropY(p.y);
-                          } else {
-                            setMobileCropX(p.x);
-                            setMobileCropY(p.y);
-                          }
+                          setCropX(p.x);
+                          setCropY(p.y);
                         }}
                         className={`rounded border px-2 py-0.5 text-[11px] font-medium transition-colors ${
                           isSelected
@@ -1126,40 +1011,28 @@ export function LayoutEditor({
                 <div>
                   <div className="flex justify-between text-[11px] text-[#71717a]">
                     <span>Posisi Horisontal (X)</span>
-                    <span className="font-mono">
-                      {cropViewport === "desktop" ? cropX : mobileCropX}%
-                    </span>
+                    <span className="font-mono">{cropX}%</span>
                   </div>
                   <input
                     type="range"
                     min="0"
                     max="100"
-                    value={cropViewport === "desktop" ? cropX : mobileCropX}
-                    onChange={(e) => {
-                      const val = Number(e.target.value);
-                      if (cropViewport === "desktop") setCropX(val);
-                      else setMobileCropX(val);
-                    }}
+                    value={cropX}
+                    onChange={(e) => setCropX(Number(e.target.value))}
                     className="mt-1 w-full"
                   />
                 </div>
                 <div>
                   <div className="flex justify-between text-[11px] text-[#71717a]">
                     <span>Posisi Vertikal (Y)</span>
-                    <span className="font-mono">
-                      {cropViewport === "desktop" ? cropY : mobileCropY}%
-                    </span>
+                    <span className="font-mono">{cropY}%</span>
                   </div>
                   <input
                     type="range"
                     min="0"
                     max="100"
-                    value={cropViewport === "desktop" ? cropY : mobileCropY}
-                    onChange={(e) => {
-                      const val = Number(e.target.value);
-                      if (cropViewport === "desktop") setCropY(val);
-                      else setMobileCropY(val);
-                    }}
+                    value={cropY}
+                    onChange={(e) => setCropY(Number(e.target.value))}
                     className="mt-1 w-full"
                   />
                 </div>
@@ -1170,21 +1043,15 @@ export function LayoutEditor({
                 <div>
                   <div className="flex justify-between text-[11px] text-[#71717a]">
                     <span>Skala / Zoom</span>
-                    <span className="font-mono">
-                      {(cropViewport === "desktop" ? zoom : mobileZoom).toFixed(1)}x
-                    </span>
+                    <span className="font-mono">{zoom.toFixed(1)}x</span>
                   </div>
                   <input
                     type="range"
                     min="1"
                     max="2.5"
                     step="0.1"
-                    value={cropViewport === "desktop" ? zoom : mobileZoom}
-                    onChange={(e) => {
-                      const val = Number(e.target.value);
-                      if (cropViewport === "desktop") setZoom(val);
-                      else setMobileZoom(val);
-                    }}
+                    value={zoom}
+                    onChange={(e) => setZoom(Number(e.target.value))}
                     className="mt-1 w-full"
                   />
                 </div>
@@ -1193,12 +1060,9 @@ export function LayoutEditor({
                   <div className="mt-1 flex gap-2">
                     <button
                       type="button"
-                      onClick={() => {
-                        if (cropViewport === "desktop") setFitMode("cover");
-                        else setMobileFitMode("cover");
-                      }}
+                      onClick={() => setFitMode("cover")}
                       className={`flex-1 rounded border py-1 text-center text-xs font-medium ${
-                        (cropViewport === "desktop" ? fitMode : mobileFitMode) === "cover"
+                        fitMode === "cover"
                           ? "border-[#18181b] bg-[#18181b] text-white"
                           : "border-[#ececee] bg-[#fafafa] text-[#52525b]"
                       }`}
@@ -1207,12 +1071,9 @@ export function LayoutEditor({
                     </button>
                     <button
                       type="button"
-                      onClick={() => {
-                        if (cropViewport === "desktop") setFitMode("contain");
-                        else setMobileFitMode("contain");
-                      }}
+                      onClick={() => setFitMode("contain")}
                       className={`flex-1 rounded border py-1 text-center text-xs font-medium ${
-                        (cropViewport === "desktop" ? fitMode : mobileFitMode) === "contain"
+                        fitMode === "contain"
                           ? "border-[#18181b] bg-[#18181b] text-white"
                           : "border-[#ececee] bg-[#fafafa] text-[#52525b]"
                       }`}
