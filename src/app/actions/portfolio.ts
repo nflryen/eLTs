@@ -25,7 +25,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { z } from "zod";
 import { requireOps } from "@/lib/auth/roles";
 import { createServerSupabase } from "@/lib/supabase/server";
-import { normaliseLayout, findFirstPhotoUrl } from "@/lib/portfolio/layout";
+import { normaliseLayout, findFirstPhotoUrl, trimTrailingEmptyRows } from "@/lib/portfolio/layout";
 import {
   PORTFOLIO_CATEGORIES,
   normalisePortfolioTags,
@@ -391,7 +391,7 @@ export async function savePortfolioSection(
     return { ok: false, error: parsed.error.issues[0]?.message ?? "Bagian tidak valid." };
   }
   const value = parsed.data;
-  const layout = normaliseLayout(value.layout);
+  const layout = trimTrailingEmptyRows(normaliseLayout(value.layout));
 
   const patch = {
     page_id: value.pageId,
@@ -466,6 +466,26 @@ export async function savePortfolioSection(
 
   revalidatePath(`/admin/portfolio/${value.pageId}`);
   return { ok: true, data };
+}
+
+/** Deletes a section from a page. Used when removing empty or unwanted sections. */
+export async function deletePortfolioSection(id: string): Promise<PortfolioResult> {
+  const { supabase } = await requireOps();
+  if (!uuidSchema.safeParse(id).success) return { ok: false, error: "ID bagian tidak valid." };
+
+  const { data: existing } = await supabase
+    .from("portfolio_sections")
+    .select("page_id")
+    .eq("id", id)
+    .maybeSingle();
+
+  if (!existing) return { ok: false, error: "Bagian tidak ditemukan." };
+
+  const { error } = await supabase.from("portfolio_sections").delete().eq("id", id);
+  if (error) return { ok: false, error: `Gagal menghapus bagian: ${error.message}` };
+
+  revalidatePath(`/admin/portfolio/${existing.page_id}`);
+  return { ok: true };
 }
 
 /** Flips a page to published and stamps the first publish time. */

@@ -48,6 +48,14 @@ export interface LayoutBlock {
   cropY?: number;
   /** Zoom scale multiplier (1.0 - 3.0), default 1.0 */
   zoom?: number;
+  /** Mobile-specific fit ("cover" | "contain"), defaults to desktop fit if unset */
+  mobileFit?: "cover" | "contain";
+  /** Mobile-specific object position X percentage (0-100), defaults to desktop cropX */
+  mobileCropX?: number;
+  /** Mobile-specific object position Y percentage (0-100), defaults to desktop cropY */
+  mobileCropY?: number;
+  /** Mobile-specific zoom scale multiplier (1.0 - 3.0), defaults to desktop zoom */
+  mobileZoom?: number;
   /** text only — sanitised by the caller before render */
   html?: string;
 }
@@ -229,6 +237,24 @@ export function normaliseLayout(raw: unknown): LayoutDoc {
           zoom: typeof candidate.zoom === "number" && Number.isFinite(candidate.zoom)
             ? Number(clamp(candidate.zoom, 1, 3).toFixed(2))
             : 1,
+          mobileFit:
+            candidate.mobileFit === "contain"
+              ? "contain"
+              : candidate.mobileFit === "cover"
+                ? "cover"
+                : undefined,
+          mobileCropX:
+            typeof candidate.mobileCropX === "number" && Number.isFinite(candidate.mobileCropX)
+              ? clamp(Math.round(candidate.mobileCropX), 0, 100)
+              : undefined,
+          mobileCropY:
+            typeof candidate.mobileCropY === "number" && Number.isFinite(candidate.mobileCropY)
+              ? clamp(Math.round(candidate.mobileCropY), 0, 100)
+              : undefined,
+          mobileZoom:
+            typeof candidate.mobileZoom === "number" && Number.isFinite(candidate.mobileZoom)
+              ? Number(clamp(candidate.mobileZoom, 1, 3).toFixed(2))
+              : undefined,
           ...(type === "text" ? { html: typeof candidate.html === "string" ? candidate.html : "" } : {}),
         },
         grid,
@@ -420,4 +446,28 @@ export function findFirstPhotoUrl(layout: unknown): string | null {
     }
   }
   return null;
+}
+
+/**
+ * Automatically trims trailing empty rows from the canvas grid.
+ * Computes the lowest extent of any block (max y + h) and sets grid.rows
+ * to exactly that extent (with a floor of 4 rows, or 8 if empty).
+ * Removes dead whitespace at the bottom of the canvas.
+ */
+export function trimTrailingEmptyRows(layout: LayoutDoc): LayoutDoc {
+  if (layout.blocks.length === 0) {
+    return {
+      ...layout,
+      grid: { ...layout.grid, rows: 8 },
+    };
+  }
+  const maxBottom = layout.blocks.reduce((max, b) => Math.max(max, b.y + b.h), 0);
+  const trimmedRows = Math.max(maxBottom, 4);
+  return {
+    ...layout,
+    grid: {
+      ...layout.grid,
+      rows: trimmedRows,
+    },
+  };
 }

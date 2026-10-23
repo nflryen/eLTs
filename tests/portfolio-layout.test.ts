@@ -13,6 +13,7 @@ import {
   normaliseLayout,
   removeBlock,
   resizeBlock,
+  trimTrailingEmptyRows,
   updateBlock,
   type LayoutBlock,
 } from "../src/lib/portfolio/layout";
@@ -301,4 +302,68 @@ test("normaliseLayout preserves cropX, cropY, zoom and fit", () => {
   assert.equal(b.cropY, 80);
   assert.equal(b.zoom, 1.8);
   assert.equal(b.fit, "contain");
+});
+
+test("trimTrailingEmptyRows trims dead whitespace rows below active blocks", () => {
+  // Empty layout stays 8 rows
+  assert.equal(trimTrailingEmptyRows(EMPTY_LAYOUT).grid.rows, 8);
+
+  // Layout with 20 rows but blocks only reach row 6 collapses to 6 rows
+  const doc = {
+    version: 1,
+    grid: { cols: 12, rows: 20 },
+    blocks: [
+      { id: "b1", type: "photo" as const, x: 0, y: 0, w: 6, h: 4, z: 1 },
+      { id: "b2", type: "photo" as const, x: 6, y: 2, w: 6, h: 4, z: 2 }, // y=2, h=4 -> bottom is 6
+    ],
+  };
+  const trimmed = trimTrailingEmptyRows(doc);
+  assert.equal(trimmed.grid.rows, 6);
+  assert.equal(trimmed.blocks.length, 2);
+
+  // Layout with blocks reaching row 2 keeps a minimum floor of 4 rows
+  const shallow = {
+    version: 1,
+    grid: { cols: 12, rows: 12 },
+    blocks: [{ id: "b1", type: "text" as const, x: 0, y: 0, w: 12, h: 2, z: 1 }],
+  };
+  assert.equal(trimTrailingEmptyRows(shallow).grid.rows, 4);
+});
+
+test("normaliseLayout preserves independent mobileCropX, mobileCropY, mobileZoom and mobileFit", () => {
+  const raw = {
+    version: 1,
+    grid: { cols: 12, rows: 8 },
+    blocks: [
+      {
+        id: "p1",
+        type: "photo",
+        x: 0,
+        y: 0,
+        w: 6,
+        h: 4,
+        cropX: 30,
+        cropY: 40,
+        zoom: 1.2,
+        fit: "cover",
+        mobileCropX: 75,
+        mobileCropY: 15,
+        mobileZoom: 1.9,
+        mobileFit: "contain",
+        publicUrl: "photo.webp",
+      },
+    ],
+  };
+  const normalised = normaliseLayout(raw);
+  const b = normalised.blocks[0];
+  // Desktop values
+  assert.equal(b.cropX, 30);
+  assert.equal(b.cropY, 40);
+  assert.equal(b.zoom, 1.2);
+  assert.equal(b.fit, "cover");
+  // Mobile independent values
+  assert.equal(b.mobileCropX, 75);
+  assert.equal(b.mobileCropY, 15);
+  assert.equal(b.mobileZoom, 1.9);
+  assert.equal(b.mobileFit, "contain");
 });

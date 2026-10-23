@@ -50,23 +50,46 @@ function PhotoBlock({ block }: { block: LayoutBlock }) {
     );
   }
 
-  const posX = typeof block.cropX === "number" ? `${block.cropX}%` : "50%";
-  const posY = typeof block.cropY === "number" ? `${block.cropY}%` : "50%";
-  const zoom = typeof block.zoom === "number" && block.zoom > 1 ? block.zoom : 1;
+  // Desktop framing
+  const dPosX = typeof block.cropX === "number" ? `${block.cropX}%` : "50%";
+  const dPosY = typeof block.cropY === "number" ? `${block.cropY}%` : "50%";
+  const dZoom = typeof block.zoom === "number" && block.zoom > 1 ? block.zoom : 1;
+  const dFit = block.fit === "contain" ? "contain" : "cover";
+
+  // Mobile framing (falls back to desktop framing if unset)
+  const mPosX = typeof block.mobileCropX === "number" ? `${block.mobileCropX}%` : dPosX;
+  const mPosY = typeof block.mobileCropY === "number" ? `${block.mobileCropY}%` : dPosY;
+  const mZoom = typeof block.mobileZoom === "number" && block.mobileZoom > 1 ? block.mobileZoom : dZoom;
+  const mFit = (block.mobileFit ?? block.fit) === "contain" ? "contain" : "cover";
 
   return (
     <div className="relative h-full w-full overflow-hidden">
+      {/* Desktop viewport: renders with desktop framing */}
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
         src={block.publicUrl}
         alt=""
         loading="lazy"
-        className="h-full w-full"
+        className="hidden md:block h-full w-full"
         style={{
-          objectFit: block.fit === "contain" ? "contain" : "cover",
-          objectPosition: `${posX} ${posY}`,
-          transform: zoom > 1 ? `scale(${zoom})` : undefined,
-          transformOrigin: `${posX} ${posY}`,
+          objectFit: dFit,
+          objectPosition: `${dPosX} ${dPosY}`,
+          transform: dZoom > 1 ? `scale(${dZoom})` : undefined,
+          transformOrigin: `${dPosX} ${dPosY}`,
+        }}
+      />
+      {/* Mobile viewport: renders with independent mobile framing */}
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src={block.publicUrl}
+        alt=""
+        loading="lazy"
+        className="block md:hidden h-full w-full"
+        style={{
+          objectFit: mFit,
+          objectPosition: `${mPosX} ${mPosY}`,
+          transform: mZoom > 1 ? `scale(${mZoom})` : undefined,
+          transformOrigin: `${mPosX} ${mPosY}`,
         }}
       />
     </div>
@@ -89,20 +112,10 @@ function TextBlock({ block }: { block: LayoutBlock }) {
 }
 
 /**
- * The public canvas, rendered twice for two layouts.
- *
- * WHY BOTH A GRID AND A FLEX STACK ARE IN THE MARKUP
- * --------------------------------------------------
- * The authored grid is meaningless at 390px: a 6/12 block becomes 160px wide and
- * a photo in a 2-row cell becomes a letterbox slot. Collapsing to one column
- * would be expressible in Tailwind, but the *placement* of every block would
- * then need `md:` overrides whose values are computed per block — impossible in
- * class names. Emitting both trees and letting `md:` hide one keeps the styles
- * fully computed while still costing nothing: the hidden tree is not painted and
- * the DOM node count is small (a layout has a handful of blocks).
- *
- * Row height is a clamp so a tall grid does not become a 3000px wall, and
- * `minHeight` keeps the proportion of a layout whose last row is empty.
+ * Public canvas renderer.
+ * Strictly adheres to the authored 12-column grid geometry across all viewports
+ * so multi-column compositions, triptychs, and side-by-side photos designed in
+ * the editor render with high fidelity on both desktop and mobile.
  */
 export function CanvasRenderer({ layout }: { layout: LayoutDoc }) {
   const { cols, rows } = layout.grid;
@@ -115,47 +128,24 @@ export function CanvasRenderer({ layout }: { layout: LayoutDoc }) {
   const ordered = [...layout.blocks].sort((a, b) => a.z - b.z);
 
   return (
-    <>
-      <div
-        className="hidden md:grid"
-        style={{
-          gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))`,
-          gridTemplateRows: `repeat(${rows}, minmax(0, 1fr))`,
-          gap: "12px",
-          minHeight: `clamp(320px, ${rows * 9}vw, ${rows * 120}px)`,
-        }}
-      >
-        {ordered.map((block) => (
-          <div
-            key={block.id}
-            style={blockStyle(block)}
-            className="relative overflow-hidden rounded-[6px]"
-          >
-            {block.type === "photo" ? <PhotoBlock block={block} /> : <TextBlock block={block} />}
-          </div>
-        ))}
-      </div>
-
-      <div className="flex flex-col gap-4 md:hidden">
-        {ordered.map((block) => (
-          <div
-            key={block.id}
-            /*
-             * Aspect ratio replaces the grid cell's height. Deriving it from the
-             * authored w:h preserves the operator's intended shape on a phone
-             * without clipping the block to a fixed pixel height.
-             */
-            style={
-              block.type === "photo"
-                ? { aspectRatio: `${Math.max(1, block.w)} / ${Math.max(1, block.h)}` }
-                : undefined
-            }
-            className="relative overflow-hidden rounded-[6px]"
-          >
-            {block.type === "photo" ? <PhotoBlock block={block} /> : <TextBlock block={block} />}
-          </div>
-        ))}
-      </div>
-    </>
+    <div
+      className="relative grid w-full"
+      style={{
+        gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))`,
+        gridTemplateRows: `repeat(${rows}, minmax(0, 1fr))`,
+        gap: "clamp(6px, 1.5vw, 12px)",
+        minHeight: `clamp(240px, ${rows * 7}vw, ${rows * 120}px)`,
+      }}
+    >
+      {ordered.map((block) => (
+        <div
+          key={block.id}
+          style={blockStyle(block)}
+          className="relative overflow-hidden rounded-[8px]"
+        >
+          {block.type === "photo" ? <PhotoBlock block={block} /> : <TextBlock block={block} />}
+        </div>
+      ))}
+    </div>
   );
 }
