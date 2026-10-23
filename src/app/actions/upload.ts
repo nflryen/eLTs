@@ -47,7 +47,12 @@ export async function uploadImageAction(
       data: result,
     };
   } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : "Gagal mengunggah gambar ke Cloudinary.";
+    const message =
+      err instanceof Error
+        ? err.message
+        : typeof err === "object" && err !== null && "message" in err
+          ? String((err as { message: unknown }).message)
+          : "Gagal mengunggah gambar ke Cloudinary.";
     console.error("upload_image_action_failed", { message });
     return { ok: false, error: message };
   }

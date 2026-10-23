@@ -77,7 +77,11 @@ export async function POST(request: Request) {
     if (err instanceof ForbiddenError) {
       return NextResponse.json({ ok: false, error: "Akses ditolak: Izin tidak mencukupi." }, { status: 403 });
     }
-    const message = err instanceof Error ? err.message : "Gagal mengunggah gambar ke Cloudinary.";
+    const message = err instanceof Error
+      ? err.message
+      : typeof err === "object" && err !== null && "message" in err
+        ? String((err as { message: unknown }).message)
+        : "Gagal mengunggah gambar ke Cloudinary.";
     console.error("upload_api_failed", { message });
     return NextResponse.json({ ok: false, error: message }, { status: 500 });
   }

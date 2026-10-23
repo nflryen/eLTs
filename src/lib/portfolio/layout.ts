@@ -42,6 +42,12 @@ export interface LayoutBlock {
   publicUrl?: string | null;
   mediaId?: string | null;
   fit?: "cover" | "contain";
+  /** Object position X percentage (0-100), default 50 */
+  cropX?: number;
+  /** Object position Y percentage (0-100), default 50 */
+  cropY?: number;
+  /** Zoom scale multiplier (1.0 - 3.0), default 1.0 */
+  zoom?: number;
   /** text only — sanitised by the caller before render */
   html?: string;
 }
@@ -106,17 +112,28 @@ export function resizeBlock(
 /** Appends a block at the first free row, defaulting to half-width. */
 export function addBlock(
   layout: LayoutDoc,
-  init: { type: BlockType; publicUrl?: string | null; mediaId?: string | null; html?: string },
+  init: {
+    type: BlockType;
+    publicUrl?: string | null;
+    mediaId?: string | null;
+    html?: string;
+    cropX?: number;
+    cropY?: number;
+    zoom?: number;
+    fit?: "cover" | "contain";
+  },
 ): LayoutDoc {
   const cols = layout.grid.cols;
   const w = Math.max(1, Math.floor(cols / 2));
   const h = init.type === "photo" ? 4 : 2;
 
   /*
-   * Place below every existing block rather than at 0,0. Dropping a new block
-   * on top of an existing one looks like the editor lost the previous block.
+   * Place below every existing block rather than at 0,0.
+   * Expand grid rows dynamically so new blocks never get squashed at the bottom.
    */
   const nextY = layout.blocks.reduce((max, b) => Math.max(max, b.y + b.h), 0);
+  const updatedRows = Math.max(layout.grid.rows, nextY + h + 2, 8);
+  const grid: LayoutGrid = { cols, rows: updatedRows };
 
   const block: LayoutBlock = clampBlock(
     {
@@ -129,12 +146,16 @@ export function addBlock(
       z: layout.blocks.length + 1,
       publicUrl: init.publicUrl ?? null,
       mediaId: init.mediaId ?? null,
-      ...(init.type === "photo" ? { fit: "cover" as const } : { html: init.html ?? "" }),
+      fit: init.fit ?? "cover",
+      cropX: init.cropX ?? 50,
+      cropY: init.cropY ?? 50,
+      zoom: init.zoom ?? 1,
+      ...(init.type === "text" ? { html: init.html ?? "" } : {}),
     },
-    layout.grid,
+    grid,
   );
 
-  return { ...layout, blocks: [...layout.blocks, block] };
+  return { ...layout, grid, blocks: [...layout.blocks, block] };
 }
 
 /** Removes a block by id. Missing ids are a no-op, not an error. */
@@ -177,12 +198,11 @@ export function normaliseLayout(raw: unknown): LayoutDoc {
   const rows = clamp(
     Number.isFinite(Number(doc.grid?.rows)) ? Number(doc.grid!.rows) : 8,
     1,
-    64,
+    200,
   );
   const grid: LayoutGrid = { cols, rows };
 
   const blocks = Array.isArray(doc.blocks) ? doc.blocks : [];
-
   const safeBlocks: LayoutBlock[] = blocks
     .map((b, index) => {
       if (!b || typeof b !== "object") return null;
@@ -200,6 +220,15 @@ export function normaliseLayout(raw: unknown): LayoutDoc {
           publicUrl: typeof candidate.publicUrl === "string" ? candidate.publicUrl : null,
           mediaId: typeof candidate.mediaId === "string" ? candidate.mediaId : null,
           fit: candidate.fit === "contain" ? "contain" : "cover",
+          cropX: typeof candidate.cropX === "number" && Number.isFinite(candidate.cropX)
+            ? clamp(Math.round(candidate.cropX), 0, 100)
+            : 50,
+          cropY: typeof candidate.cropY === "number" && Number.isFinite(candidate.cropY)
+            ? clamp(Math.round(candidate.cropY), 0, 100)
+            : 50,
+          zoom: typeof candidate.zoom === "number" && Number.isFinite(candidate.zoom)
+            ? Number(clamp(candidate.zoom, 1, 3).toFixed(2))
+            : 1,
           ...(type === "text" ? { html: typeof candidate.html === "string" ? candidate.html : "" } : {}),
         },
         grid,
@@ -236,7 +265,7 @@ export function layoutToGridStyle(block: LayoutBlock): {
 export const LAYOUT_TEMPLATES: ReadonlyArray<{ id: string; label: string; build: () => LayoutDoc }> = [
   {
     id: "photo-grid",
-    label: "Grid Foto",
+    label: "Grid Foto (4 Foto)",
     build: () => ({
       version: LAYOUT_VERSION,
       grid: { cols: 12, rows: 8 },
@@ -250,20 +279,20 @@ export const LAYOUT_TEMPLATES: ReadonlyArray<{ id: string; label: string; build:
   },
   {
     id: "editorial-split",
-    label: "Editorial Split",
+    label: "Editorial Split (Teks + Foto)",
     build: () => ({
       version: LAYOUT_VERSION,
       grid: { cols: 12, rows: 8 },
       blocks: [
         { id: "e1", type: "text", x: 0, y: 0, w: 5, h: 4, z: 1, html: "<h2>Judul Proyek</h2>" },
         { id: "e2", type: "photo", x: 5, y: 0, w: 7, h: 8, z: 2, fit: "cover", mediaId: null },
-        { id: "e3", type: "text", x: 0, y: 4, w: 5, h: 4, z: 3, html: "<p>Deskripsi singkat.</p>" },
+        { id: "e3", type: "text", x: 0, y: 4, w: 5, h: 4, z: 3, html: "<p>Deskripsi singkat cerita.</p>" },
       ],
     }),
   },
   {
     id: "case-study",
-    label: "Case Study",
+    label: "Case Study (Hero + 2 Kolom)",
     build: () => ({
       version: LAYOUT_VERSION,
       grid: { cols: 12, rows: 8 },
@@ -274,7 +303,107 @@ export const LAYOUT_TEMPLATES: ReadonlyArray<{ id: string; label: string; build:
       ],
     }),
   },
+  {
+    id: "hero-cinema",
+    label: "Hero Sinematik (Lebar + Kutipan)",
+    build: () => ({
+      version: LAYOUT_VERSION,
+      grid: { cols: 12, rows: 8 },
+      blocks: [
+        { id: "hc1", type: "photo", x: 0, y: 0, w: 12, h: 6, z: 1, fit: "cover", mediaId: null },
+        { id: "hc2", type: "text", x: 2, y: 6, w: 8, h: 2, z: 2, html: "<p style=\"text-align:center; font-style:italic;\">\"Setiap detik adalah kenangan yang tak tergantikan.\"</p>" },
+      ],
+    }),
+  },
+  {
+    id: "triptych",
+    label: "Triptych 3 Kolom (3 Foto Potret)",
+    build: () => ({
+      version: LAYOUT_VERSION,
+      grid: { cols: 12, rows: 6 },
+      blocks: [
+        { id: "tr1", type: "photo", x: 0, y: 0, w: 4, h: 6, z: 1, fit: "cover", mediaId: null },
+        { id: "tr2", type: "photo", x: 4, y: 0, w: 4, h: 6, z: 2, fit: "cover", mediaId: null },
+        { id: "tr3", type: "photo", x: 8, y: 0, w: 4, h: 6, z: 3, fit: "cover", mediaId: null },
+      ],
+    }),
+  },
+  {
+    id: "mosaic",
+    label: "Mosaic Dinamis (1 Besar + 2 Kecil)",
+    build: () => ({
+      version: LAYOUT_VERSION,
+      grid: { cols: 12, rows: 8 },
+      blocks: [
+        { id: "m1", type: "photo", x: 0, y: 0, w: 7, h: 8, z: 1, fit: "cover", mediaId: null },
+        { id: "m2", type: "photo", x: 7, y: 0, w: 5, h: 4, z: 2, fit: "cover", mediaId: null },
+        { id: "m3", type: "photo", x: 7, y: 4, w: 5, h: 4, z: 3, fit: "cover", mediaId: null },
+      ],
+    }),
+  },
+  {
+    id: "quote-break",
+    label: "Kutipan Editorial (Quote + 2 Foto)",
+    build: () => ({
+      version: LAYOUT_VERSION,
+      grid: { cols: 12, rows: 7 },
+      blocks: [
+        { id: "qb1", type: "text", x: 1, y: 0, w: 10, h: 3, z: 1, html: "<h2>Keindahan dalam Kesederhanaan</h2><p>Momen berharga yang tertangkap secara alami dan jujur.</p>" },
+        { id: "qb2", type: "photo", x: 0, y: 3, w: 6, h: 4, z: 2, fit: "cover", mediaId: null },
+        { id: "qb3", type: "photo", x: 6, y: 3, w: 6, h: 4, z: 3, fit: "cover", mediaId: null },
+      ],
+    }),
+  },
 ];
+
+/**
+ * Appends a template's blocks below existing layout content.
+ * Offsets block y coordinates so they sit below the lowest existing block,
+ * generates fresh unique IDs, and dynamically expands the canvas row count.
+ */
+export function appendTemplateToLayout(
+  current: LayoutDoc,
+  template: LayoutDoc,
+): LayoutDoc {
+  const maxY = current.blocks.reduce((max, b) => Math.max(max, b.y + b.h), 0);
+  const offsetY = maxY > 0 ? maxY : 0;
+
+  const newBlocks: LayoutBlock[] = template.blocks.map((b, index) => ({
+    ...b,
+    id: `b_${Date.now().toString(36)}_${index}_${Math.random().toString(36).slice(2, 6)}`,
+    y: b.y + offsetY,
+    z: current.blocks.length + index + 1,
+  }));
+
+  const totalRows = Math.max(current.grid.rows, offsetY + template.grid.rows, 8);
+
+  return {
+    ...current,
+    grid: {
+      cols: current.grid.cols,
+      rows: totalRows,
+    },
+    blocks: [...current.blocks, ...newBlocks],
+  };
+}
+
+/**
+ * Expands the vertical canvas by adding extra rows at the bottom.
+ */
+export function expandLayoutRows(
+  layout: LayoutDoc,
+  additionalRows: number = 4,
+): LayoutDoc {
+  const maxY = layout.blocks.reduce((max, b) => Math.max(max, b.y + b.h), 0);
+  const currentRows = Math.max(layout.grid.rows, maxY);
+  return {
+    ...layout,
+    grid: {
+      ...layout.grid,
+      rows: clamp(currentRows + additionalRows, 8, 200),
+    },
+  };
+}
 
 /**
  * Scans a layout document for the first photo block that has a non-empty `publicUrl`.

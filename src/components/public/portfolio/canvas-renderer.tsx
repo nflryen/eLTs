@@ -50,17 +50,26 @@ function PhotoBlock({ block }: { block: LayoutBlock }) {
     );
   }
 
+  const posX = typeof block.cropX === "number" ? `${block.cropX}%` : "50%";
+  const posY = typeof block.cropY === "number" ? `${block.cropY}%` : "50%";
+  const zoom = typeof block.zoom === "number" && block.zoom > 1 ? block.zoom : 1;
+
   return (
-    // The layout cell is the sizing authority, so the image fills it. next/image
-    // needs intrinsic dimensions a grid cell does not have.
-    // eslint-disable-next-line @next/next/no-img-element
-    <img
-      src={block.publicUrl}
-      alt=""
-      loading="lazy"
-      className="h-full w-full"
-      style={{ objectFit: block.fit === "contain" ? "contain" : "cover" }}
-    />
+    <div className="relative h-full w-full overflow-hidden">
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src={block.publicUrl}
+        alt=""
+        loading="lazy"
+        className="h-full w-full"
+        style={{
+          objectFit: block.fit === "contain" ? "contain" : "cover",
+          objectPosition: `${posX} ${posY}`,
+          transform: zoom > 1 ? `scale(${zoom})` : undefined,
+          transformOrigin: `${posX} ${posY}`,
+        }}
+      />
+    </div>
   );
 }
 

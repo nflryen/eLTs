@@ -2,8 +2,10 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   addBlock,
+  appendTemplateToLayout,
   clampBlock,
   EMPTY_LAYOUT,
+  expandLayoutRows,
   findFirstPhotoUrl,
   LAYOUT_TEMPLATES,
   layoutToGridStyle,
@@ -237,4 +239,66 @@ test("findFirstPhotoUrl returns the first photo with publicUrl in reading order"
     findFirstPhotoUrl(docWithEmpty),
     "https://res.cloudinary.com/demo/image/upload/valid.webp",
   );
+});
+
+test("appendTemplateToLayout appends template blocks sequentially below existing blocks", () => {
+  const base = {
+    version: 1,
+    grid: { cols: 12, rows: 8 },
+    blocks: [
+      { id: "b1", type: "photo" as const, x: 0, y: 0, w: 12, h: 5, z: 1, publicUrl: "test.webp" },
+    ],
+  };
+  const tpl = LAYOUT_TEMPLATES[0].build(); // photo-grid (rows: 8)
+
+  const combined = appendTemplateToLayout(base, tpl);
+  assert.equal(combined.blocks.length, base.blocks.length + tpl.blocks.length);
+  assert.ok(combined.grid.rows >= 13, "rows expanded to fit both");
+
+  // Newly added blocks should start at or after y=5
+  const addedBlocks = combined.blocks.slice(base.blocks.length);
+  for (const b of addedBlocks) {
+    assert.ok(b.y >= 5, `appended block y (${b.y}) must be >= 5`);
+    assert.notEqual(b.id, "b1");
+  }
+});
+
+test("expandLayoutRows extends rows without corrupting block geometry", () => {
+  const base = {
+    version: 1,
+    grid: { cols: 12, rows: 8 },
+    blocks: [{ id: "b1", type: "photo" as const, x: 0, y: 0, w: 6, h: 4, z: 1 }],
+  };
+  const expanded = expandLayoutRows(base, 6);
+  assert.equal(expanded.grid.rows, 14);
+  assert.equal(expanded.blocks.length, 1);
+  assert.equal(expanded.blocks[0].h, 4);
+});
+
+test("normaliseLayout preserves cropX, cropY, zoom and fit", () => {
+  const raw = {
+    version: 1,
+    grid: { cols: 12, rows: 8 },
+    blocks: [
+      {
+        id: "p1",
+        type: "photo",
+        x: 0,
+        y: 0,
+        w: 6,
+        h: 4,
+        cropX: 25,
+        cropY: 80,
+        zoom: 1.8,
+        fit: "contain",
+        publicUrl: "photo.webp",
+      },
+    ],
+  };
+  const normalised = normaliseLayout(raw);
+  const b = normalised.blocks[0];
+  assert.equal(b.cropX, 25);
+  assert.equal(b.cropY, 80);
+  assert.equal(b.zoom, 1.8);
+  assert.equal(b.fit, "contain");
 });

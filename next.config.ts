@@ -14,12 +14,16 @@ const nextConfig: NextConfig = {
         hostname: "images.unsplash.com",
         pathname: "/photo-*",
       },
+      {
+        protocol: "https",
+        hostname: "res.cloudinary.com",
+        pathname: "/**",
+      },
     ],
   },
   experimental: {
     serverActions: {
-      // Binary uploads go directly to Cloudinary; actions accept metadata only.
-      bodySizeLimit: "1mb",
+      bodySizeLimit: "20mb",
     },
   },
   async headers() {
