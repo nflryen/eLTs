@@ -8,9 +8,9 @@ import { legalNextStatuses, isLegalTransition, STATUS_LABEL, type ProjectStatus 
  * ever diverge the dropdown offers a move the database rejects.
  */
 test("legal transitions mirror the database state machine", () => {
-  assert.deepEqual(legalNextStatuses("draft").sort(), ["editing"]);
+  assert.deepEqual(legalNextStatuses("draft").sort(), ["editing", "ready"]);
   assert.deepEqual(legalNextStatuses("editing").sort(), ["draft", "ready"]);
-  assert.deepEqual(legalNextStatuses("ready").sort(), ["archived", "editing"]);
+  assert.deepEqual(legalNextStatuses("ready").sort(), ["archived", "draft", "editing"]);
   assert.deepEqual(legalNextStatuses("archived").sort(), ["ready"]);
 });
 
@@ -22,14 +22,16 @@ test("expired offers no operator-initiated transition", () => {
 
 test("illegal jumps are rejected", () => {
   assert.equal(isLegalTransition("draft", "archived"), false);
-  assert.equal(isLegalTransition("draft", "ready"), false);
   assert.equal(isLegalTransition("archived", "editing"), false);
-  assert.equal(isLegalTransition("ready", "draft"), false);
+  assert.equal(isLegalTransition("archived", "draft"), false);
 });
 
 test("legal edges are accepted", () => {
   assert.equal(isLegalTransition("draft", "editing"), true);
+  assert.equal(isLegalTransition("draft", "ready"), true);
   assert.equal(isLegalTransition("editing", "ready"), true);
+  assert.equal(isLegalTransition("editing", "draft"), true);
+  assert.equal(isLegalTransition("ready", "draft"), true);
   assert.equal(isLegalTransition("ready", "archived"), true);
   assert.equal(isLegalTransition("archived", "ready"), true);
 });

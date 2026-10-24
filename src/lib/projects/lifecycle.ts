@@ -15,9 +15,9 @@ export type ProjectStatus = "draft" | "editing" | "ready" | "archived" | "expire
 /**
  * The legal edges, mirroring `private.enforce_project_status_transition()`:
  *
- *   draft    -> editing, expired
+ *   draft    -> editing, ready, expired
  *   editing  -> draft, ready, expired
- *   ready    -> editing, archived, expired
+ *   ready    -> editing, archived, draft, expired
  *   archived -> ready
  *   expired  -> archived
  *
@@ -25,9 +25,9 @@ export type ProjectStatus = "draft" | "editing" | "ready" | "archived" | "expire
  * the dropdown even though the database permits it.
  */
 const LEGAL_TRANSITIONS: Record<ProjectStatus, readonly ProjectStatus[]> = {
-  draft: ["editing"],
+  draft: ["ready", "editing"],
   editing: ["draft", "ready"],
-  ready: ["editing", "archived"],
+  ready: ["editing", "archived", "draft"],
   archived: ["ready"],
   expired: [],
 };

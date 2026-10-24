@@ -80,7 +80,7 @@ export async function changeProjectStatus(
     return {
       ok: false,
       reason: "illegal",
-      error: `Perubahan dari ${STATUS_LABEL[from]} ke ${STATUS_LABEL[to]} tidak diizinkan. Urutan yang benar: Draft → Editing → Ready → Archived.`,
+      error: `Perubahan dari ${STATUS_LABEL[from]} ke ${STATUS_LABEL[to]} tidak diizinkan.`,
     };
   }
 
