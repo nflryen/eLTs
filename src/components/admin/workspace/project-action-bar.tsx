@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Check, Loader2 } from "lucide-react";
+import { Check, Loader2, Trash2 } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -20,6 +20,7 @@ import {
   type ReminderPreview,
 } from "@/app/actions/project-dispatch";
 import { changeProjectStatus } from "@/app/actions/project-lifecycle";
+import { deleteProjectAction } from "@/app/actions/admin-projects";
 import { STATUS_LABEL, legalNextStatuses, type ProjectStatus } from "@/lib/projects/lifecycle";
 import type { ReminderKind } from "@/lib/reminders/compose";
 
@@ -100,6 +101,8 @@ export function ProjectActionBar({
   const [ctxFailed, setCtxFailed] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [statusOpen, setStatusOpen] = useState(false);
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [deletePending, startDeleteTransition] = useTransition();
   const [preview, setPreview] = useState<ReminderPreview | null>(null);
   const [toast, setToast] = useState<Toast | null>(null);
   /*
@@ -219,6 +222,18 @@ export function ProjectActionBar({
     },
     [projectId, status, router]
   );
+  const handleDeleteProject = () => {
+    startDeleteTransition(async () => {
+      const res = await deleteProjectAction(projectId);
+      if (res.success) {
+        router.push("/admin/projects");
+      } else {
+        setToast({ kind: "error", text: res.error || "Gagal menghapus proyek." });
+        setDeleteConfirmOpen(false);
+      }
+    });
+  };
+
 
   const suggested = ctx?.suggested ?? [];
   const latestPdf = ctx?.invoices.find((inv) => inv.pdfUrl) ?? null;
@@ -353,6 +368,16 @@ export function ProjectActionBar({
         >
           {pending ? "Menyiapkan…" : isFullyPaid ? "Tagihan Lunas" : "Kirim Tagihan"}
         </button>
+
+        <button
+          type="button"
+          onClick={() => setDeleteConfirmOpen(true)}
+          title="Hapus Proyek"
+          className="inline-flex min-h-11 items-center justify-center rounded-[10000px] border border-[#fecaca] bg-white px-3 text-xs font-semibold text-[#dc2626] transition-colors hover:bg-[#fef2f2] hover:border-[#f87171]"
+        >
+          <Trash2 size={13} className="mr-1" />
+          Hapus
+        </button>
       </div>
 
       {toast ? <ToastBar toast={toast} onDismiss={() => setToast(null)} /> : null}
@@ -426,6 +451,40 @@ export function ProjectActionBar({
               disabled={!preview?.waUrl || preview.missing.length > 0}
             >
               Buka WhatsApp
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={deleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-red-600 flex items-center gap-2">
+              <Trash2 size={18} /> Hapus Proyek Permanen?
+            </DialogTitle>
+            <DialogDescription>
+              Tindakan ini tidak dapat dibatalkan. Seluruh data jadwal, alokasi kru, galeri media, dan tagihan invoice terkait proyek ini akan dihapus secara permanen dari basis data.
+            </DialogDescription>
+          </DialogHeader>
+
+          <DialogFooter className="mt-4 gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setDeleteConfirmOpen(false)}
+              disabled={deletePending}
+            >
+              Batal
+            </Button>
+            <Button
+              size="sm"
+              variant="default"
+              onClick={handleDeleteProject}
+              disabled={deletePending}
+              className="bg-red-600 hover:bg-red-700 text-white gap-1.5"
+            >
+              {deletePending ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
+              {deletePending ? "Menghapus..." : "Hapus Permanen"}
             </Button>
           </DialogFooter>
         </DialogContent>

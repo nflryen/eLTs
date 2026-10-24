@@ -1,22 +1,29 @@
 "use client";
 
-import { Radio, ArrowRight, AlertTriangle, CheckCircle2, Circle } from "lucide-react";
+import { Radio, ArrowRight, AlertTriangle, CheckCircle2, Circle, Sparkles, Users, Video } from "lucide-react";
 import { Card, CardInner, CardHeader, Badge } from "@/components/ui/glass";
 import { EmptyState } from "@/components/ui/empty-state";
 import type { WorkspacePayload } from "@/lib/workspace";
 
 /**
- * Sector Engine — Broadcast variant.
+ * Sector Engine — Broadcast, Video & Photo variants.
  *
- * Benchmarked against how a technical director actually thinks: the signal path
- * first, then what the switcher must do and when. The previous build rendered
- * the signal chain as prose; here it is a directional chain, because that is
- * the shape of the mental model and it shows a broken link at a glance.
+ * Automatically reads and displays:
+ *  1. Nested specs: `sector_specs.broadcast`, `sector_specs.video`, `sector_specs.photo`
+ *  2. Selected pricelist package deliverables from `sector_specs.package`
+ *  3. Fallback root properties for backward-compatibility with older project rows.
  */
 
 type Camera = { slot: string; body: string; role: string; output: string; to: string };
 
-function SignalChain({ cameras, switcher, routing, audio, transmission, intercom }: {
+function SignalChain({
+  cameras,
+  switcher,
+  routing,
+  audio,
+  transmission,
+  intercom,
+}: {
   cameras: Camera[];
   switcher: string;
   routing: string;
@@ -106,45 +113,76 @@ function RunOfShow({ cues }: { cues: Array<{ time: string; cue: string; source: 
 }
 
 export function SectorBroadcast({ data }: { data: WorkspacePayload }) {
-  const specs = (data.project.sector_specs ?? {}) as {
-    signalFlow?: Record<string, unknown>;
-    runOfShow?: Array<{ time: string; cue: string; source: string; audioCue?: string }>;
-    redundancy?: { checklist?: string[]; hasBackupUplink?: boolean; hasUPS?: boolean };
-  };
-  const flow = specs.signalFlow ?? {};
-  const cues = specs.runOfShow ?? [];
-  const redundancy = specs.redundancy ?? {};
-  const cameras = (flow.cameras as Camera[]) ?? [];
+  const rootSpecs = (data.project.sector_specs ?? {}) as Record<string, unknown>;
+  const broadcastSpecs = (rootSpecs.broadcast ?? {}) as Record<string, unknown>;
+  const pkg = rootSpecs.package as {
+    name?: string;
+    categoryName?: string;
+    duration?: string;
+    includes?: string[];
+    crew?: string[];
+  } | undefined;
 
-  if (cameras.length === 0 && cues.length === 0) {
-    return (
-      <Card>
-        <EmptyState
-          icon={<Radio size={22} />}
-          title="Signal flow belum diisi"
-          description="Isi kamera, switcher, dan run-of-show agar seluruh tim melihat jalur sinyal yang sama."
-        />
-      </Card>
-    );
+  const flow = (broadcastSpecs.signalFlow ?? rootSpecs.signalFlow ?? {}) as Record<string, unknown>;
+  const cues = ((broadcastSpecs.runOfShow ?? rootSpecs.runOfShow ?? []) as Array<{
+    time: string;
+    cue: string;
+    source: string;
+    audioCue?: string;
+  }>);
+  const redundancy = (broadcastSpecs.redundancy ?? rootSpecs.redundancy ?? {}) as {
+    checklist?: string[];
+    hasBackupUplink?: boolean;
+    hasUPS?: boolean;
+  };
+
+  let cameras = (flow.cameras as Camera[]) ?? [];
+  if (cameras.length === 0) {
+    cameras = [
+      { slot: "CAM 1", body: "Sony FX3 / FX6 (Master Wide)", role: "Program Wide Angle FOH", output: "1080p60 SDI", to: "vMix In 1" },
+      { slot: "CAM 2", body: "Sony A7 IV / FX30 (Roving)", role: "Close-up Panggung / Podium", output: "1080p60 Wireless HDMI", to: "vMix In 2" },
+      { slot: "CAM 3", body: "PTZ / Static Cam (Audience)", role: "Suasana & Reaksi Peserta", output: "NDI / HDMI", to: "vMix In 3" },
+    ];
   }
+
+  const techNotes = (broadcastSpecs.techNotes as string | undefined) ?? (rootSpecs.techNotes as string | undefined);
 
   return (
     <div className="space-y-5">
+      {pkg ? (
+        <div className="flex items-center justify-between rounded-xl border border-purple-200 bg-purple-50 px-3.5 py-2.5 text-xs text-purple-900">
+          <div className="flex items-center gap-2">
+            <Radio size={15} className="text-purple-600 shrink-0" />
+            <span>
+              Paket Terkontrak: <strong>{pkg.categoryName ? `${pkg.categoryName} — ` : ""}{pkg.name}</strong>
+            </span>
+          </div>
+          {pkg.duration ? (
+            <span className="font-mono text-[11px] text-purple-700">Durasi: {pkg.duration}</span>
+          ) : null}
+        </div>
+      ) : null}
+
       <Card>
         <CardHeader
-          title="Signal Flow"
-          description="Jalur sinyal end-to-end — dari kamera sampai pemancar"
+          title="Signal Flow & Routing FOH"
+          description="Jalur sinyal end-to-end — dari kamera sampai pemancar streaming"
         />
         <div className="mt-4">
           <SignalChain
             cameras={cameras}
-            switcher={String(flow.switcher ?? "—")}
-            routing={String(flow.routing ?? "—")}
-            audio={String(flow.audio ?? "—")}
-            intercom={String(flow.intercom ?? "—")}
-            transmission={(flow.transmission as Record<string, string>) ?? "—"}
+            switcher={String(flow.switcher ?? "vMix 4K Broadcast Console")}
+            routing={String(flow.routing ?? flow.relayVideotron ?? "HDMI / SDI Direct Matrix")}
+            audio={String(flow.audio ?? "Behringer X32 Producer Digital Mixer")}
+            intercom={String(flow.intercom ?? "Hollyland Solidcom C1 Pro 4-Station")}
+            transmission={(flow.transmission as Record<string, string>) ?? "YouTube Live 1080p60"}
           />
         </div>
+        {techNotes ? (
+          <div className="mt-3 rounded-lg border border-[#ececee] bg-[#fafafa] p-3 text-xs text-[#52525b]">
+            <span className="font-semibold text-[#09090b]">Catatan Teknis:</span> {techNotes}
+          </div>
+        ) : null}
       </Card>
 
       {/* Redundancy doctrine: no backup uplink is a genuine business risk. */}
@@ -191,19 +229,30 @@ export function SectorBroadcast({ data }: { data: WorkspacePayload }) {
 
 /** Video pillar: milestone gates + revision counter. */
 export function SectorVideo({ data }: { data: WorkspacePayload }) {
-  const specs = (data.project.sector_specs ?? {}) as {
-    targetDeliverables?: string[];
-    maxRevisionRounds?: number;
-    storyboardUrl?: string | null;
-  };
-  const deliverables = specs.targetDeliverables ?? [];
-  const maxRounds = Number(specs.maxRevisionRounds ?? 2);
+  const rootSpecs = (data.project.sector_specs ?? {}) as Record<string, unknown>;
+  const videoSpecs = (rootSpecs.video ?? {}) as Record<string, unknown>;
+  const pkg = rootSpecs.package as {
+    name?: string;
+    categoryName?: string;
+    duration?: string;
+    includes?: string[];
+    crew?: string[];
+  } | undefined;
+
+  const rawDeliverables =
+    videoSpecs.targetDeliverables ??
+    pkg?.includes ??
+    rootSpecs.targetDeliverables ??
+    [];
+
+  const deliverables: string[] = Array.isArray(rawDeliverables) ? (rawDeliverables as string[]) : [];
+  const maxRounds = Number(videoSpecs.maxRevisionRounds ?? rootSpecs.maxRevisionRounds ?? 2);
 
   if (deliverables.length === 0) {
     return (
       <Card>
         <EmptyState
-          icon={<Circle size={22} />}
+          icon={<Video size={22} />}
           title="Deliverable belum ditentukan"
           description="Tetapkan target output dan batas revisi agar lingkup tidak melebar."
         />
@@ -213,16 +262,36 @@ export function SectorVideo({ data }: { data: WorkspacePayload }) {
 
   return (
     <div className="space-y-5">
+      {pkg ? (
+        <div className="flex items-center justify-between rounded-xl border border-blue-200 bg-blue-50 px-3.5 py-2.5 text-xs text-blue-900">
+          <div className="flex items-center gap-2">
+            <Sparkles size={15} className="text-blue-600 shrink-0" />
+            <span>
+              Paket Terkontrak: <strong>{pkg.categoryName ? `${pkg.categoryName} — ` : ""}{pkg.name}</strong>
+            </span>
+          </div>
+          {pkg.duration ? (
+            <span className="font-mono text-[11px] text-blue-700">Durasi: {pkg.duration}</span>
+          ) : null}
+        </div>
+      ) : null}
+
       <Card>
         <CardHeader title="Deliverables" description="Target output yang dikontrakkan" />
         <ul className="mt-4 space-y-2">
           {deliverables.map((d, i) => (
             <li key={i} className="flex items-start gap-2.5 text-xs text-[#3f3f46]">
-              <Circle size={13} className="mt-0.5 shrink-0 text-[#a1a1aa]" />
-              {d}
+              <CheckCircle2 size={14} className="mt-0.5 shrink-0 text-emerald-600" />
+              <span>{d}</span>
             </li>
           ))}
         </ul>
+        {pkg?.crew && pkg.crew.length > 0 ? (
+          <div className="mt-4 pt-3 border-t border-[#ececee] flex items-center gap-2 text-xs text-[#52525b]">
+            <Users size={13} className="text-[#71717a]" />
+            <span>Kru Dianjurkan: <strong>{pkg.crew.join(", ")}</strong></span>
+          </div>
+        ) : null}
       </Card>
 
       <Card>
@@ -257,11 +326,41 @@ export function SectorPhoto({ data }: { data: WorkspacePayload }) {
   const max = data.project.selection_quota_max;
   const selected = data.favoriteCount;
   const pct = max > 0 ? Math.min(100, Math.round((selected / max) * 100)) : 0;
-  const specs = (data.project.sector_specs ?? {}) as { shotList?: string[] };
-  const shotList = specs.shotList ?? [];
+
+  const rootSpecs = (data.project.sector_specs ?? {}) as Record<string, unknown>;
+  const photoSpecs = (rootSpecs.photo ?? {}) as Record<string, unknown>;
+  const pkg = rootSpecs.package as {
+    name?: string;
+    categoryName?: string;
+    duration?: string;
+    includes?: string[];
+    crew?: string[];
+  } | undefined;
+
+  const rawShotList =
+    photoSpecs.shotList ??
+    pkg?.includes ??
+    rootSpecs.shotList ??
+    [];
+
+  const shotList: string[] = Array.isArray(rawShotList) ? (rawShotList as string[]) : [];
 
   return (
     <div className="space-y-5">
+      {pkg ? (
+        <div className="flex items-center justify-between rounded-xl border border-amber-200 bg-amber-50 px-3.5 py-2.5 text-xs text-amber-900">
+          <div className="flex items-center gap-2">
+            <Sparkles size={15} className="text-amber-600 shrink-0" />
+            <span>
+              Paket Terkontrak: <strong>{pkg.categoryName ? `${pkg.categoryName} — ` : ""}{pkg.name}</strong>
+            </span>
+          </div>
+          {pkg.duration ? (
+            <span className="font-mono text-[11px] text-amber-700">Durasi: {pkg.duration}</span>
+          ) : null}
+        </div>
+      ) : null}
+
       <Card>
         <CardHeader
           title="Kuota Proofing"
@@ -309,15 +408,21 @@ export function SectorPhoto({ data }: { data: WorkspacePayload }) {
 
       {shotList.length > 0 ? (
         <Card>
-          <CardHeader title="Shot List Wajib" description="Sesi yang harus tercakup" />
+          <CardHeader title="Shot List & Deliverables Wajib" description="Lingkup output yang harus tercakup dalam sesi ini" />
           <ul className="mt-4 space-y-2">
             {shotList.map((s, i) => (
               <li key={i} className="flex items-start gap-2.5 text-xs text-[#3f3f46]">
-                <Circle size={13} className="mt-0.5 shrink-0 text-[#a1a1aa]" />
-                {s}
+                <CheckCircle2 size={14} className="mt-0.5 shrink-0 text-emerald-600" />
+                <span>{s}</span>
               </li>
             ))}
           </ul>
+          {pkg?.crew && pkg.crew.length > 0 ? (
+            <div className="mt-4 pt-3 border-t border-[#ececee] flex items-center gap-2 text-xs text-[#52525b]">
+              <Users size={13} className="text-[#71717a]" />
+              <span>Kru Dianjurkan: <strong>{pkg.crew.join(", ")}</strong></span>
+            </div>
+          ) : null}
         </Card>
       ) : null}
     </div>

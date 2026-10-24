@@ -111,6 +111,8 @@ export type WorkspacePayload = {
     selection_quota_min: number;
     selection_quota_max: number;
     sector_specs: Record<string, unknown>;
+    referral_code?: string | null;
+    referral_discount_amount?: number | null;
   };
   customer: { id: string; name: string; email: string | null; phone: string | null } | null;
   crew: CrewAssignment[];
@@ -417,6 +419,8 @@ export async function loadWorkspace(projectId: string): Promise<WorkspacePayload
       selection_quota_min: num(project.selection_quota_min) || 15,
       selection_quota_max: num(project.selection_quota_max) || 20,
       sector_specs: specs,
+      referral_code: (project.referral_code as string | null) ?? null,
+      referral_discount_amount: numOrNull(project.referral_discount_amount),
     },
     customer: customer
       ? { id: customer.id as string, name: customer.name as string, email: customer.email as string | null, phone: customer.phone as string | null }

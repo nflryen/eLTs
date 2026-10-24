@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import { requireFounder } from "@/lib/auth/roles";
+import { requireOps } from "@/lib/auth/roles";
 
 /**
  * Client invoice receipt ledger — the ONLY write path for payments.
@@ -112,7 +112,7 @@ function consolePath(projectId: string): string {
  */
 export async function recordPayment(input: RecordPaymentInput): Promise<RecordPaymentResult> {
   try {
-    const { admin, supabase } = await requireFounder();
+    const { admin, supabase } = await requireOps();
 
     const parsed = recordPaymentSchema.safeParse(input);
     if (!parsed.success) {
@@ -204,7 +204,7 @@ export async function verifyReceipt(
   projectId: string,
 ): Promise<{ success: boolean; error?: string }> {
   try {
-    const { admin, supabase } = await requireFounder();
+    const { admin, supabase } = await requireOps();
 
     const parsed = verifySchema.safeParse({ receiptId, projectId });
     if (!parsed.success) return { success: false, error: "ID tidak valid." };
@@ -259,7 +259,7 @@ export async function deleteReceipt(
   projectId: string,
 ): Promise<{ success: boolean; error?: string }> {
   try {
-    const { supabase } = await requireFounder();
+    const { supabase } = await requireOps();
 
     const parsed = deleteSchema.safeParse({ receiptId, projectId });
     if (!parsed.success) return { success: false, error: "ID tidak valid." };

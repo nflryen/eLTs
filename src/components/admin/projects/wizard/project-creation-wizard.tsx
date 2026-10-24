@@ -14,6 +14,7 @@ import {
   Layers,
   RotateCcw,
   Users,
+  Ticket,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { CustomerRow } from "@/types/database";
@@ -34,6 +35,7 @@ import {
   updateProjectWizardStepAction,
   completeProjectScaffoldAction,
 } from "@/app/actions/admin-projects";
+import { validateReferralCodeAction } from "@/app/actions/referral";
 
 interface ProjectCreationWizardProps {
   customers: CustomerRow[];
@@ -100,6 +102,57 @@ export function ProjectCreationWizard({
   // Step 3 State: Commercial Baseline
   const [contractValue, setContractValue] = useState("1500000");
   const [dpPercentage, setDpPercentage] = useState(50);
+
+  // Step 3 Referral Code State
+  const [referralInput, setReferralInput] = useState("");
+  const [isCheckingReferral, setIsCheckingReferral] = useState(false);
+  const [appliedReferral, setAppliedReferral] = useState<{
+    code: string;
+    discountType: string;
+    discountValue: number;
+    discountAmount: number;
+    formattedDiscount: string;
+  } | null>(null);
+  const [referralMsg, setReferralMsg] = useState<{ type: "success" | "error"; text: string } | null>(null);
+
+  const rawContract = Number(contractValue) || 0;
+  const referralDiscountAmt = appliedReferral ? appliedReferral.discountAmount : 0;
+  const netContractValue = Math.max(0, rawContract - referralDiscountAmt);
+  const dpAmount = Math.round(netContractValue * (dpPercentage / 100));
+  const finalBalanceAmount = Math.max(0, netContractValue - dpAmount);
+
+  const handleApplyReferral = async () => {
+    if (!referralInput.trim()) return;
+    setIsCheckingReferral(true);
+    setReferralMsg(null);
+    try {
+      const res = await validateReferralCodeAction(referralInput.trim(), rawContract);
+      if (res.ok && res.valid) {
+        setAppliedReferral({
+          code: res.code,
+          discountType: res.discountType,
+          discountValue: res.discountValue,
+          discountAmount: res.discountAmount,
+          formattedDiscount: res.formattedDiscount,
+        });
+        setReferralMsg({ type: "success", text: `Kode ${res.code} berhasil diterapkan!` });
+      } else if (res.ok) {
+        setReferralMsg({ type: "error", text: res.message });
+      } else {
+        setReferralMsg({ type: "error", text: res.error });
+      }
+    } catch {
+      setReferralMsg({ type: "error", text: "Gagal memverifikasi kode referral." });
+    } finally {
+      setIsCheckingReferral(false);
+    }
+  };
+
+  const handleRemoveReferral = () => {
+    setAppliedReferral(null);
+    setReferralInput("");
+    setReferralMsg(null);
+  };
 
   const selectedCustomer = customers.find((c) => c.id === customerId);
 
@@ -258,12 +311,11 @@ export function ProjectCreationWizard({
     }
 
     startTransition(async () => {
-      const numericContract = Number(contractValue) || 0;
-      const dpAmount = Math.round(numericContract * (dpPercentage / 100));
-
       const updateRes = await updateProjectWizardStepAction(draftProjectId, {
-        contract_value: numericContract,
+        contract_value: netContractValue,
         dp_amount: dpAmount,
+        referral_code: appliedReferral?.code || null,
+        referral_discount_amount: referralDiscountAmt,
       });
 
       if (!updateRes.success) {
@@ -880,12 +932,71 @@ export function ProjectCreationWizard({
               </div>
             </div>
 
+            {/* Referral / Discount Code Input */}
+            <div className="rounded-xl border border-[#ececee] bg-[#fafafa] p-4 space-y-2">
+              <label className="flex items-center gap-1.5 text-xs font-bold text-[#3f3f46]">
+                <Ticket size={14} className="text-[#ff5a00]" />
+                <span>Kode Referral / Diskon (Opsional)</span>
+              </label>
+              {appliedReferral ? (
+                <div className="flex items-center justify-between rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-800">
+                  <div className="flex items-center gap-2">
+                    <Check size={14} className="text-emerald-600 shrink-0" />
+                    <div>
+                      <span className="font-mono font-bold tracking-wider">{appliedReferral.code}</span>
+                      <span className="ml-2 text-emerald-700">(-{appliedReferral.formattedDiscount})</span>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleRemoveReferral}
+                    className="text-xs text-emerald-700 hover:text-red-600 hover:underline cursor-pointer"
+                  >
+                    Hapus
+                  </button>
+                </div>
+              ) : (
+                <div className="space-y-1">
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      placeholder="CONTOH: SPECIAL10"
+                      value={referralInput}
+                      onChange={(e) => {
+                        setReferralInput(e.target.value.toUpperCase());
+                        setReferralMsg(null);
+                      }}
+                      className="contact-input h-9 flex-1 font-mono text-xs uppercase tracking-wider"
+                    />
+                    <Button
+                      type="button"
+                      size="sm"
+                      onClick={handleApplyReferral}
+                      disabled={isCheckingReferral || !referralInput.trim()}
+                      className="bg-[#09090b] text-white hover:bg-[#27272a] h-9"
+                    >
+                      {isCheckingReferral ? <Loader2 size={13} className="animate-spin" /> : "Terapkan"}
+                    </Button>
+                  </div>
+                  {referralMsg && (
+                    <p
+                      className={`text-xs ${
+                        referralMsg.type === "success" ? "text-emerald-700" : "text-[#c2410c]"
+                      }`}
+                    >
+                      {referralMsg.text}
+                    </p>
+                  )}
+                </div>
+              )}
+            </div>
+
             {/* Calculated Breakdown Card */}
             <div className="p-4 bg-[#fafafa] rounded-xl border border-border grid grid-cols-2 gap-4 text-xs font-mono">
               <div>
                 <p className="text-muted-foreground mb-0.5">Invoice 1 (Down Payment {dpPercentage}%):</p>
                 <p className="text-base font-bold text-[#09090b]">
-                  Rp {(Math.round((Number(contractValue) || 0) * (dpPercentage / 100))).toLocaleString("id-ID")}
+                  Rp {dpAmount.toLocaleString("id-ID")}
                 </p>
                 <p className="text-[10px] text-muted-foreground">Wajib lunas untuk mengunci jadwal</p>
               </div>
@@ -893,11 +1004,18 @@ export function ProjectCreationWizard({
               <div>
                 <p className="text-muted-foreground mb-0.5">Invoice 2 (Pelunasan Akhir):</p>
                 <p className="text-base font-bold text-[#09090b]">
-                  Rp {(Math.round((Number(contractValue) || 0) * ((100 - dpPercentage) / 100))).toLocaleString("id-ID")}
+                  Rp {finalBalanceAmount.toLocaleString("id-ID")}
                 </p>
                 <p className="text-[10px] text-muted-foreground">Wajib lunas sebelum rilis master/download</p>
               </div>
             </div>
+
+            {appliedReferral && (
+              <div className="p-3 bg-emerald-50 rounded-xl border border-emerald-200 text-xs text-emerald-900 flex items-center justify-between">
+                <span>Nilai Kontrak Bersih (Net Total):</span>
+                <span className="font-mono font-bold text-sm">Rp {netContractValue.toLocaleString("id-ID")}</span>
+              </div>
+            )}
 
             {/* Scope & Deliverables Synchronization Card */}
             <div className="p-4 rounded-xl border border-border bg-[#fafafa] space-y-3">

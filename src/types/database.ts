@@ -90,6 +90,8 @@ export type ProjectRow = {
   selection_deadline: string | null;
   rehearsal_date?: string | null;
   sector_specs?: Record<string, unknown>;
+  referral_code?: string | null;
+  referral_discount_amount?: number | null;
   created_at: string;
   updated_at: string;
 };

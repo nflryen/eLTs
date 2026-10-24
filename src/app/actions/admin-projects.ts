@@ -158,6 +158,8 @@ export async function updateProjectWizardStepAction(
     rehearsal_date?: string | null;
     contract_value?: number;
     dp_amount?: number;
+    referral_code?: string | null;
+    referral_discount_amount?: number | null;
     sector_specs?: Record<string, unknown>;
     photography_type?: string;
     selection_quota_min?: number;
@@ -185,6 +187,8 @@ export async function updateProjectWizardStepAction(
     if (stepData.rehearsal_date !== undefined) updatePayload.rehearsal_date = stepData.rehearsal_date || null;
     if (stepData.contract_value !== undefined) updatePayload.contract_value = Number(stepData.contract_value) || 0;
     if (stepData.dp_amount !== undefined) updatePayload.dp_amount = Number(stepData.dp_amount) || 0;
+    if (stepData.referral_code !== undefined) updatePayload.referral_code = stepData.referral_code;
+    if (stepData.referral_discount_amount !== undefined) updatePayload.referral_discount_amount = Number(stepData.referral_discount_amount) || 0;
     if (stepData.sector_specs !== undefined) updatePayload.sector_specs = stepData.sector_specs;
     const validPhotographyTypes = ["wedding", "prewedding", "graduation", "couple", "event"];
     if (stepData.photography_type && validPhotographyTypes.includes(stepData.photography_type)) {
@@ -366,5 +370,70 @@ export async function updateProjectOverviewAction(
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : "Gagal memperbarui data proyek";
     return { success: false, error: message };
+  }
+}
+
+/**
+ * Securely deletes a project and cascades cleanup of all linked records.
+ * Restricted to Admin / Founder (rank >= 80).
+ */
+export async function deleteProjectAction(projectId: string): Promise<{
+  success: boolean;
+  error?: string;
+}> {
+  try {
+    const { supabase, rank } = await requireOps();
+    if (rank < 80) {
+      return { success: false, error: "Hanya Admin dan Founder yang dapat menghapus proyek." };
+    }
+    if (!projectId) {
+      return { success: false, error: "ID proyek tidak valid." };
+    }
+
+    // Verify project exists
+    const { data: project, error: fetchErr } = await supabase
+      .from("projects")
+      .select("id, name")
+      .eq("id", projectId)
+      .maybeSingle();
+
+    if (fetchErr || !project) {
+      return { success: false, error: "Proyek tidak ditemukan." };
+    }
+
+    // Explicitly delete invoice receipts and snapshots to ensure clean deletion
+    const { data: invoices } = await supabase
+      .from("project_invoices")
+      .select("id")
+      .eq("project_id", projectId);
+
+    if (invoices && invoices.length > 0) {
+      const invIds = invoices.map((inv) => inv.id);
+      await supabase.from("invoice_payment_receipts").delete().in("invoice_id", invIds);
+    }
+
+    await supabase.from("project_profit_snapshots").delete().eq("project_id", projectId);
+
+    // Delete the project (cascades via PostgreSQL foreign keys)
+    const { error: deleteErr } = await supabase
+      .from("projects")
+      .delete()
+      .eq("id", projectId);
+
+    if (deleteErr) {
+      return { success: false, error: `Gagal menghapus proyek: ${deleteErr.message}` };
+    }
+
+    revalidatePath("/admin/projects");
+    revalidatePath("/admin");
+    revalidatePath("/admin/invoices");
+    revalidatePath("/admin/calendar");
+
+    return { success: true };
+  } catch (err: unknown) {
+    return {
+      success: false,
+      error: err instanceof Error ? err.message : "Terjadi kesalahan sistem saat menghapus proyek.",
+    };
   }
 }

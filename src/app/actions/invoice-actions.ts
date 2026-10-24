@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { randomBytes } from "node:crypto";
-import { requirePermission } from "@/lib/auth/roles";
+import { requirePermission, requireOps } from "@/lib/auth/roles";
 import { generateGalleryCredentials, hashGalleryPin } from "@/lib/security/credentials";
 import { getPinPepper } from "@/lib/env";
 
@@ -587,6 +587,139 @@ export async function createRentalInvoiceAction(input: CreateRentalInvoiceInput)
     };
   } catch (err: unknown) {
     console.error("[createRentalInvoiceAction] Unexpected error:", err);
+    return {
+      success: false,
+      error: err instanceof Error ? err.message : "Terjadi kesalahan sistem saat membuat invoice.",
+    };
+  }
+}
+
+/**
+ * Generates a commercial invoice directly from a project's configuration,
+ * deliverables, and applied referral discounts.
+ */
+export async function generateProjectInvoiceAction(projectId: string): Promise<{
+  success: boolean;
+  invoiceNumber?: string;
+  invoiceId?: string;
+  error?: string;
+}> {
+  try {
+    const { supabase } = await requireOps();
+    if (!projectId) {
+      return { success: false, error: "ID proyek tidak valid." };
+    }
+
+    // 1. Fetch project details
+    const { data: project, error: projErr } = await supabase
+      .from("projects")
+      .select("id, name, customer_id, contract_value, dp_amount, service_pillar, sector_specs, referral_code, referral_discount_amount")
+      .eq("id", projectId)
+      .maybeSingle();
+
+    if (projErr || !project) {
+      return { success: false, error: "Data proyek tidak ditemukan." };
+    }
+
+    // 2. Check if active invoice already exists
+    const { data: existingInv } = await supabase
+      .from("project_invoices")
+      .select("id, invoice_number")
+      .eq("project_id", projectId)
+      .eq("is_cancelled", false)
+      .maybeSingle();
+
+    if (existingInv) {
+      return {
+        success: false,
+        error: `Invoice ${existingInv.invoice_number} sudah aktif untuk proyek ini.`,
+      };
+    }
+
+    const today = jakartaTodayString();
+    const periodKey = jakartaPeriodKey();
+
+    // 3. Mint atomic invoice number
+    const { data: invNum, error: rpcErr } = await supabase.rpc("next_document_number", {
+      p_doc_type: "INV",
+      p_period_key: periodKey,
+    });
+
+    if (rpcErr || !invNum) {
+      return { success: false, error: "Gagal menerbitkan nomor invoice baru." };
+    }
+
+    const invoiceNumber = invNum as string;
+
+    // 4. Calculate line items
+    const netContract = Number(project.contract_value) || 0;
+    const referralDiscount = Number(project.referral_discount_amount) || 0;
+    const baseContract = netContract + referralDiscount;
+
+    const sectorSpecs = (project.sector_specs ?? {}) as Record<string, unknown>;
+    const pkg = sectorSpecs.package as { name?: string; categoryName?: string; includes?: string[] } | undefined;
+    const mainDesc = pkg?.name
+      ? `${pkg.categoryName ? `${pkg.categoryName} — ` : ""}${pkg.name}`
+      : `${project.name} (${project.service_pillar || "PRODUKSI"})`;
+
+    const lineItems: Array<{
+      description: string;
+      quantity: number;
+      unit_price: number;
+      subtotal: number;
+    }> = [
+      {
+        description: mainDesc,
+        quantity: 1,
+        unit_price: baseContract,
+        subtotal: baseContract,
+      },
+    ];
+
+    if (referralDiscount > 0) {
+      lineItems.push({
+        description: `Diskon Referral (${project.referral_code || "KODE"})`,
+        quantity: 1,
+        unit_price: -referralDiscount,
+        subtotal: -referralDiscount,
+      });
+    }
+
+    const dueDateObj = new Date();
+    dueDateObj.setDate(dueDateObj.getDate() + 14);
+    const dueDate = dueDateObj.toISOString().slice(0, 10);
+
+    // 5. Insert into project_invoices
+    const { data: invRecord, error: insertErr } = await supabase
+      .from("project_invoices")
+      .insert({
+        project_id: projectId,
+        invoice_number: invoiceNumber,
+        issue_date: today,
+        due_date: dueDate,
+        line_items: lineItems,
+        gross_contract_value: netContract,
+        minimum_dp_pct: 50,
+        referral_code: project.referral_code || null,
+        referral_discount_amount: referralDiscount > 0 ? referralDiscount : undefined,
+      })
+      .select("id, invoice_number")
+      .single();
+
+    if (insertErr || !invRecord) {
+      return { success: false, error: `Gagal menyimpan invoice: ${insertErr?.message || "Kesalahan database"}` };
+    }
+
+    revalidatePath(`/admin/projects/${projectId}`);
+    revalidatePath("/admin/invoices");
+    revalidatePath("/admin/finance");
+
+    return {
+      success: true,
+      invoiceNumber: invRecord.invoice_number,
+      invoiceId: invRecord.id,
+    };
+  } catch (err: unknown) {
     return {
       success: false,
       error: err instanceof Error ? err.message : "Terjadi kesalahan sistem saat membuat invoice.",

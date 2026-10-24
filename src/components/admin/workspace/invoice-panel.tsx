@@ -13,12 +13,15 @@ import {
   X,
   Trash2,
   CheckCircle2,
+  Loader2,
+  Ticket,
 } from "lucide-react";
 import { Card, CardHeader, CardInner, Badge, StatTile } from "@/components/ui/glass";
 import { EmptyState } from "@/components/ui/empty-state";
 import { jakartaShortDate } from "@/lib/datetime";
 import { idr } from "@/lib/format";
 import { recordPayment, verifyReceipt, deleteReceipt } from "@/app/actions/invoice-receipts";
+import { generateProjectInvoiceAction } from "@/app/actions/invoice-actions";
 import type { WorkspacePayload, InvoicePosition, Receipt as ReceiptRow } from "@/lib/workspace";
 
 /**
@@ -94,15 +97,7 @@ export function InvoicePanel({ data }: { data: WorkspacePayload }) {
   const [nowMs] = useState(() => Date.now());
 
   if (!inv) {
-    return (
-      <Card>
-        <EmptyState
-          icon={<Receipt size={20} />}
-          title="Belum ada invoice terbit"
-          description="Terbitkan invoice komersial untuk memulai penagihan klien."
-        />
-      </Card>
-    );
+    return <EmptyInvoiceState data={data} />;
   }
 
 
@@ -162,7 +157,12 @@ export function InvoicePanel({ data }: { data: WorkspacePayload }) {
         ) : null}
 
         <div className="mt-5 flex flex-wrap items-center gap-2">
-          <RecordPaymentButton invoiceId={inv.invoice_id} balanceDue={inv.balance_due} />
+          <RecordPaymentButton
+            invoiceId={inv.invoice_id}
+            balanceDue={inv.balance_due}
+            defaultAmount={inv.paid_amount === 0 && inv.minimum_dp_required > 0 ? inv.minimum_dp_required : inv.balance_due}
+            defaultAppliedTo={inv.paid_amount === 0 ? "DP" : "FINAL_BALANCE"}
+          />
           <Link
             href={`/invoice/${encodeURIComponent(inv.invoice_number)}`}
             target="_blank"
@@ -367,20 +367,24 @@ function CopyTextButton({
 function RecordPaymentButton({
   invoiceId,
   balanceDue,
+  defaultAmount,
+  defaultAppliedTo,
 }: {
   invoiceId: string;
   balanceDue: number;
+  defaultAmount?: number;
+  defaultAppliedTo?: AppliedTo;
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [pending, start] = useTransition();
   const [status, setStatus] = useState<{ kind: "ok" | "err"; message: string } | null>(null);
 
-  const [amount, setAmount] = useState("");
+  const [amount, setAmount] = useState(() => (defaultAmount && defaultAmount > 0 ? String(defaultAmount) : ""));
   const [method, setMethod] = useState<PaymentMethod>("BANK_TRANSFER");
   const [bankName, setBankName] = useState("");
   const [reference, setReference] = useState("");
-  const [appliedTo, setAppliedTo] = useState<AppliedTo>("UNALLOCATED");
+  const [appliedTo, setAppliedTo] = useState<AppliedTo>(() => defaultAppliedTo ?? "UNALLOCATED");
   const [receivedAt, setReceivedAt] = useState(jakartaToday);
   const [notes, setNotes] = useState("");
   const [verified, setVerified] = useState(true);
@@ -637,6 +641,105 @@ function RecordPaymentButton({
         </div>
       ) : null}
     </>
+  );
+}
+
+function EmptyInvoiceState({ data }: { data: WorkspacePayload }) {
+  const router = useRouter();
+  const [pending, startTransition] = useTransition();
+  const [error, setError] = useState<string | null>(null);
+
+  const rootSpecs = (data.project.sector_specs ?? {}) as Record<string, unknown>;
+  const pkg = rootSpecs.package as {
+    name?: string;
+    categoryName?: string;
+    priceIdr?: number;
+    includes?: string[];
+  } | undefined;
+
+  const contractVal = Number(data.project.contract_value) || 0;
+  const refCode = data.project.referral_code;
+  const refDiscount = Number(data.project.referral_discount_amount) || 0;
+
+  const handleGenerate = () => {
+    setError(null);
+    startTransition(async () => {
+      const res = await generateProjectInvoiceAction(data.project.id);
+      if (res.success) {
+        router.refresh();
+      } else {
+        setError(res.error || "Gagal menerbitkan invoice.");
+      }
+    });
+  };
+
+  return (
+    <Card>
+      <div className="p-6 space-y-6">
+        <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
+          <div>
+            <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-mono font-medium bg-[#fafafa] border border-[#ececee] text-[#71717a] mb-2 uppercase">
+              Tagihan Klien
+            </div>
+            <h3 className="font-serif text-2xl font-bold text-[#09090b]">
+              Belum Ada Invoice Terbit
+            </h3>
+            <p className="text-xs text-[#71717a] mt-1">
+              Terbitkan invoice komersial resmi untuk memulai penagihan termin DP dan pelunasan klien.
+            </p>
+          </div>
+          <div className="shrink-0">
+            <button
+              type="button"
+              onClick={handleGenerate}
+              disabled={pending}
+              className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-[#09090b] hover:bg-[#27272a] px-4 text-xs font-semibold text-white transition-colors disabled:opacity-60 cursor-pointer shadow-sm"
+            >
+              {pending ? <Loader2 size={15} className="animate-spin" /> : <Receipt size={15} />}
+              {pending ? "Menerbitkan Invoice…" : "Terbitkan Invoice Komersial"}
+            </button>
+          </div>
+        </div>
+
+        {error && (
+          <p className="text-xs text-[#dc2626] bg-[#fef2f2] border border-[#fecaca] p-3 rounded-lg">
+            {error}
+          </p>
+        )}
+
+        {/* Commercial Baseline Summary */}
+        <div className="grid gap-3 sm:grid-cols-3 pt-3 border-t border-[#ececee]">
+          <CardInner>
+            <p className="text-[10px] font-mono uppercase text-[#a1a1aa]">Klien / Instansi</p>
+            <p className="mt-1 font-semibold text-xs text-[#09090b]">
+              {data.customer?.name || "Klien Tanpa Nama"}
+            </p>
+          </CardInner>
+          <CardInner>
+            <p className="text-[10px] font-mono uppercase text-[#a1a1aa]">Paket / Layanan</p>
+            <p className="mt-1 font-semibold text-xs text-[#09090b] truncate">
+              {pkg?.name ? `${pkg.categoryName ? `${pkg.categoryName} — ` : ""}${pkg.name}` : data.project.name}
+            </p>
+            {pkg?.includes && pkg.includes.length > 0 && (
+              <p className="text-[10px] text-[#71717a] mt-0.5">
+                {pkg.includes.length} deliverables terkontrak
+              </p>
+            )}
+          </CardInner>
+          <CardInner>
+            <p className="text-[10px] font-mono uppercase text-[#a1a1aa]">Nilai Kontrak</p>
+            <p className="mt-1 font-mono text-sm font-bold text-[#09090b]">
+              {idr(contractVal)}
+            </p>
+            {refCode && refDiscount > 0 ? (
+              <p className="text-[10px] text-emerald-700 font-medium mt-0.5 flex items-center gap-1">
+                <Ticket size={11} /> Diskon {refCode}: -{idr(refDiscount)}
+              </p>
+            ) : null}
+          </CardInner>
+        </div>
+      </div>
+    </Card>
   );
 }
 
