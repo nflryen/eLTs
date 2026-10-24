@@ -7,17 +7,28 @@ import {
   ArrowLeft,
   ArrowRight,
   Check,
+  CheckCircle2,
   Loader2,
   AlertCircle,
   Sparkles,
+  Layers,
+  RotateCcw,
+  Users,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { CustomerRow } from "@/types/database";
+import type { Pricelist, PricelistCategory, PricelistPackage } from "@/lib/pricelist";
 import {
   SERVICE_PILLARS,
   type ServicePillarType,
   getDefaultSectorSpecs,
 } from "@/types/sectors";
+import {
+  getPillarCategories,
+  resolvePhotographyTypeFromCategory,
+  extractPhotoQuotaFromIncludes,
+  syncPackageToSectorSpecs,
+} from "@/lib/projects/wizard-sync";
 import {
   createProjectDraftAction,
   updateProjectWizardStepAction,
@@ -26,9 +37,13 @@ import {
 
 interface ProjectCreationWizardProps {
   customers: CustomerRow[];
+  pricelist?: Pricelist;
 }
 
-export function ProjectCreationWizard({ customers }: ProjectCreationWizardProps) {
+export function ProjectCreationWizard({
+  customers,
+  pricelist,
+}: ProjectCreationWizardProps) {
   const router = useRouter();
   const [step, setStep] = useState<1 | 2 | 3>(1);
   const [isPending, startTransition] = useTransition();
@@ -45,6 +60,33 @@ export function ProjectCreationWizard({ customers }: ProjectCreationWizardProps)
   const [projectName, setProjectName] = useState("");
   const [slugPreview, setSlugPreview] = useState("");
 
+  // Pricelist Package Selection State
+  const [selectedPackageId, setSelectedPackageId] = useState<string | null>(null);
+  const [activeCategorySlug, setActiveCategorySlug] = useState<string>("all");
+
+  const categories = pricelist?.categories ?? [];
+  const relevantCategories = getPillarCategories(servicePillar, categories);
+
+  // Flattened list of packages for the current pillar and category filter
+  const availablePackages: Array<{ pkg: PricelistPackage; category: PricelistCategory }> = [];
+  for (const cat of relevantCategories) {
+    if (activeCategorySlug === "all" || activeCategorySlug === cat.slug) {
+      for (const p of cat.packages) {
+        availablePackages.push({ pkg: p, category: cat });
+      }
+    }
+  }
+
+  // Currently selected package object
+  let selectedPackage: { pkg: PricelistPackage; category: PricelistCategory } | null = null;
+  for (const cat of categories) {
+    const found = cat.packages.find((p) => p.id === selectedPackageId);
+    if (found) {
+      selectedPackage = { pkg: found, category: cat };
+      break;
+    }
+  }
+
   // Step 2 State: Temporal Staging
   const [shootDate, setShootDate] = useState("");
   const [rollTime, setRollTime] = useState("07:30");
@@ -59,6 +101,8 @@ export function ProjectCreationWizard({ customers }: ProjectCreationWizardProps)
   const [contractValue, setContractValue] = useState("1500000");
   const [dpPercentage, setDpPercentage] = useState(50);
 
+  const selectedCustomer = customers.find((c) => c.id === customerId);
+
   // Handle Project Name changes with live slug preview
   const handleNameChange = (val: string) => {
     setProjectName(val);
@@ -67,6 +111,37 @@ export function ProjectCreationWizard({ customers }: ProjectCreationWizardProps)
       .replace(/[^a-z0-9]+/g, "-")
       .replace(/^-+|-+$/g, "");
     setSlugPreview(generated ? `${generated}-2026` : "");
+  };
+
+  // Change Service Pillar and validate selected package
+  const handlePillarChange = (newPillar: ServicePillarType) => {
+    setServicePillar(newPillar);
+    setActiveCategorySlug("all");
+    const newRelevant = getPillarCategories(newPillar, categories);
+    const stillValid = newRelevant.some((cat) =>
+      cat.packages.some((p) => p.id === selectedPackageId)
+    );
+    if (!stillValid) {
+      setSelectedPackageId(null);
+    }
+  };
+
+  // Click on a pricelist package card
+  const handlePackageClick = (pkg: PricelistPackage, _category: PricelistCategory) => {
+    if (selectedPackageId === pkg.id) {
+      // Toggle off to custom
+      setSelectedPackageId(null);
+      return;
+    }
+    setSelectedPackageId(pkg.id);
+    setContractValue(pkg.priceIdr.toString());
+
+    // Auto-suggest project name if empty
+    if (!projectName.trim() && selectedCustomer) {
+      handleNameChange(`${selectedCustomer.name} — ${pkg.name}`);
+    } else if (!projectName.trim()) {
+      handleNameChange(pkg.name);
+    }
   };
 
   // STEP 1 SUBMIT -> Autosave Draft
@@ -84,11 +159,17 @@ export function ProjectCreationWizard({ customers }: ProjectCreationWizardProps)
     }
 
     startTransition(async () => {
+      let photographyType: string | undefined = undefined;
+      if (selectedPackage) {
+        photographyType = resolvePhotographyTypeFromCategory(selectedPackage.category.slug);
+      }
+
       const res = await createProjectDraftAction({
         customer_id: customerId,
         name: projectName.trim(),
         slug: slugPreview,
         service_pillar: servicePillar,
+        photography_type: photographyType,
       });
 
       if (!res.success || !res.project) {
@@ -112,12 +193,36 @@ export function ProjectCreationWizard({ customers }: ProjectCreationWizardProps)
     }
 
     startTransition(async () => {
-      const defaultSpecs = getDefaultSectorSpecs(servicePillar);
+      let defaultSpecs = getDefaultSectorSpecs(servicePillar);
+
+      // Merge package deliverables into sector specs if package is selected
+      if (selectedPackage) {
+        defaultSpecs = syncPackageToSectorSpecs(
+          servicePillar,
+          selectedPackage.pkg,
+          selectedPackage.category,
+          defaultSpecs
+        );
+      }
 
       // Merge rehearsal into specs if broadcast
       if (hasRehearsal && servicePillar === "BROADCAST_LIVE_STREAMING" && defaultSpecs.broadcast) {
         defaultSpecs.broadcast.rehearsalDate = rehearsalDate || null;
         defaultSpecs.broadcast.rehearsalCallTime = rehearsalCallTime || null;
+      }
+
+      // Determine photography type and quota from package category if available
+      let photographyType: string | undefined = undefined;
+      let selectionQuotaMax: number | undefined = undefined;
+      let selectionQuotaMin: number | undefined = undefined;
+
+      if (selectedPackage) {
+        photographyType = resolvePhotographyTypeFromCategory(selectedPackage.category.slug);
+        const quota = extractPhotoQuotaFromIncludes(selectedPackage.pkg.includes);
+        if (quota) {
+          selectionQuotaMax = quota;
+          selectionQuotaMin = Math.min(15, quota);
+        }
       }
 
       const res = await updateProjectWizardStepAction(draftProjectId, {
@@ -128,6 +233,9 @@ export function ProjectCreationWizard({ customers }: ProjectCreationWizardProps)
         venue_maps_url: venueMapsUrl || undefined,
         roll_time: rollTime,
         sector_specs: defaultSpecs as Record<string, unknown>,
+        photography_type: photographyType,
+        selection_quota_min: selectionQuotaMin,
+        selection_quota_max: selectionQuotaMax,
       });
 
       if (!res.success) {
@@ -173,8 +281,6 @@ export function ProjectCreationWizard({ customers }: ProjectCreationWizardProps)
     });
   };
 
-  const selectedCustomer = customers.find((c) => c.id === customerId);
-
   return (
     <div className="max-w-3xl mx-auto py-4">
       {/* Top Header */}
@@ -187,14 +293,14 @@ export function ProjectCreationWizard({ customers }: ProjectCreationWizardProps)
         </Link>
         <div className="flex items-center justify-between">
           <div>
-            <p className="eyebrow mb-1">Staged Project Wizard</p>
+            <span className="eyebrow block mb-1">STAGED PROJECT WIZARD</span>
             <h1 className="font-serif text-3xl font-bold tracking-tight">
               Scaffold Proyek Baru
             </h1>
           </div>
           {draftProjectId && (
-            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-mono bg-[#09090b]/5 text-[#09090b] border border-[#09090b]/25">
-              <span className="w-1.5 h-1.5 rounded-full bg-[#09090b] animate-pulse"></span>
+            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-mono font-medium bg-[#09090b]/5 text-[#09090b] border border-[#09090b]/20">
+              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
               Draft Tersimpan ({draftProjectId.slice(0, 8)})
             </span>
           )}
@@ -214,7 +320,7 @@ export function ProjectCreationWizard({ customers }: ProjectCreationWizardProps)
             <span className="w-5 h-5 rounded-full bg-white/20 flex items-center justify-center text-[11px]">
               1
             </span>
-            <span>Sektor & Klien</span>
+            <span>Sektor & Layanan</span>
           </div>
 
           <div
@@ -255,10 +361,11 @@ export function ProjectCreationWizard({ customers }: ProjectCreationWizardProps)
         </div>
       )}
 
-      {/* STEP 1: SECTOR DNA & CORE METADATA */}
+      {/* STEP 1: SECTOR DNA & PRICELIST PACKAGE */}
       {step === 1 && (
         <form onSubmit={handleStep1Submit} className="space-y-6">
           <div className="bg-white border border-border rounded-xl p-6 shadow-xs space-y-6">
+            {/* 1. SECTOR DNA */}
             <div>
               <label className="block text-sm font-semibold text-[#09090b] mb-2">
                 1. Pilih Pilar Layanan (Sector DNA) <span className="text-[#ff5a00]">*</span>
@@ -270,7 +377,7 @@ export function ProjectCreationWizard({ customers }: ProjectCreationWizardProps)
                     <button
                       key={p.id}
                       type="button"
-                      onClick={() => setServicePillar(p.id)}
+                      onClick={() => handlePillarChange(p.id)}
                       className={`text-left p-4 rounded-xl border transition-all cursor-pointer flex flex-col justify-between ${
                         isSelected
                           ? "border-[#09090b] bg-[#09090b] text-white shadow-sm ring-1 ring-[#09090b]"
@@ -307,10 +414,175 @@ export function ProjectCreationWizard({ customers }: ProjectCreationWizardProps)
               </div>
             </div>
 
-            <div className="grid sm:grid-cols-2 gap-4 pt-2">
+            {/* 2. PRICELIST PACKAGE INTEGRATION */}
+            <div className="pt-2 border-t border-border">
+              <div className="flex items-center justify-between mb-1.5">
+                <label className="block text-sm font-semibold text-[#09090b]">
+                  2. Paket Layanan (Pricelist) <span className="text-[#a1a1aa] font-normal text-xs">(Opsional)</span>
+                </label>
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-mono font-medium bg-emerald-50 text-emerald-700 border border-emerald-200">
+                  <Sparkles size={11} className="text-emerald-600" /> Sinkronisasi Otomatis
+                </span>
+              </div>
+              <p className="text-xs text-[#71717a] mb-3">
+                Pilih paket dari pricelist aktif untuk mengisi nilai kontrak baseline, lingkup kerja, dan deliverables secara otomatis.
+              </p>
+
+              {/* Category Filter Tabs */}
+              {relevantCategories.length > 1 && (
+                <div className="flex flex-wrap items-center gap-1.5 mb-3">
+                  <button
+                    type="button"
+                    onClick={() => setActiveCategorySlug("all")}
+                    className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${
+                      activeCategorySlug === "all"
+                        ? "bg-[#09090b] text-white"
+                        : "bg-[#f4f4f5] text-[#71717a] hover:bg-[#ececee]"
+                    }`}
+                  >
+                    Semua Kategori ({relevantCategories.reduce((acc, c) => acc + c.packages.length, 0)})
+                  </button>
+                  {relevantCategories.map((cat) => (
+                    <button
+                      key={cat.id}
+                      type="button"
+                      onClick={() => setActiveCategorySlug(cat.slug)}
+                      className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${
+                        activeCategorySlug === cat.slug
+                          ? "bg-[#09090b] text-white"
+                          : "bg-[#f4f4f5] text-[#71717a] hover:bg-[#ececee]"
+                      }`}
+                    >
+                      {cat.name} ({cat.packages.length})
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              {/* Package Cards Grid */}
+              <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                {/* Custom / No Package Card */}
+                <button
+                  type="button"
+                  onClick={() => setSelectedPackageId(null)}
+                  className={`text-left p-3.5 rounded-xl border transition-all cursor-pointer flex flex-col justify-between ${
+                    selectedPackageId === null
+                      ? "border-[#09090b] bg-[#fafafa] ring-1 ring-[#09090b]"
+                      : "border-border bg-white hover:bg-[#fafafa] text-[#71717a]"
+                  }`}
+                >
+                  <div>
+                    <div className="flex items-center justify-between mb-1.5">
+                      <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-[#f4f4f5] text-[#52525b] font-medium uppercase">
+                        Custom Scope
+                      </span>
+                      {selectedPackageId === null && <Check size={14} className="text-[#09090b]" />}
+                    </div>
+                    <h5 className="font-bold text-xs text-[#09090b] mb-1">Kustom / Tanpa Paket</h5>
+                    <p className="text-[11px] text-[#71717a] leading-relaxed">
+                      Tentukan nilai kontrak dan lingkup kerja kustom tanpa paket standar.
+                    </p>
+                  </div>
+                  <p className="text-[11px] font-mono text-[#a1a1aa] mt-3 pt-2 border-t border-[#f4f4f5]">
+                    Nilai kontrak manual
+                  </p>
+                </button>
+
+                {/* Pricelist Packages */}
+                {availablePackages.map(({ pkg, category }) => {
+                  const isSelected = selectedPackageId === pkg.id;
+                  return (
+                    <button
+                      key={pkg.id}
+                      type="button"
+                      onClick={() => handlePackageClick(pkg, category)}
+                      className={`text-left p-3.5 rounded-xl border transition-all cursor-pointer flex flex-col justify-between ${
+                        isSelected
+                          ? "border-[#09090b] bg-[#09090b] text-white shadow-sm ring-1 ring-[#09090b]"
+                          : "border-border bg-white hover:bg-[#fafafa] text-[#3f3f46]"
+                      }`}
+                    >
+                      <div>
+                        <div className="flex items-center justify-between mb-1.5">
+                          <span
+                            className={`text-[9.5px] font-mono px-2 py-0.5 rounded-full font-medium ${
+                              isSelected ? "bg-white/20 text-white" : "bg-[#f4f4f5] text-[#71717a]"
+                            }`}
+                          >
+                            {category.name}
+                          </span>
+                          {isSelected && <Check size={14} className="text-white shrink-0" />}
+                        </div>
+                        <h5 className="font-bold text-sm leading-snug mb-1">{pkg.name}</h5>
+                        <div className="flex items-baseline gap-1.5 my-1.5">
+                          <span className={`font-mono text-sm font-bold ${isSelected ? "text-white" : "text-[#09090b]"}`}>
+                            Rp {pkg.priceIdr.toLocaleString("id-ID")}
+                          </span>
+                          {pkg.duration && (
+                            <span className={`text-[10px] font-mono ${isSelected ? "text-[#d4d4d8]" : "text-[#71717a]"}`}>
+                              • {pkg.duration}
+                            </span>
+                          )}
+                        </div>
+
+                        {/* Scope / Includes Preview */}
+                        {pkg.includes.length > 0 && (
+                          <ul className="mt-2 space-y-1 text-[11px]">
+                            {pkg.includes.slice(0, 2).map((item, idx) => (
+                              <li
+                                key={idx}
+                                className={`line-clamp-1 flex items-center gap-1.5 ${
+                                  isSelected ? "text-[#d4d4d8]" : "text-[#71717a]"
+                                }`}
+                              >
+                                <span className="w-1 h-1 rounded-full bg-current shrink-0" />
+                                <span>{item}</span>
+                              </li>
+                            ))}
+                            {pkg.includes.length > 2 && (
+                              <li className={`text-[10px] italic ${isSelected ? "text-[#a1a1aa]" : "text-[#a1a1aa]"}`}>
+                                +{pkg.includes.length - 2} deliverable lainnya
+                              </li>
+                            )}
+                          </ul>
+                        )}
+                      </div>
+
+                      {pkg.crew.length > 0 && (
+                        <p
+                          className={`text-[10px] font-mono mt-2.5 pt-1.5 border-t line-clamp-1 ${
+                            isSelected ? "border-white/10 text-[#a1a1aa]" : "border-[#f4f4f5] text-[#71717a]"
+                          }`}
+                        >
+                          Kru: {pkg.crew.join(", ")}
+                        </p>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Active Selection Banner */}
+              {selectedPackage && (
+                <div className="mt-3 p-3 rounded-lg bg-emerald-50 border border-emerald-200 text-xs text-emerald-900 flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <CheckCircle2 size={15} className="text-emerald-600 shrink-0" />
+                    <span>
+                      Paket Terpilih: <strong>{selectedPackage.category.name} — {selectedPackage.pkg.name}</strong> (Rp {selectedPackage.pkg.priceIdr.toLocaleString("id-ID")})
+                    </span>
+                  </div>
+                  <span className="text-[11px] font-mono text-emerald-700">
+                    {selectedPackage.pkg.includes.length} deliverables disinkronkan
+                  </span>
+                </div>
+              )}
+            </div>
+
+            {/* 3. CLIENT & NAME */}
+            <div className="grid sm:grid-cols-2 gap-4 pt-2 border-t border-border">
               <div className="space-y-1.5">
                 <label htmlFor="customer" className="text-xs font-bold text-[#3f3f46]">
-                  2. Klien / Pemesan <span className="text-[#ff5a00]">*</span>
+                  3. Klien / Pemesan <span className="text-[#ff5a00]">*</span>
                 </label>
                 <select
                   id="customer"
@@ -335,7 +607,7 @@ export function ProjectCreationWizard({ customers }: ProjectCreationWizardProps)
 
               <div className="space-y-1.5">
                 <label htmlFor="name" className="text-xs font-bold text-[#3f3f46]">
-                  3. Nama Acara / Proyek <span className="text-[#ff5a00]">*</span>
+                  4. Nama Acara / Proyek <span className="text-[#ff5a00]">*</span>
                 </label>
                 <input
                   id="name"
@@ -382,9 +654,17 @@ export function ProjectCreationWizard({ customers }: ProjectCreationWizardProps)
       {step === 2 && (
         <form onSubmit={handleStep2Submit} className="space-y-6">
           <div className="bg-white border border-border rounded-xl p-6 shadow-xs space-y-6">
-            <h3 className="font-serif text-lg font-bold border-b border-border pb-3">
-              Jadwal Produksi & Titik Staging
-            </h3>
+            <div className="flex items-center justify-between border-b border-border pb-3">
+              <h3 className="font-serif text-lg font-bold">
+                Jadwal Produksi & Titik Staging
+              </h3>
+              {selectedPackage && (
+                <span className="inline-flex items-center gap-1.5 text-xs font-medium text-emerald-800 bg-emerald-50 px-2.5 py-1 rounded-full border border-emerald-200">
+                  <CheckCircle2 size={13} className="text-emerald-600" />
+                  Paket: {selectedPackage.pkg.name} {selectedPackage.pkg.duration ? `(${selectedPackage.pkg.duration})` : ""}
+                </span>
+              )}
+            </div>
 
             <div className="grid sm:grid-cols-2 gap-4">
               <div className="space-y-1.5">
@@ -463,11 +743,11 @@ export function ProjectCreationWizard({ customers }: ProjectCreationWizardProps)
               )}
             </div>
 
-            {/* Venue Details */}
+            {/* Venue Location */}
             <div className="space-y-3 pt-2">
               <div className="space-y-1.5">
                 <label className="text-xs font-bold text-[#3f3f46]">
-                  Nama Lokasi / Venue Acara
+                  Nama Lokasi / Gedung / Venue
                 </label>
                 <input
                   type="text"
@@ -480,7 +760,7 @@ export function ProjectCreationWizard({ customers }: ProjectCreationWizardProps)
 
               <div className="grid sm:grid-cols-2 gap-3">
                 <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-[#3f3f46]">
+                  <label className="text-xs font-medium text-[#52525b]">
                     Alamat Lengkap Venue
                   </label>
                   <input
@@ -488,19 +768,19 @@ export function ProjectCreationWizard({ customers }: ProjectCreationWizardProps)
                     placeholder="e.g. Jl. HR Boenyamin No. 708, Purwokerto"
                     value={venueAddress}
                     onChange={(e) => setVenueAddress(e.target.value)}
-                    className="contact-input text-sm"
+                    className="contact-input text-xs"
                   />
                 </div>
                 <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-[#3f3f46]">
-                    Link Titik Google Maps
+                  <label className="text-xs font-medium text-[#52525b]">
+                    URL Google Maps Pin Point
                   </label>
                   <input
                     type="url"
                     placeholder="https://maps.google.com/?q=..."
                     value={venueMapsUrl}
                     onChange={(e) => setVenueMapsUrl(e.target.value)}
-                    className="contact-input text-sm"
+                    className="contact-input text-xs"
                   />
                 </div>
               </div>
@@ -558,6 +838,25 @@ export function ProjectCreationWizard({ customers }: ProjectCreationWizardProps)
                     className="contact-input pl-9 font-mono text-sm font-semibold"
                   />
                 </div>
+                {selectedPackage && (
+                  <div className="mt-1 flex items-center justify-between text-[11px]">
+                    <span className="text-[#71717a]">
+                      Standar Paket:{" "}
+                      <strong className="font-mono text-[#09090b]">
+                        Rp {selectedPackage.pkg.priceIdr.toLocaleString("id-ID")}
+                      </strong>
+                    </span>
+                    {Number(contractValue) !== selectedPackage.pkg.priceIdr && (
+                      <button
+                        type="button"
+                        onClick={() => setContractValue(selectedPackage.pkg.priceIdr.toString())}
+                        className="text-[#ff5a00] hover:underline font-medium inline-flex items-center gap-1 cursor-pointer"
+                      >
+                        <RotateCcw size={11} /> Reset ke Harga Paket
+                      </button>
+                    )}
+                  </div>
+                )}
               </div>
 
               <div className="space-y-1.5">
@@ -600,11 +899,67 @@ export function ProjectCreationWizard({ customers }: ProjectCreationWizardProps)
               </div>
             </div>
 
+            {/* Scope & Deliverables Synchronization Card */}
+            <div className="p-4 rounded-xl border border-border bg-[#fafafa] space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Layers size={15} className="text-[#09090b]" />
+                  <h4 className="text-xs font-bold text-[#09090b]">
+                    Lingkup Kerja & Deliverables yang Disinkronkan
+                  </h4>
+                </div>
+                {selectedPackage ? (
+                  <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 font-semibold">
+                    {selectedPackage.pkg.includes.length} Output Terkontrak
+                  </span>
+                ) : (
+                  <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-[#f4f4f5] text-[#71717a]">
+                    Template Standar Pilar
+                  </span>
+                )}
+              </div>
+
+              {selectedPackage ? (
+                <div className="space-y-2">
+                  <p className="text-[11px] text-[#71717a]">
+                    Item deliverable berikut akan otomatis mengisi modul Sector Engine & Tracker pasca-peluncuran:
+                  </p>
+                  <ul className="grid sm:grid-cols-2 gap-1.5 text-xs text-[#3f3f46]">
+                    {selectedPackage.pkg.includes.map((item, idx) => (
+                      <li key={idx} className="flex items-start gap-2 bg-white px-2.5 py-1.5 rounded-lg border border-[#ececee]">
+                        <Check size={13} className="text-emerald-600 mt-0.5 shrink-0" />
+                        <span className="leading-snug text-[11.5px]">{item}</span>
+                      </li>
+                    ))}
+                  </ul>
+                  {selectedPackage.pkg.crew.length > 0 && (
+                    <div className="pt-2 border-t border-[#ececee] flex items-center gap-2 text-[11px] text-[#52525b]">
+                      <Users size={12} className="text-[#71717a]" />
+                      <span>Kru Dianjurkan: <strong>{selectedPackage.pkg.crew.join(", ")}</strong></span>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <p className="text-[11px] text-[#71717a] leading-relaxed">
+                  Mode Kustom: Deliverables dan alur kerja akan mengikuti template default sektor{" "}
+                  <strong className="text-[#09090b]">{servicePillar}</strong>. Anda dapat mengatur ulang spesifikasi di dalam workspace proyek.
+                </p>
+              )}
+            </div>
+
             {/* Scaffold Summary Card */}
             <div className="p-4 rounded-xl border border-[#ececee] bg-white space-y-2 text-xs">
               <div className="flex items-center justify-between text-[#71717a] font-mono text-[11px] border-b border-[#ececee] pb-2">
                 <span>SECTOR DNA</span>
                 <span className="font-bold text-[#3f3f46]">{servicePillar}</span>
+              </div>
+              <div className="flex items-center justify-between text-[#71717a] font-mono text-[11px] border-b border-[#ececee] pb-2">
+                <span>PAKET PRICELIST</span>
+                <span className="font-bold text-[#3f3f46]">
+                  {selectedPackage
+                    ? `${selectedPackage.category.name} — ${selectedPackage.pkg.name}`
+                    : "Kustom / Tanpa Paket"}
+                </span>
               </div>
               <div className="flex items-center justify-between text-[#71717a] font-mono text-[11px] border-b border-[#ececee] pb-2">
                 <span>NAMA PROYEK</span>

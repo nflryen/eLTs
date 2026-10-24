@@ -89,6 +89,7 @@ export async function createProjectDraftAction(data: {
   name: string;
   slug?: string;
   service_pillar: string;
+  photography_type?: string;
 }): Promise<{ success: boolean; project?: ProjectRow; error?: string }> {
   try {
     const { supabase } = await requireOps();
@@ -111,13 +112,15 @@ export async function createProjectDraftAction(data: {
     const defaultPin = Math.floor(100000 + Math.random() * 900000).toString();
     const gallery_pin_hash = await hashGalleryPin(defaultPin, pepper);
 
-    // Determine photography type fallback
-    const photography_type = service_pillar.includes("PHOTO")
+    // Determine photography type fallback or explicit value
+    const validPhotographyTypes = ["wedding", "prewedding", "graduation", "couple", "event"];
+    const photography_type = (data.photography_type && validPhotographyTypes.includes(data.photography_type))
+      ? (data.photography_type as ProjectRow["photography_type"])
+      : service_pillar.includes("PHOTO")
       ? "graduation"
       : service_pillar.includes("BROADCAST")
       ? "event"
       : "event";
-
     const { data: project, error } = await supabase
       .from("projects")
       .insert({
@@ -156,6 +159,9 @@ export async function updateProjectWizardStepAction(
     contract_value?: number;
     dp_amount?: number;
     sector_specs?: Record<string, unknown>;
+    photography_type?: string;
+    selection_quota_min?: number;
+    selection_quota_max?: number;
     notes?: string;
     venue_name?: string;
     venue_address?: string;
@@ -180,7 +186,12 @@ export async function updateProjectWizardStepAction(
     if (stepData.contract_value !== undefined) updatePayload.contract_value = Number(stepData.contract_value) || 0;
     if (stepData.dp_amount !== undefined) updatePayload.dp_amount = Number(stepData.dp_amount) || 0;
     if (stepData.sector_specs !== undefined) updatePayload.sector_specs = stepData.sector_specs;
-
+    const validPhotographyTypes = ["wedding", "prewedding", "graduation", "couple", "event"];
+    if (stepData.photography_type && validPhotographyTypes.includes(stepData.photography_type)) {
+      updatePayload.photography_type = stepData.photography_type as ProjectRow["photography_type"];
+    }
+    if (stepData.selection_quota_min !== undefined) updatePayload.selection_quota_min = stepData.selection_quota_min;
+    if (stepData.selection_quota_max !== undefined) updatePayload.selection_quota_max = stepData.selection_quota_max;
     const { error } = await supabase
       .from("projects")
       .update(updatePayload)
