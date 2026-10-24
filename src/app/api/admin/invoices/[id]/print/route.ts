@@ -404,7 +404,7 @@ export const GET = withAdmin<{ id: string }>(
           </div>
           <p class="text-[11px] text-[#52525b] font-medium leading-tight">Moving Stories, Building Futures.</p>
           <p class="text-[10px] text-[#71717a] mt-0.5 leading-tight">
-            Purwokerto Utara, Kab. Banyumas • WhatsApp: 0822-3459-0719 • halo@elts.id
+            Purwokerto Utara, Kab. Banyumas • WhatsApp: 0851-2801-5848 • hallo.elts@gmail.com
           </p>
         </div>
 

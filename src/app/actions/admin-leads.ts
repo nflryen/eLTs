@@ -128,6 +128,9 @@ export async function listLeads(): Promise<LeadRow[]> {
       : [];
     const addonsTotal = sumAddons(addons);
     const pkgPrice = pkg?.price ?? null;
+    const rawSubtotal = (pkgPrice ?? 0) + addonsTotal;
+    const discount = Number(lead.referral_discount_amount) || 0;
+    const finalEstimate = Math.max(0, rawSubtotal - discount);
 
     return {
       ...lead,
@@ -135,7 +138,7 @@ export async function listLeads(): Promise<LeadRow[]> {
       package_name: pkg?.name ?? null,
       package_price_idr: pkgPrice,
       estimate_total_idr:
-        pkgPrice === null && addonsTotal === 0 ? null : (pkgPrice ?? 0) + addonsTotal,
+        pkgPrice === null && addonsTotal === 0 ? null : finalEstimate,
     };
   });
 }
@@ -393,8 +396,17 @@ export async function convertLeadToBooking(
       subtotal: price,
     });
   }
+  if (lead.referral_code && Number(lead.referral_discount_amount) > 0) {
+    const discount = Math.round(Number(lead.referral_discount_amount));
+    lineItems.push({
+      description: `Diskon Referral (${lead.referral_code})`,
+      quantity: 1,
+      unit_price: -discount,
+      subtotal: -discount,
+    });
+  }
 
-  const grossContractValue = lineItems.reduce((acc, item) => acc + item.subtotal, 0);
+  const grossContractValue = Math.max(0, lineItems.reduce((acc, item) => acc + item.subtotal, 0));
 
   let invoiceId: string | null = null;
   if (lineItems.length > 0) {
@@ -418,6 +430,9 @@ export async function convertLeadToBooking(
           gross_contract_value: grossContractValue,
           minimum_dp_pct: 30,
           client_notes: lead.notes,
+          referral_code_id: lead.referral_code_id ?? null,
+          referral_code: lead.referral_code ?? null,
+          referral_discount_amount: Number(lead.referral_discount_amount) || 0,
         })
         .select("id")
         .single();

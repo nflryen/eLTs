@@ -247,7 +247,7 @@ export async function bookStudioEventAction(data: BookingFormData): Promise<{
         `\nMohon konfirmasi jadwalnya ya kak. Terima kasih!`
     );
 
-    const waNumber = site.whatsappNumber || "6280000000000";
+    const waNumber = site.whatsappNumber || "6285128015848";
     const waLink = `https://wa.me/${waNumber}?text=${waText}`;
 
     return {

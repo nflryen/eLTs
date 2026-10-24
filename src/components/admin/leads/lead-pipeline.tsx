@@ -12,6 +12,7 @@ import {
   Package,
   Phone,
   Search,
+  Ticket,
   Trash2,
 } from "lucide-react";
 import {
@@ -259,6 +260,15 @@ export function LeadPipeline({
                       <span className="ml-auto font-medium tabular-nums text-[#18181b]">
                         Estimasi {idr(lead.estimate_total_idr)}
                       </span>
+                    )}
+                  </div>
+                )}
+                {lead.referral_code && (
+                  <div className="mt-2 flex items-center gap-1.5 text-[11px] text-emerald-800 bg-emerald-50 border border-emerald-200 rounded-md px-2.5 py-1 w-fit">
+                    <Ticket size={12} className="text-emerald-600" />
+                    <span>Kode Referral: <strong className="font-mono">{lead.referral_code}</strong></span>
+                    {Number(lead.referral_discount_amount) > 0 && (
+                      <span className="font-semibold text-emerald-700">(-{idr(Number(lead.referral_discount_amount))})</span>
                     )}
                   </div>
                 )}

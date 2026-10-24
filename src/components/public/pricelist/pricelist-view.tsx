@@ -1,12 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
-import { ArrowRight, Check, Clock, Info, LayoutGrid, Table2 } from "lucide-react";
+import { useState, useTransition } from "react";
+import { ArrowRight, Check, Clock, Info, LayoutGrid, Loader2, Table2, Ticket, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { idr } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import type { Pricelist, PricelistCategory, PricelistPackage } from "@/lib/pricelist";
+import { validateReferralCodeAction } from "@/app/actions/referral";
 
 /**
  * The public pricelist surface.
@@ -137,6 +138,16 @@ export function PricelistView({ data }: Props) {
    */
   const [selected, setSelected] = useState<Record<string, true>>({});
   const [qtyText, setQtyText] = useState<Record<string, string>>({});
+  const [referralInput, setReferralInput] = useState("");
+  const [appliedReferral, setAppliedReferral] = useState<{
+    code: string;
+    discountType: "fixed" | "percentage";
+    discountValue: number;
+    discountAmount: number;
+    formattedDiscount: string;
+  } | null>(null);
+  const [referralPending, startReferralTransition] = useTransition();
+  const [referralMsg, setReferralMsg] = useState<{ text: string; error: boolean } | null>(null);
 
   /*
    * The numeric quantity for one add-on. An empty or unparseable field falls
@@ -175,7 +186,13 @@ export function PricelistView({ data }: Props) {
     0,
   );
   const packagePrice = activePackage?.priceIdr ?? 0;
-  const total = packagePrice + addonsTotal;
+  const baseTotal = packagePrice + addonsTotal;
+  const discountAmount = appliedReferral
+    ? appliedReferral.discountType === "percentage"
+      ? Math.round(baseTotal * (appliedReferral.discountValue / 100))
+      : Math.min(baseTotal, appliedReferral.discountValue)
+    : 0;
+  const total = Math.max(0, baseTotal - discountAmount);
 
   /*
    * Also not memoised: the link is rendered once per commit and `URLSearchParams`
@@ -209,6 +226,10 @@ export function PricelistView({ data }: Props) {
           .join(","),
       );
     }
+    if (appliedReferral && discountAmount > 0) {
+      params.set("referral", appliedReferral.code);
+      params.set("discount", String(discountAmount));
+    }
     params.set("total", String(total));
     /*
      * The CTA lands on /contact, NOT /booking.
@@ -231,6 +252,32 @@ export function PricelistView({ data }: Props) {
       if (next[slug]) delete next[slug];
       else next[slug] = true;
       return next;
+    });
+  };
+
+  const handleApplyReferral = () => {
+    const code = referralInput.trim();
+    if (!code) return;
+    setReferralMsg(null);
+
+    startReferralTransition(async () => {
+      const res = await validateReferralCodeAction(code, baseTotal);
+      if (!res.ok) {
+        setReferralMsg({ text: res.error, error: true });
+        return;
+      }
+      if (!res.valid) {
+        setReferralMsg({ text: res.message, error: true });
+        return;
+      }
+      setAppliedReferral({
+        code: res.code,
+        discountType: res.discountType,
+        discountValue: res.discountValue,
+        discountAmount: res.discountAmount,
+        formattedDiscount: res.formattedDiscount,
+      });
+      setReferralMsg({ text: `Kode ${res.code} berhasil diterapkan!`, error: false });
     });
   };
 
@@ -628,15 +675,81 @@ export function PricelistView({ data }: Props) {
               </ul>
             </fieldset>
 
+            {/* Referral code input */}
+            <div className="mt-4 border-t border-[#ececee] pt-3">
+              <label htmlFor="p-referral" className="flex items-center gap-1.5 text-[11px] font-medium text-[#71717a]">
+                <Ticket size={12} />
+                <span>Have a referral code?</span>
+              </label>
+              {appliedReferral ? (
+                <div className="mt-1.5 flex items-center justify-between rounded-lg border border-emerald-200 bg-emerald-50 px-2.5 py-1.5 text-xs text-emerald-800">
+                  <div className="flex items-center gap-1.5">
+                    <Check size={13} className="text-emerald-600" />
+                    <span className="font-mono font-bold tracking-wider">{appliedReferral.code}</span>
+                    <span className="text-[11px]">(-{appliedReferral.formattedDiscount})</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAppliedReferral(null);
+                      setReferralInput("");
+                      setReferralMsg(null);
+                    }}
+                    className="rounded p-0.5 hover:bg-emerald-100"
+                    title="Remove code"
+                  >
+                    <X size={13} />
+                  </button>
+                </div>
+              ) : (
+                <div className="mt-1.5 flex gap-1.5">
+                  <input
+                    id="p-referral"
+                    type="text"
+                    placeholder="REFERRAL CODE"
+                    value={referralInput}
+                    onChange={(e) => {
+                      setReferralInput(e.target.value.toUpperCase());
+                      setReferralMsg(null);
+                    }}
+                    className="h-8 flex-1 rounded-lg border border-[#ececee] bg-white px-2.5 font-mono text-xs uppercase tracking-wider text-[#18181b] outline-none focus:border-[#18181b]"
+                  />
+                  <button
+                    type="button"
+                    disabled={referralPending || !referralInput.trim()}
+                    onClick={handleApplyReferral}
+                    className="h-8 rounded-lg bg-[#18181b] px-3 text-xs font-medium text-white hover:bg-[#27272a] disabled:opacity-40"
+                  >
+                    {referralPending ? <Loader2 size={12} className="animate-spin" /> : "Apply"}
+                  </button>
+                </div>
+              )}
+              {referralMsg && (
+                <p className={`mt-1 text-[11px] ${referralMsg.error ? "text-red-600" : "text-emerald-600"}`}>
+                  {referralMsg.text}
+                </p>
+              )}
+            </div>
+
             <dl className="mt-4 space-y-1.5 border-t border-[#ececee] pt-4 text-[12px]">
               <div className="flex items-center justify-between gap-2">
                 <dt className="text-[#71717a]">Package</dt>
                 <dd className="tabular-nums text-[#3f3f46]">{idr(packagePrice)}</dd>
               </div>
-              <div className="flex items-center justify-between gap-2">
-                <dt className="text-[#71717a]">Add-on</dt>
-                <dd className="tabular-nums text-[#3f3f46]">{idr(addonsTotal)}</dd>
-              </div>
+              {addonsTotal > 0 && (
+                <div className="flex items-center justify-between gap-2">
+                  <dt className="text-[#71717a]">Add-on</dt>
+                  <dd className="tabular-nums text-[#3f3f46]">{idr(addonsTotal)}</dd>
+                </div>
+              )}
+              {appliedReferral && discountAmount > 0 && (
+                <div className="flex items-center justify-between gap-2 text-emerald-700">
+                  <dt className="flex items-center gap-1 font-medium">
+                    <span>Referral Discount ({appliedReferral.code})</span>
+                  </dt>
+                  <dd className="tabular-nums font-semibold">-{idr(discountAmount)}</dd>
+                </div>
+              )}
               <div
                 aria-live="polite"
                 className="mt-2 flex items-baseline justify-between gap-2 border-t border-[#ececee] pt-2"

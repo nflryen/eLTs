@@ -1,6 +1,6 @@
 import Image from "next/image";
 import type { Metadata } from "next";
-import { MapPin, MessageCircle } from "lucide-react";
+import { Mail, MapPin, MessageCircle } from "lucide-react";
 import { ContactForm } from "@/components/contact/contact-form";
 import { site, bookingUrl } from "@/config/site";
 
@@ -29,6 +29,8 @@ export default async function ContactPage({ searchParams }: Props) {
     packageId: first("package_id"),
     packageName: first("package_name"),
     addons: first("addons"),
+    referral: first("referral"),
+    discount: first("discount"),
   };
 
   return (
@@ -62,6 +64,20 @@ export default async function ContactPage({ searchParams }: Props) {
                 <p className="text-sm font-medium">WhatsApp</p>
                 <p className="mt-0.5 text-sm text-muted-foreground group-hover:text-foreground transition-colors">
                   +{site.whatsappNumber}
+                </p>
+              </div>
+            </a>
+            <a
+              href={`mailto:${site.email}`}
+              className="group flex items-start gap-4"
+            >
+              <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-secondary">
+                <Mail size={18} />
+              </span>
+              <div>
+                <p className="text-sm font-medium">Email</p>
+                <p className="mt-0.5 text-sm text-muted-foreground group-hover:text-foreground transition-colors">
+                  {site.email}
                 </p>
               </div>
             </a>

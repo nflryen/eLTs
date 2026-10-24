@@ -66,7 +66,7 @@ export const GET = withAdmin<{ id: string }>(
           <div class="tag">Creative &amp; Digital Studio</div>
           <div class="contact">
             Purwokerto, Jawa Tengah<br>
-            WhatsApp 0822-3459-0719<br>
+            WhatsApp 0851-2801-5848<br>
             studio@elts.id
           </div>
         </div>

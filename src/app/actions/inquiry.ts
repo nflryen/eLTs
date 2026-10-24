@@ -5,6 +5,7 @@ import { createServiceSupabase } from "@/lib/supabase/service";
 import type { InquiryRow } from "@/types/database";
 import { buildLeadWhatsAppLink } from "@/lib/leads/whatsapp";
 import { resolveLeadPricing } from "@/lib/leads/pricing";
+import { validateReferralCodeAction, trackReferralUsage } from "@/app/actions/referral";
 
 /*
  * Public-facing submission contract.
@@ -52,6 +53,7 @@ const inquirySchema = z.object({
     .or(z.literal("")),
   selectedPackageId: z.string().uuid().optional().or(z.literal("")),
   selectedAddons: z.array(addonSelectionSchema).max(20).optional(),
+  referralCode: z.string().trim().max(32).optional().or(z.literal("")),
 });
 
 export type InquiryFormValues = z.input<typeof inquirySchema>;
@@ -88,6 +90,24 @@ export async function submitInquiryAction(
        */
       console.warn("inquiry_unknown_addon_slugs", { slugs: pricing.unknownAddonSlugs });
     }
+    /*
+     * Resolve referral code and calculate discount if provided.
+     */
+    let referralCodeId: string | null = null;
+    let referralCode: string | null = null;
+    let referralDiscountAmount = 0;
+
+    if (validated.referralCode) {
+      const refRes = await validateReferralCodeAction(
+        validated.referralCode,
+        pricing.totalEstimateIdr ?? 0,
+      );
+      if (refRes.ok && refRes.valid) {
+        referralCodeId = refRes.referralId;
+        referralCode = refRes.code;
+        referralDiscountAmount = refRes.discountAmount;
+      }
+    }
 
     /*
      * Annotated so `status` stays the enum union rather than widening to
@@ -113,6 +133,9 @@ export async function submitInquiryAction(
        */
       selected_package_id: pricing.unknownPackage ? null : validated.selectedPackageId || null,
       selected_addons: pricing.addons,
+      referral_code_id: referralCodeId,
+      referral_code: referralCode,
+      referral_discount_amount: referralDiscountAmount,
     };
 
     /*
@@ -129,6 +152,9 @@ export async function submitInquiryAction(
       console.error("Database error saving inquiry:", error);
       return { success: false, error: "Gagal menyimpan permintaan. Silakan coba lagi." };
     }
+    if (referralCodeId) {
+      await trackReferralUsage(referralCodeId);
+    }
 
     const waLink = buildLeadWhatsAppLink(
       {
@@ -139,6 +165,8 @@ export async function submitInquiryAction(
         eventDate: validated.eventDate || null,
         packageName: pricing.packageName,
         addonNames: pricing.addons.map((a) => a.name),
+        referralCode,
+        discountAmount: referralDiscountAmount,
       },
       "client",
     );

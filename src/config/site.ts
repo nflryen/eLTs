@@ -1,5 +1,7 @@
 const whatsappNumber =
-  process.env.NEXT_PUBLIC_WHATSAPP_NUMBER || "6280000000000";
+  process.env.NEXT_PUBLIC_WHATSAPP_NUMBER || "6285128015848";
+const contactEmail =
+  process.env.NEXT_PUBLIC_CONTACT_EMAIL || "hallo.elts@gmail.com";
 
 export const site = {
   name: "Elts. Photography",
@@ -8,6 +10,7 @@ export const site = {
     "Elts. Photography captures weddings, preweddings, graduations, couples and meaningful events through timeless visual storytelling.",
   url: process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000",
   whatsappNumber: whatsappNumber.replace(/\D/g, ""),
+  email: contactEmail.trim(),
   instagramUrl: process.env.NEXT_PUBLIC_INSTAGRAM_URL || null,
 };
 

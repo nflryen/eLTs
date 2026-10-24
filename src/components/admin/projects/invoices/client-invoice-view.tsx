@@ -173,7 +173,7 @@ export function ClientInvoiceView({ invoice }: ClientInvoiceViewProps) {
             <p className="text-xs text-[#52525b] font-medium leading-tight">Moving Stories, Building Futures.</p>
             <p className="text-[11px] text-[#71717a] mt-1 leading-tight">
               Purwokerto Utara, Kabupaten Banyumas, Jawa Tengah<br />
-              WhatsApp: 0822-3459-0719 • Email: halo@elts.id
+              WhatsApp: 0851-2801-5848 • Email: hallo.elts@gmail.com
             </p>
           </div>
 

@@ -212,7 +212,28 @@ export type InquiryRow = {
   contacted_at: string | null;
   converted_customer_id: string | null;
   converted_project_id: string | null;
+  referral_code_id: string | null;
+  referral_code: string | null;
+  referral_discount_amount: number;
   created_at: string;
+};
+
+export type ReferralDiscountType = "fixed" | "percentage";
+export type ReferralStatus = "ACTIVE" | "DISABLED" | "EXPIRED";
+
+export type ReferralCodeRow = {
+  id: string;
+  code: string;
+  sales_name: string;
+  discount_type: ReferralDiscountType;
+  discount_value: number;
+  max_uses: number | null;
+  used_count: number;
+  expiry_date: string | null;
+  status: ReferralStatus;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
 };
 
 export type MoodboardCardRow = {
@@ -482,7 +503,10 @@ export type Database = {
       project_expenses: Table<ProjectExpenseRow, "project_id" | "category" | "name" | "unit_cost">;
       inventory_assets: Table<InventoryAssetRow, "asset_code" | "name" | "category">;
       project_invoices: Table<ProjectInvoiceRow, "project_id" | "invoice_number" | "gross_contract_value">;
-
+      referral_codes: Table<
+        ReferralCodeRow,
+        "code" | "sales_name" | "discount_type" | "discount_value"
+      >;
       /* -- Remaining live tables (previously undeclared) ---------------------
        * Generated from information_schema against the hosted database.
        * `never` as the required-key set means "no insert path is declared";

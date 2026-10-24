@@ -2,7 +2,7 @@ import Link from "next/link";
 import {
   LayoutDashboard, FolderKanban, Calendar, Package,
   Coins, Building2, Settings, LogOut, Clock, Receipt, Wallet,
-  Clapperboard, LayoutTemplate, Inbox, ClipboardList, Tags,
+  Clapperboard, LayoutTemplate, Inbox, ClipboardList, Tags, Ticket,
 } from "lucide-react";
 import { adminLogout } from "@/app/actions/admin-auth";
 import { requireStaff } from "@/lib/auth/roles";
@@ -84,6 +84,7 @@ const NAV_GROUPS: NavGroup[] = [
       { href: "/admin/leads", label: "Lead & Konsultasi", icon: <Inbox size={18} />, minRank: RANKS.ADMIN },
       { href: "/admin/portfolio", label: "Portofolio & CMS", icon: <LayoutTemplate size={18} />, minRank: RANKS.ADMIN },
       { href: "/admin/pricelist", label: "Pricelist", icon: <Tags size={18} />, minRank: RANKS.ADMIN },
+      { href: "/admin/referrals", label: "Kode Referral", icon: <Ticket size={18} />, minRank: RANKS.ADMIN },
     ],
   },
 ];

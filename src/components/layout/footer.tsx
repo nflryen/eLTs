@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowUpRight, Camera } from "lucide-react";
+import { ArrowUpRight, Camera, Mail } from "lucide-react";
 import { bookingUrl, navigation, site } from "@/config/site";
 
 /*
@@ -51,6 +51,12 @@ export function Footer() {
                 <Camera size={15} /> Instagram
               </a>
             )}
+            <a
+              href={`mailto:${site.email}`}
+              className="inline-flex w-fit items-center gap-2 text-[14px] text-[var(--color-ash)] transition-colors hover:text-white"
+            >
+              <Mail size={15} /> {site.email}
+            </a>
             <a
               href={bookingUrl()}
               target="_blank"

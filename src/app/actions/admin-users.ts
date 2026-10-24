@@ -87,8 +87,8 @@ export async function getUnifiedUsersList(): Promise<UnifiedUser[]> {
 
     for (const admin of (adminsData || []) as AdminRow[]) {
       const authUser = authUsersMap.get(admin.user_id);
-      const email = authUser?.email || "admin@elts.studio";
-      const phone = authUser?.phone || "082234590719";
+      const email = authUser?.email || "hallo.elts@gmail.com";
+      const phone = authUser?.phone || "085128015848";
       const lastActive = authUser?.last_sign_in_at || admin.created_at || null;
       const waLink = await formatWhatsAppLink(
         phone,

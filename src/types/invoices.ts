@@ -40,6 +40,9 @@ export type ProjectInvoiceRow = {
   minimum_dp_pct: number;
   client_notes: string | null;
   pdf_storage_key: string | null;
+  referral_code_id?: string | null;
+  referral_code?: string | null;
+  referral_discount_amount?: number;
   /** Migration 0006: cancelled invoices reject new receipts. */
   is_cancelled: boolean;
   cancelled_reason: string | null;

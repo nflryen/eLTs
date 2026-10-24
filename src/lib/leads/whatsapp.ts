@@ -35,6 +35,8 @@ export type LeadWhatsAppInput = {
   eventDate?: string | null;
   packageName?: string | null;
   addonNames?: string[];
+  referralCode?: string | null;
+  discountAmount?: number | null;
 };
 
 /**
@@ -61,7 +63,7 @@ export function buildLeadWhatsAppLink(
       lead.eventDate ? `Tanggal acara: *${lead.eventDate}*` : null,
       lead.packageName ? `Paket yang saya minati: *${lead.packageName}*` : null,
       lead.addonNames?.length ? `Add-on pilihan: ${lead.addonNames.join(", ")}` : null,
-      "",
+      lead.referralCode ? `Kode referral: *${lead.referralCode}*` : null,
       "Mohon info ketersediaan jadwal dan langkah selanjutnya. Terima kasih!",
     ].filter(Boolean);
     return `https://wa.me/${studioNumber}?text=${encodeURIComponent(lines.join("\n"))}`;
@@ -79,7 +81,7 @@ export function buildLeadWhatsAppLink(
     lead.eventType ? `Jenis acara: ${lead.eventType}` : null,
     lead.eventDate ? `Tanggal acara: ${lead.eventDate}` : null,
     lead.packageName ? `Paket yang diminati: ${lead.packageName}` : null,
-    "",
+    lead.referralCode ? `Kode referral: ${lead.referralCode}` : null,
     "Apakah ada waktu untuk kita diskusikan detailnya?",
   ].filter(Boolean);
 

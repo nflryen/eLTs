@@ -55,6 +55,8 @@ export type ContactPrefill = {
   packageName?: string;
   /** Comma-separated `slug` or `slug:qty` pairs from the configurator. */
   addons?: string;
+  referral?: string;
+  discount?: string;
 };
 
 /**
@@ -89,6 +91,7 @@ function prettySlug(slug: string): string {
 export function ContactForm({ prefill }: { prefill?: ContactPrefill }) {
   const [form, setForm] = useState<FormState>(EMPTY);
   const [sent, setSent] = useState<{ reference: string; waLink: string } | null>(null);
+  const [referralCode, setReferralCode] = useState(prefill?.referral ?? "");
   const addons = parseAddons(prefill?.addons);
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
@@ -125,6 +128,7 @@ export function ContactForm({ prefill }: { prefill?: ContactPrefill }) {
         eventDate: form.date,
         selectedPackageId: prefill?.packageId || undefined,
         selectedAddons: addons,
+        referralCode: (referralCode || prefill?.referral)?.trim().toUpperCase() || undefined,
       });
 
       if (!result.success) {
@@ -194,16 +198,27 @@ export function ContactForm({ prefill }: { prefill?: ContactPrefill }) {
         and re-type it into the message box — which is exactly the duplication
         the pipeline exists to remove.
       */}
-      {prefill?.packageName && (
+      {(prefill?.packageName || prefill?.referral) && (
         <div className="rounded-lg border border-border bg-secondary/40 px-4 py-3">
-          <p className="text-[11px] uppercase tracking-[0.18em] text-[var(--color-fog)]">
-            Selected package
-          </p>
-          <p className="mt-1 text-sm font-medium">{prefill.packageName}</p>
-          {addons.length > 0 && (
-            <p className="mt-0.5 text-[12px] text-[var(--color-fog)]">
-              Add-on: {addons.map((a) => prettySlug(a.id)).join(", ")}
-            </p>
+          {prefill?.packageName && (
+            <>
+              <p className="text-[11px] uppercase tracking-[0.18em] text-[var(--color-fog)]">
+                Selected package
+              </p>
+              <p className="mt-1 text-sm font-medium">{prefill.packageName}</p>
+              {addons.length > 0 && (
+                <p className="mt-0.5 text-[12px] text-[var(--color-fog)]">
+                  Add-on: {addons.map((a) => prettySlug(a.id)).join(", ")}
+                </p>
+              )}
+            </>
+          )}
+          {prefill?.referral && (
+            <div className="mt-2 flex items-center gap-1.5 text-xs text-emerald-700">
+              <span className="font-semibold">Referral code:</span>
+              <span className="font-mono font-bold tracking-wider">{prefill.referral}</span>
+              {prefill.discount && <span>(-Rp {Number(prefill.discount).toLocaleString("id-ID")})</span>}
+            </div>
           )}
         </div>
       )}
@@ -312,6 +327,24 @@ export function ContactForm({ prefill }: { prefill?: ContactPrefill }) {
           className="contact-input resize-none"
         />
       </div>
+
+      {/* Referral Code (Optional) */}
+      {!prefill?.referral && (
+        <div className="space-y-2">
+          <label htmlFor="contact-referral" className="text-sm font-medium">
+            Referral code <span className="text-muted-foreground">(optional)</span>
+          </label>
+          <input
+            id="contact-referral"
+            name="referralCode"
+            type="text"
+            value={referralCode}
+            onChange={(e) => setReferralCode(e.target.value.toUpperCase())}
+            placeholder="e.g. SUMMER2026"
+            className="contact-input font-mono uppercase tracking-wider"
+          />
+        </div>
+      )}
 
       {error && (
         <p role="alert" className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">

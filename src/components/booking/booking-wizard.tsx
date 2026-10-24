@@ -16,10 +16,12 @@ import {
   Check,
   Loader2,
   Sparkles,
+  Ticket,
   MessageCircle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { getAvailableSlots, bookStudioEventAction } from "@/app/actions/booking";
+import { validateReferralCodeAction } from "@/app/actions/referral";
 import type {
   BookingConfirmationDetails,
   BookingOption,
@@ -96,6 +98,14 @@ export function BookingWizard() {
   const [notes, setNotes] = useState("");
   const [formError, setFormError] = useState<string | null>(null);
 
+  // Referral code state
+  const [referralCode, setReferralCode] = useState("");
+  const [appliedReferral, setAppliedReferral] = useState<{
+    code: string;
+    formattedDiscount: string;
+  } | null>(null);
+  const [referralPending, setReferralPending] = useState(false);
+  const [referralMsg, setReferralMsg] = useState<{ text: string; error: boolean } | null>(null);
   // Step 4: Submission & Confirmation
   const [isSubmitting, startSubmitTransition] = useTransition();
   const [confirmation, setConfirmation] =
@@ -215,7 +225,12 @@ export function BookingWizard() {
         whatsapp: cleanWa,
         email: email.trim(),
         servicePillar,
-        notes: notes.trim(),
+        notes: [
+          notes.trim(),
+          appliedReferral ? `[Referral: ${appliedReferral.code} (${appliedReferral.formattedDiscount})]` : null,
+        ]
+          .filter(Boolean)
+          .join(" "),
       });
 
       if (res.success && res.confirmation) {
@@ -668,6 +683,79 @@ export function BookingWizard() {
             />
           </div>
 
+
+          {/* Referral Code (Optional) */}
+          <div>
+            <label className="block text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-1.5 flex items-center gap-1.5">
+              <Ticket size={13} />
+              <span>Referral code (optional)</span>
+            </label>
+            {appliedReferral ? (
+              <div className="flex items-center justify-between rounded-[var(--radius-inputs)] border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-800">
+                <div className="flex items-center gap-2">
+                  <Check size={14} className="text-emerald-600" />
+                  <span className="font-mono font-bold">{appliedReferral.code}</span>
+                  <span>(-{appliedReferral.formattedDiscount})</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAppliedReferral(null);
+                    setReferralCode("");
+                    setReferralMsg(null);
+                  }}
+                  className="text-xs text-emerald-700 hover:underline"
+                >
+                  Remove
+                </button>
+              </div>
+            ) : (
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={referralCode}
+                  onChange={(e) => {
+                    setReferralCode(e.target.value.toUpperCase());
+                    setReferralMsg(null);
+                  }}
+                  placeholder="e.g. SUMMER2026"
+                  className="w-full rounded-[var(--radius-inputs)] border border-[var(--color-cloud)] bg-[var(--color-snow)] px-3 py-2 text-sm font-mono uppercase tracking-wider text-[var(--color-graphite)] focus:border-[#09090b] focus:outline-none"
+                />
+                <button
+                  type="button"
+                  disabled={referralPending || !referralCode.trim()}
+                  onClick={async () => {
+                    if (!referralCode.trim()) return;
+                    setReferralPending(true);
+                    setReferralMsg(null);
+                    const res = await validateReferralCodeAction(referralCode.trim(), 1000000);
+                    setReferralPending(false);
+                    if (!res.ok) {
+                      setReferralMsg({ text: res.error, error: true });
+                      return;
+                    }
+                    if (!res.valid) {
+                      setReferralMsg({ text: res.message, error: true });
+                      return;
+                    }
+                    setAppliedReferral({
+                      code: res.code,
+                      formattedDiscount: res.formattedDiscount,
+                    });
+                    setReferralMsg({ text: `Kode ${res.code} valid!`, error: false });
+                  }}
+                  className="shrink-0 rounded-[var(--radius-inputs)] bg-[#18181b] px-4 py-2 text-xs font-medium text-white hover:bg-[#27272a] disabled:opacity-40"
+                >
+                  {referralPending ? <Loader2 size={13} className="animate-spin" /> : "Apply"}
+                </button>
+              </div>
+            )}
+            {referralMsg && (
+              <p className={`mt-1 text-[11px] ${referralMsg.error ? "text-red-600" : "text-emerald-600"}`}>
+                {referralMsg.text}
+              </p>
+            )}
+          </div>
           <div className="mt-8 flex items-center justify-between border-t border-border pt-6">
             <Button
               type="button"
