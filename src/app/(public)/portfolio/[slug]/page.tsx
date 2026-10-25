@@ -1,9 +1,8 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { getPublishedPortfolioPage } from "@/app/actions/portfolio";
-import { CanvasRenderer } from "@/components/public/portfolio/canvas-renderer";
+import { ShowcaseViewer } from "@/components/public/portfolio/showcase-viewer";
 import { BookingCta } from "@/components/home/booking-cta";
-import { normaliseLayout } from "@/lib/portfolio/layout";
 
 interface Props {
   params: Promise<{ slug: string }>;
@@ -64,22 +63,8 @@ export default async function PortfolioShowcasePage({ params }: Props) {
         ) : null}
       </section>
 
-      <section className="site-container space-y-16 pb-24" aria-label={page.title}>
-        {sections.length === 0 ? (
-          <p className="text-sm text-muted-foreground">
-            This page has no sections yet.
-          </p>
-        ) : (
-          sections.map((section) => (
-            /*
-             * `normaliseLayout` again, at the render boundary. The database
-             * trigger validates on write, but a row can also arrive from an older
-             * schema or a hand-edited JSONB column — and a public page that loses
-             * one malformed block is far better than one that 500s.
-             */
-            <CanvasRenderer key={section.id} layout={normaliseLayout(section.layout)} />
-          ))
-        )}
+      <section className="site-container pb-24" aria-label={page.title}>
+        <ShowcaseViewer page={page} sections={sections} />
       </section>
 
       <BookingCta />

@@ -8,6 +8,7 @@ import { SortHeader } from "@/components/admin/projects-sort-header";
 import { ViewSwitcher } from "@/components/admin/projects/view-switcher";
 import { parseView } from "@/lib/projects/view";
 import { FolderCard, type FolderCardProject } from "@/components/admin/projects/folder-card";
+import { ProjectDeleteButton } from "@/components/admin/projects/project-delete-button";
 import { loadFolderMetrics, formatStorage } from "@/lib/workspace/folder-metrics";
 import { Suspense } from "react";
 
@@ -164,6 +165,7 @@ export default async function ProjectsPage(props: {
       isDpPaid: financeVisible ? p.is_dp_paid : false,
       isFullyPaid: financeVisible ? p.is_fully_paid : false,
       financeVisible,
+      canDelete: rank >= 80,
     };
   });
 
@@ -363,6 +365,13 @@ export default async function ProjectsPage(props: {
                           >
                             Tagih
                           </Link>
+                          {rank >= 80 ? (
+                            <ProjectDeleteButton
+                              projectId={p.id}
+                              projectName={p.name}
+                              variant="table-btn"
+                            />
+                          ) : null}
                         </div>
                       </td>
                     </tr>

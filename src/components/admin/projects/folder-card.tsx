@@ -4,6 +4,7 @@ import Link from "next/link";
 import { Camera, HardDrive, Users } from "lucide-react";
 import type { Pillar } from "@/lib/workspace/pillar-config";
 import { PILLAR_CONFIG, isPillar } from "@/lib/workspace/pillar-config";
+import { ProjectDeleteButton } from "./project-delete-button";
 
 /**
  * Folder card — Awesomic Zinc / neumorphic folder sleeve.
@@ -45,6 +46,7 @@ export type FolderCardProject = {
    * payment fact the payload never contained.
    */
   financeVisible?: boolean;
+  canDelete?: boolean;
 };
 
 const STATUS_LABEL: Record<string, string> = {
@@ -128,15 +130,26 @@ export function FolderCard({
            * belongs at the foot with its micro-indicator so the eye reads the
            * title first, then the state of the work.
            */}
-          <span
-            className={`self-start rounded-full px-2 py-0.5 text-[9px] font-bold uppercase tracking-[0.1em] ${
-              selected
-                ? "bg-white text-[#c2410c]"
-                : "border border-[#ececee] bg-[#fafafa] text-[#71717a]"
-            }`}
-          >
-            {pillarTag(project.pillar)}
-          </span>
+          <div className="flex items-center justify-between">
+            <span
+              className={`rounded-full px-2 py-0.5 text-[9px] font-bold uppercase tracking-[0.1em] ${
+                selected
+                  ? "bg-white text-[#c2410c]"
+                  : "border border-[#ececee] bg-[#fafafa] text-[#71717a]"
+              }`}
+            >
+              {pillarTag(project.pillar)}
+            </span>
+            {project.canDelete !== false ? (
+              <div className="relative z-10">
+                <ProjectDeleteButton
+                  projectId={project.id}
+                  projectName={project.name}
+                  variant="card-btn"
+                />
+              </div>
+            ) : null}
+          </div>
 
           <p
             className={`mt-2 line-clamp-2 text-[13px] font-semibold leading-snug ${

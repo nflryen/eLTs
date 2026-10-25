@@ -5,6 +5,7 @@ import { Services } from "@/components/home/services";
 import { FeaturedWorks } from "@/components/portfolio/featured-works";
 import { BookingCta } from "@/components/home/booking-cta";
 import { getPricelist } from "@/lib/pricelist";
+import { getHomepageFeaturedWorks } from "@/lib/portfolio/homepage";
 
 export const metadata: Metadata = { alternates: { canonical: "/" } };
 
@@ -16,7 +17,10 @@ export const metadata: Metadata = { alternates: { canonical: "/" } };
 export const dynamic = "force-dynamic";
 
 export default async function HomePage() {
-  const pricelist = await getPricelist().catch(() => ({ categories: [], addons: [] }));
+  const [pricelist, featuredWorks] = await Promise.all([
+    getPricelist().catch(() => ({ categories: [], addons: [] })),
+    getHomepageFeaturedWorks().catch(() => []),
+  ]);
   const packageCount = pricelist.categories.reduce((n, c) => n + c.packages.length, 0);
   const categoryCount = pricelist.categories.length;
   return (
@@ -48,7 +52,7 @@ export default async function HomePage() {
       </div>
       <AboutPreview />
       <Services />
-      <FeaturedWorks />
+      <FeaturedWorks items={featuredWorks} />
       <BookingCta />
     </main>
   );

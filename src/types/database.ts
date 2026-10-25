@@ -728,6 +728,8 @@ client_reminders_log: Table<
           status: "draft" | "published";
           published_at: string | null;
           sort_order: number;
+          category?: string | null;
+          tags?: string[];
           created_at: string;
           updated_at: string;
         },

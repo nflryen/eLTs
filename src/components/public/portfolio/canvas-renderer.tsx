@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, type CSSProperties } from "react";
+import { Expand } from "lucide-react";
 import { layoutToGridStyle, type LayoutDoc, type LayoutBlock } from "@/lib/portfolio/layout";
 
 /**
@@ -34,7 +35,13 @@ function blockStyle(block: LayoutBlock): CSSProperties {
   return layoutToGridStyle(block);
 }
 
-function PhotoBlock({ block }: { block: LayoutBlock }) {
+function PhotoBlock({
+  block,
+  onClick,
+}: {
+  block: LayoutBlock;
+  onClick?: () => void;
+}) {
   if (!block.publicUrl) {
     return (
       <div className="flex h-full w-full items-center justify-center bg-[#f4f4f5] text-[11px] uppercase tracking-[0.18em] text-[#a1a1aa]">
@@ -49,15 +56,15 @@ function PhotoBlock({ block }: { block: LayoutBlock }) {
   const zoom = typeof block.zoom === "number" && block.zoom > 1 ? block.zoom : 1;
   const fit = block.fit === "contain" ? "contain" : "cover";
 
-  return (
-    <div className="relative h-full w-full overflow-hidden bg-[#f4f4f5]">
+  const imageElement = (
+    <div className="group relative h-full w-full overflow-hidden bg-[#f4f4f5]">
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
         src={block.publicUrl}
         alt=""
         loading="lazy"
         draggable={false}
-        className="h-full w-full select-none"
+        className="h-full w-full select-none transition-transform duration-500 ease-out group-hover:scale-105"
         style={{
           objectFit: fit,
           objectPosition: `${posX} ${posY}`,
@@ -65,8 +72,30 @@ function PhotoBlock({ block }: { block: LayoutBlock }) {
           transformOrigin: `${posX} ${posY}`,
         }}
       />
+      {onClick && (
+        <div className="absolute inset-0 flex items-center justify-center bg-black/0 transition-colors duration-300 group-hover:bg-black/20">
+          <div className="rounded-full bg-black/50 p-2.5 text-white opacity-0 backdrop-blur-xs transition-all duration-300 group-hover:opacity-100 group-hover:scale-105 shadow-md">
+            <Expand size={16} />
+          </div>
+        </div>
+      )}
     </div>
   );
+
+  if (onClick) {
+    return (
+      <button
+        type="button"
+        onClick={onClick}
+        aria-label="Buka foto layar penuh"
+        className="block h-full w-full text-left cursor-zoom-in focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#09090b]"
+      >
+        {imageElement}
+      </button>
+    );
+  }
+
+  return imageElement;
 }
 
 function TextBlock({ block }: { block: LayoutBlock }) {
@@ -78,7 +107,13 @@ function TextBlock({ block }: { block: LayoutBlock }) {
   );
 }
 
-export function CanvasRenderer({ layout }: { layout: LayoutDoc }) {
+export function CanvasRenderer({
+  layout,
+  onPhotoClick,
+}: {
+  layout: LayoutDoc;
+  onPhotoClick?: (block: LayoutBlock) => void;
+}) {
   const { cols, rows } = layout.grid;
   const ordered = [...layout.blocks].sort((a, b) => a.z - b.z);
 
@@ -86,61 +121,75 @@ export function CanvasRenderer({ layout }: { layout: LayoutDoc }) {
   const [scale, setScale] = useState<number>(1);
 
   // Exact unscaled height based on the editor's design geometry
-  const designHeight = CANVAS_PAD * 2 + rows * ROW_PX + Math.max(0, rows - 1) * CELL_GAP;
+  const designHeight = rows * ROW_PX + (rows - 1) * CELL_GAP + CANVAS_PAD * 2;
 
   useEffect(() => {
-    const el = containerRef.current;
-    if (!el) return;
-
-    const updateScale = () => {
-      const containerWidth = el.clientWidth;
-      if (containerWidth > 0 && containerWidth < DESIGN_WIDTH) {
-        setScale(containerWidth / DESIGN_WIDTH);
-      } else {
-        setScale(1);
+    function computeScale() {
+      if (!containerRef.current) return;
+      const currentWidth = containerRef.current.clientWidth;
+      if (currentWidth > 0) {
+        setScale(Math.min(1, currentWidth / DESIGN_WIDTH));
       }
+    }
+
+    computeScale();
+
+    // ResizeObserver watches fluid container changes on viewport resize or split-screen
+    const ro = new ResizeObserver(() => computeScale());
+    if (containerRef.current) ro.observe(containerRef.current);
+    window.addEventListener("resize", computeScale);
+
+    return () => {
+      ro.disconnect();
+      window.removeEventListener("resize", computeScale);
     };
-
-    updateScale();
-    const observer = new ResizeObserver(updateScale);
-    observer.observe(el);
-    return () => observer.disconnect();
   }, []);
-
-  const scaledHeight = scale < 1 ? Math.ceil(designHeight * scale) : designHeight;
 
   return (
     <div
       ref={containerRef}
       className="relative w-full max-w-[1200px] mx-auto overflow-hidden"
       style={{
-        height: `${scaledHeight}px`,
-        // CSS aspect-ratio ensures 0 layout shift during SSR before hydration
         aspectRatio: `${DESIGN_WIDTH} / ${designHeight}`,
       }}
     >
       <div
-        className="relative grid rounded-xl border border-[#ececee] bg-[#fafafa]"
+        className="absolute top-0 left-0 origin-top-left"
         style={{
-          width: `${DESIGN_WIDTH}px`,
-          height: `${designHeight}px`,
-          gap: `${CELL_GAP}px`,
-          padding: `${CANVAS_PAD}px`,
-          gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))`,
-          gridAutoRows: `${ROW_PX}px`,
-          transform: scale < 1 ? `scale(${scale})` : undefined,
+          width: DESIGN_WIDTH,
+          height: designHeight,
+          transform: `scale(${scale})`,
           transformOrigin: "top left",
         }}
       >
-        {ordered.map((block) => (
-          <div
-            key={block.id}
-            style={blockStyle(block)}
-            className="relative overflow-hidden rounded-[8px]"
-          >
-            {block.type === "photo" ? <PhotoBlock block={block} /> : <TextBlock block={block} />}
-          </div>
-        ))}
+        <div
+          className="relative w-full h-full"
+          style={{
+            display: "grid",
+            gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))`,
+            gridTemplateRows: `repeat(${rows}, ${ROW_PX}px)`,
+            gap: `${CELL_GAP}px`,
+            padding: `${CANVAS_PAD}px`,
+            boxSizing: "border-box",
+          }}
+        >
+          {ordered.map((block) => (
+            <div
+              key={block.id}
+              style={blockStyle(block)}
+              className="relative min-w-0 min-h-0 overflow-hidden rounded-[8px]"
+            >
+              {block.type === "photo" ? (
+                <PhotoBlock
+                  block={block}
+                  onClick={onPhotoClick ? () => onPhotoClick(block) : undefined}
+                />
+              ) : (
+                <TextBlock block={block} />
+              )}
+            </div>
+          ))}
+        </div>
       </div>
     </div>
   );

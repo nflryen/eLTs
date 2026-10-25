@@ -1,5 +1,4 @@
 import type { Metadata } from "next";
-import { PortfolioGrid } from "@/components/portfolio/portfolio-grid";
 import { ShowcaseFilter } from "@/components/public/portfolio/showcase-filter";
 import { BookingCta } from "@/components/home/booking-cta";
 import { listPublishedPortfolioPages } from "@/app/actions/portfolio";
@@ -19,9 +18,8 @@ export const metadata: Metadata = {
 
 export default async function PortfolioPage() {
   /*
-   * A failed read must not take down the static gallery below it, so this
-   * degrades to "no showcases" rather than throwing. The gallery is the page's
-   * primary content and never depends on the CMS.
+   * Read dynamic CMS showcases published from the studio admin.
+   * Degrades gracefully to an honest empty state if none are published yet.
    */
   const showcases = await listPublishedPortfolioPages().catch(() => []);
 
@@ -40,26 +38,21 @@ export default async function PortfolioPage() {
       </section>
 
       {/*
-       * CMS showcases. The category chips are derived from the published rows,
-       * so the filter can never advertise a category with nothing behind it —
-       * the whole reason the vocabulary moved out of a hardcoded array.
+       * CMS showcases. Category chips are derived dynamically from published rows,
+       * ensuring only active categories with live stories are displayed.
        */}
-      <section className="site-container pb-20" aria-labelledby="showcase-heading">
+      <section className="site-container pb-24" aria-labelledby="showcase-heading">
         <h2 id="showcase-heading" className="eyebrow">
           Selected stories
         </h2>
 
         {showcases.length === 0 ? (
-          /*
-           * Honest empty state. The gallery below still renders, so this says
-           * "no showcases yet" rather than pretending the page is broken.
-           */
           <div className="mt-6 rounded-[var(--radius-cards)] border border-dashed border-[var(--color-cloud)] px-6 py-16 text-center">
             <p className="text-sm font-semibold text-[var(--color-obsidian)]">
               No stories published yet.
             </p>
             <p className="mx-auto mt-1.5 max-w-sm text-xs leading-relaxed text-[var(--color-fog)]">
-              The curated collection is being prepared. In the meantime, browse the gallery below.
+              The curated collection is being prepared. Explore our services or contact our team to discuss your project.
             </p>
           </div>
         ) : (
@@ -67,11 +60,6 @@ export default async function PortfolioPage() {
             <ShowcaseFilter pages={showcases} />
           </div>
         )}
-      </section>
-
-      {/* Gallery */}
-      <section className="site-container pb-24" aria-label="Portfolio gallery">
-        <PortfolioGrid />
       </section>
 
       <BookingCta />
