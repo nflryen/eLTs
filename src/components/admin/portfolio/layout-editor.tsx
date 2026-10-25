@@ -102,6 +102,7 @@ export function LayoutEditor({
   const [pageCoverUrl, setPageCoverUrl] = useState<string>(coverUrl ?? "");
   const [uploadingCover, setUploadingCover] = useState(false);
   const [uploadingBlockId, setUploadingBlockId] = useState<string | null>(null);
+  const [uploadStatusText, setUploadStatusText] = useState<string | null>(null);
   const [settingsDirty, setSettingsDirty] = useState(false);
   const [settingsError, setSettingsError] = useState<string | null>(null);
   const [settingsSaved, setSettingsSaved] = useState(false);
@@ -674,17 +675,28 @@ export function LayoutEditor({
                             if (!file) return;
                             try {
                               setUploadingBlockId(selected.id);
-                              const url = await uploadImageToCloudinary(file, "portfolio/blocks");
+                              setUploadStatusText("Mengompres...");
+                              const url = await uploadImageToCloudinary(file, {
+                                folder: "portfolio/blocks",
+                                onProgress: (status) => setUploadStatusText(status.message),
+                              });
                               mutate(updateBlock(layout, selected.id, { publicUrl: url }));
                             } catch (err) {
                               setError(err instanceof Error ? err.message : "Gagal mengunggah foto");
                             } finally {
                               setUploadingBlockId(null);
+                              setUploadStatusText(null);
                             }
                           }}
                         />
                       </label>
                     </div>
+                    {uploadingBlockId === selected.id && uploadStatusText && (
+                      <p className="mt-1 flex items-center gap-1.5 text-[10.5px] text-[#ff5a00] font-medium animate-pulse">
+                        <Loader2 size={11} className="animate-spin shrink-0" />
+                        <span>{uploadStatusText}</span>
+                      </p>
+                    )}
                   </label>
 
                   {/* Crop / Framing Button */}
@@ -808,7 +820,11 @@ export function LayoutEditor({
                     if (!file) return;
                     try {
                       setUploadingCover(true);
-                      const url = await uploadImageToCloudinary(file, "portfolio/covers");
+                      setUploadStatusText("Mengompres...");
+                      const url = await uploadImageToCloudinary(file, {
+                        folder: "portfolio/covers",
+                        onProgress: (status) => setUploadStatusText(status.message),
+                      });
                       setPageCoverUrl(url);
                       setSettingsDirty(true);
                       setSettingsSaved(false);
@@ -816,11 +832,18 @@ export function LayoutEditor({
                       setSettingsError(err instanceof Error ? err.message : "Gagal mengunggah gambar");
                     } finally {
                       setUploadingCover(false);
+                      setUploadStatusText(null);
                     }
                   }}
                 />
               </label>
             </div>
+            {uploadingCover && uploadStatusText && (
+              <p className="mt-1 flex items-center gap-1.5 text-[10.5px] text-[#ff5a00] font-medium animate-pulse">
+                <Loader2 size={11} className="animate-spin shrink-0" />
+                <span>{uploadStatusText}</span>
+              </p>
+            )}
             {pageCoverUrl ? (
               <div className="mt-1 flex items-center gap-2">
                 {/* eslint-disable-next-line @next/next/no-img-element */}

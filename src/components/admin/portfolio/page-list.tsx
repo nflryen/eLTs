@@ -38,6 +38,7 @@ export function PortfolioPageList({ pages }: { pages: PortfolioPageRow[] }) {
   const [tags, setTags] = useState("");
   const [coverUrl, setCoverUrl] = useState("");
   const [uploadingCover, setUploadingCover] = useState(false);
+  const [uploadStatusText, setUploadStatusText] = useState<string | null>(null);
 
   const run = (fn: () => Promise<{ ok: boolean; error?: string; data?: { id?: string } }>, after?: (id?: string) => void) => {
     setError(null);
@@ -186,17 +187,28 @@ export function PortfolioPageList({ pages }: { pages: PortfolioPageRow[] }) {
                     if (!file) return;
                     try {
                       setUploadingCover(true);
-                      const url = await uploadImageToCloudinary(file, "portfolio/covers");
+                      setUploadStatusText("Mengompres...");
+                      const url = await uploadImageToCloudinary(file, {
+                        folder: "portfolio/covers",
+                        onProgress: (status) => setUploadStatusText(status.message),
+                      });
                       setCoverUrl(url);
                     } catch (err) {
                       setError(err instanceof Error ? err.message : "Gagal mengunggah gambar");
                     } finally {
                       setUploadingCover(false);
+                      setUploadStatusText(null);
                     }
                   }}
                 />
               </label>
             </div>
+            {uploadingCover && uploadStatusText && (
+              <p className="mt-1.5 flex items-center gap-1.5 text-xs text-[#ff5a00] font-medium animate-pulse">
+                <Loader2 size={12} className="animate-spin shrink-0" />
+                <span>{uploadStatusText}</span>
+              </p>
+            )}
             {coverUrl ? (
               <div className="mt-2 flex items-center gap-3">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
