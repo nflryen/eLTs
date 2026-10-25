@@ -2,17 +2,18 @@
 
 import Link from "next/link";
 import {
-  Users, HardDrive, Image as ImageIcon,
+  Users, HardDrive,
   CheckCircle2, Clock, XCircle, AlertTriangle,
 } from "lucide-react";
 import { Card, CardInner, CardHeader, Badge } from "@/components/ui/glass";
 import { EmptyState } from "@/components/ui/empty-state";
 import type { WorkspacePayload, CrewAssignment } from "@/lib/workspace";
-import { jakartaLongDate, jakartaShortDate, jakartaTime } from "@/lib/datetime";
+import { jakartaLongDate, jakartaTime } from "@/lib/datetime";
 import { Suspense } from "react";
 import { RabPanel } from "./rab-panel";
 import { InvoicePanel } from "./invoice-panel";
 import { CrewManager } from "./crew-manager";
+import { ProofingPanel } from "./proofing-panel";
 
 const idr = (n: number) => `Rp ${n.toLocaleString("id-ID")}`;
 
@@ -393,117 +394,5 @@ export function ModuleMedia({ data }: { data: WorkspacePayload }) {
 }
 
 export function ModuleProofing({ data }: { data: WorkspacePayload }) {
-  const locked = Boolean(data.project.selection_locked_at);
-  return (
-    <div className="space-y-5">
-      <Card>
-        <CardHeader
-          title="Status Proofing Klien"
-          description="Klien memilih foto melalui galeri ber-PIN"
-        />
-        <div className="mt-4 grid gap-3 sm:grid-cols-2">
-          <CardInner>
-            <p className="text-[10px] font-mono uppercase text-[#a1a1aa]">Kode Galeri</p>
-            <p className="mt-1 font-mono text-sm font-bold text-[#09090b]">
-              {data.project.gallery_code}
-            </p>
-          </CardInner>
-          <CardInner>
-            <p className="text-[10px] font-mono uppercase text-[#a1a1aa]">Pilihan Klien</p>
-            <p className="mt-1 font-mono text-sm font-bold text-[#09090b]">
-              {data.favoriteCount} / {data.project.selection_quota_max}
-            </p>
-          </CardInner>
-        </div>
-        <p className={`mt-3 rounded-lg border px-3 py-2 text-[11px] font-medium ${
-          locked
-            ? "border-[#ececee] bg-[#fafafa] text-[#09090b]"
-            : "border-[#ececee] bg-[#fafafa] text-[#71717a]"
-        }`}>
-          {locked
-            ? "Pilihan terkunci — tugas editor sudah dibuat otomatis."
-            : "Menunggu klien menyelesaikan pemilihan foto."}
-        </p>
-      </Card>
-
-      <Card>
-        <CardHeader title="Gate Pengiriman" description="Rantai sebab-akibat menuju unduhan hi-res" />
-        <ul className="mt-4 space-y-2.5">
-          <li className="flex items-center gap-2.5 text-xs">
-            {data.project.selection_locked_at ? (
-              <CheckCircle2 size={14} className="text-[#09090b]" />
-            ) : (
-              <Clock size={14} className="text-[#a1a1aa]" />
-            )}
-            <span className="text-[#3f3f46]">Klien menyelesaikan pemilihan</span>
-          </li>
-          <li className="flex items-center gap-2.5 text-xs">
-            {data.editorTask && ["IN_PROGRESS", "REVIEW", "COMPLETED"].includes(data.editorTask.status) ? (
-              <CheckCircle2 size={14} className="text-[#09090b]" />
-            ) : (
-              <Clock size={14} className="text-[#a1a1aa]" />
-            )}
-            <span className="text-[#3f3f46]">Editor mengerjakan retouch</span>
-          </li>
-          <li className="flex items-center gap-2.5 text-xs">
-            {data.project.is_fully_paid ? (
-              <CheckCircle2 size={14} className="text-[#09090b]" />
-            ) : (
-              <AlertTriangle size={14} className="text-[#ff5a00]" />
-            )}
-            <span className="text-[#3f3f46]">
-              Pelunasan {data.project.is_fully_paid ? "diterima" : "belum diterima"}
-            </span>
-          </li>
-          <li className="flex items-center gap-2.5 text-xs">
-            <Badge variant={data.project.is_fully_paid ? "outline" : "ember"} className={data.project.is_fully_paid ? "text-[#09090b]" : undefined}>
-              {data.project.is_fully_paid ? "Hi-Res Terbuka" : "Hi-Res Terkunci"}
-            </Badge>
-          </li>
-        </ul>
-      </Card>
-
-      {data.editorTask ? (
-        <Card>
-          <CardHeader title="Tugas Post-Produksi" description="Dibuat otomatis saat pilihan klien dikunci" />
-          <div className="mt-3 grid gap-3 sm:grid-cols-3">
-            <CardInner>
-              <p className="text-[10px] font-mono uppercase text-[#a1a1aa]">Status</p>
-              <p className="mt-1 text-sm font-bold text-[#09090b]">
-                {data.editorTask.status.replace(/_/g, " ")}
-              </p>
-            </CardInner>
-            <CardInner>
-              <p className="text-[10px] font-mono uppercase text-[#a1a1aa]">Jumlah Deliverable</p>
-              <p className="mt-1 font-mono text-sm font-bold text-[#09090b]">
-                {data.editorTask.deliverable_count}
-              </p>
-            </CardInner>
-            <CardInner>
-              <p className="text-[10px] font-mono uppercase text-[#a1a1aa]">Dibuat</p>
-              <p className="mt-1 text-xs font-semibold text-[#09090b]">
-                {jakartaShortDate(data.editorTask.created_at)}
-              </p>
-            </CardInner>
-          </div>
-          <div className="mt-4">
-            <Link
-              href="/admin/editor-queue"
-              className="inline-flex min-h-11 items-center rounded-xl border border-[#ececee] bg-white px-4 text-xs font-semibold text-[#3f3f46]"
-            >
-              Buka Post-Produksi
-            </Link>
-          </div>
-        </Card>
-      ) : (
-        <Card>
-          <EmptyState
-            icon={<ImageIcon size={20} />}
-            title="Belum ada tugas editor"
-            description="Tugas dibuat otomatis begitu klien mengunci pilihan foto."
-          />
-        </Card>
-      )}
-    </div>
-  );
+  return <ProofingPanel data={data} />;
 }

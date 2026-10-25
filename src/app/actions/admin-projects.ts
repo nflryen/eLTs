@@ -12,7 +12,10 @@ import {
 import { getPinPepper } from "@/lib/env";
 import { z } from "zod";
 
-const uuidSchema = z.string().uuid();
+const uuidSchema = z.string().regex(
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i,
+  "ID proyek tidak valid."
+);
 const photographyTypes = [
   "wedding",
   "prewedding",
@@ -22,7 +25,7 @@ const photographyTypes = [
 ] as const;
 
 const createProjectSchema = z.object({
-  customer_id: z.string().uuid(),
+  customer_id: uuidSchema,
   name: z.string().min(1).max(200),
   slug: z
     .string()
@@ -440,6 +443,104 @@ export async function deleteProjectAction(projectId: string): Promise<{
     return {
       success: false,
       error: err instanceof Error ? err.message : "Terjadi kesalahan sistem saat menghapus proyek.",
+    };
+  }
+}
+
+/**
+ * Updates a project's selection proofing quotas and deadline window.
+ * Restricted to Staff / Admin / Founder (rank >= 80).
+ */
+export async function updateProjectProofingConfigAction(
+  projectId: string,
+  input: {
+    selection_quota_min: number;
+    selection_quota_max: number;
+    selection_deadline?: string | null;
+  }
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    const { supabase } = await requireOps();
+    if (!uuidSchema.safeParse(projectId).success) {
+      return { success: false, error: "ID proyek tidak valid." };
+    }
+
+    const minQuota = Math.max(1, Math.round(Number(input.selection_quota_min) || 1));
+    const maxQuota = Math.max(minQuota, Math.round(Number(input.selection_quota_max) || minQuota));
+
+    const updatePayload: Partial<ProjectRow> = {
+      selection_quota_min: minQuota,
+      selection_quota_max: maxQuota,
+      updated_at: new Date().toISOString(),
+    };
+
+    if (input.selection_deadline !== undefined) {
+      updatePayload.selection_deadline = input.selection_deadline || null;
+    }
+
+    const { error } = await supabase
+      .from("projects")
+      .update(updatePayload)
+      .eq("id", projectId);
+
+    if (error) {
+      return { success: false, error: error.message };
+    }
+
+    revalidatePath(`/admin/projects/${projectId}`);
+    revalidatePath("/admin/projects");
+    return { success: true };
+  } catch (err: unknown) {
+    return {
+      success: false,
+      error: err instanceof Error ? err.message : "Gagal memperbarui konfigurasi proofing.",
+    };
+  }
+}
+
+/**
+ * Resets / unlocks a project's locked selection state so a client can modify
+ * their photo picks, and safely cleans up the corresponding pending editor task.
+ * Restricted to Staff / Admin / Founder (rank >= 80).
+ */
+export async function unlockProjectSelectionAction(
+  projectId: string
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    const { supabase } = await requireOps();
+    if (!uuidSchema.safeParse(projectId).success) {
+      return { success: false, error: "ID proyek tidak valid." };
+    }
+
+    // 1. Reset selection_locked_at on project
+    const { error: projectErr } = await supabase
+      .from("projects")
+      .update({
+        selection_locked_at: null,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", projectId);
+
+    if (projectErr) {
+      return { success: false, error: `Gagal membuka kunci pilihan: ${projectErr.message}` };
+    }
+
+    // 2. Remove pending editor task so the editor queue doesn't process stale selections
+    await supabase
+      .from("editor_tasks")
+      .delete()
+      .eq("project_id", projectId)
+      .eq("status", "PENDING");
+
+    revalidatePath(`/admin/projects/${projectId}`);
+    revalidatePath("/admin/projects");
+    revalidatePath("/admin/editor-queue");
+
+    return { success: true };
+  } catch (err: unknown) {
+    return {
+      success: false,
+      error: err instanceof Error ? err.message : "Terjadi kesalahan sistem saat membuka kunci pilihan.",
     };
   }
 }

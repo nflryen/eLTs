@@ -107,7 +107,9 @@ export type WorkspacePayload = {
     is_fully_paid: boolean;
     gallery_code: string;
     gallery_pin_hash: string;
+    access_token?: string;
     selection_locked_at: string | null;
+    selection_deadline?: string | null;
     selection_quota_min: number;
     selection_quota_max: number;
     sector_specs: Record<string, unknown>;
@@ -415,7 +417,9 @@ export async function loadWorkspace(projectId: string): Promise<WorkspacePayload
       is_dp_paid: Boolean(project.is_dp_paid),
       gallery_code: project.gallery_code as string,
       gallery_pin_hash: project.gallery_pin_hash as string,
+      access_token: (project.access_token as string) ?? undefined,
       selection_locked_at: project.selection_locked_at as string | null,
+      selection_deadline: (project.selection_deadline as string | null) ?? null,
       selection_quota_min: num(project.selection_quota_min) || 15,
       selection_quota_max: num(project.selection_quota_max) || 20,
       sector_specs: specs,
