@@ -2,36 +2,80 @@ import Image from "next/image";
 import Link from "next/link";
 import { ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import type { AboutCollageSet } from "@/lib/portfolio/homepage";
+import { DEFAULT_ABOUT_COLLAGE } from "@/lib/portfolio/homepage";
+
+interface AboutPreviewProps {
+  photos?: AboutCollageSet;
+}
 
 /*
  * Awesomic about section: light canvas, editorial two-column, photography as a
  * structural element with generous rounding (not a backdrop).
+ *
+ * Dynamically renders rotational photography from published portfolio showcases
+ * with a deterministic rotation schedule and clean fallback.
  */
-export function AboutPreview() {
+export function AboutPreview({ photos }: AboutPreviewProps) {
+  const collage = photos ?? DEFAULT_ABOUT_COLLAGE;
+
   return (
     <section
       id="about"
       className="site-container section-space grid items-center gap-14 lg:grid-cols-[1fr_1fr] lg:gap-20"
     >
       <div className="grid grid-cols-[1.6fr_1fr] items-end gap-4">
-        <div className="relative aspect-[.78] overflow-hidden rounded-[var(--radius-cards)]">
-          <Image
-            src="/images/bride.webp"
-            alt="A bride holding a bouquet in a quiet, reflective moment"
-            fill
-            sizes="(max-width: 768px) 55vw, 340px"
-            className="object-cover"
-          />
-        </div>
-        <div className="relative aspect-[.67] overflow-hidden rounded-[var(--radius-cards)]">
-          <Image
-            src="/images/hands.webp"
-            alt="The gentle details of a wedding day: two hands held together"
-            fill
-            sizes="(max-width: 768px) 30vw, 200px"
-            className="object-cover"
-          />
-        </div>
+        {collage.primary.slug ? (
+          <Link
+            href={`/portfolio/${collage.primary.slug}`}
+            className="group relative aspect-[.78] overflow-hidden rounded-[var(--radius-cards)] bg-[var(--color-cloud)] border border-[var(--color-cloud)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#09090b]"
+            aria-label={`Lihat showcase ${collage.primary.title || "portfolio"}`}
+          >
+            <Image
+              src={collage.primary.src}
+              alt={collage.primary.alt}
+              fill
+              sizes="(max-width: 768px) 55vw, 340px"
+              className="object-cover transition-transform duration-700 ease-out group-hover:scale-105 select-none"
+            />
+          </Link>
+        ) : (
+          <div className="group relative aspect-[.78] overflow-hidden rounded-[var(--radius-cards)] bg-[var(--color-cloud)] border border-[var(--color-cloud)]">
+            <Image
+              src={collage.primary.src}
+              alt={collage.primary.alt}
+              fill
+              sizes="(max-width: 768px) 55vw, 340px"
+              className="object-cover transition-transform duration-700 ease-out group-hover:scale-105 select-none"
+            />
+          </div>
+        )}
+
+        {collage.secondary.slug ? (
+          <Link
+            href={`/portfolio/${collage.secondary.slug}`}
+            className="group relative aspect-[.67] overflow-hidden rounded-[var(--radius-cards)] bg-[var(--color-cloud)] border border-[var(--color-cloud)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#09090b]"
+            aria-label={`Lihat showcase ${collage.secondary.title || "portfolio"}`}
+          >
+            <Image
+              src={collage.secondary.src}
+              alt={collage.secondary.alt}
+              fill
+              sizes="(max-width: 768px) 30vw, 200px"
+              className="object-cover transition-transform duration-700 ease-out group-hover:scale-105 select-none"
+            />
+          </Link>
+        ) : (
+          <div className="group relative aspect-[.67] overflow-hidden rounded-[var(--radius-cards)] bg-[var(--color-cloud)] border border-[var(--color-cloud)]">
+            <Image
+              src={collage.secondary.src}
+              alt={collage.secondary.alt}
+              fill
+              sizes="(max-width: 768px) 30vw, 200px"
+              className="object-cover transition-transform duration-700 ease-out group-hover:scale-105 select-none"
+            />
+          </div>
+        )}
       </div>
 
       <div className="max-w-md">

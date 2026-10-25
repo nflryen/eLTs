@@ -4,7 +4,9 @@ import { ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { BookingCta } from "@/components/home/booking-cta";
 import { bookingUrl } from "@/config/site";
+import { getAboutCollagePhotos, DEFAULT_ABOUT_COLLAGE } from "@/lib/portfolio/homepage";
 
+export const dynamic = "force-dynamic";
 export const metadata: Metadata = {
   title: "About — More Than Just Photos",
   description:
@@ -39,7 +41,8 @@ const values = [
   },
 ];
 
-export default function AboutPage() {
+export default async function AboutPage() {
+  const collage = await getAboutCollagePhotos().catch(() => DEFAULT_ABOUT_COLLAGE);
   return (
     <main id="main-content">
       {/* Hero */}
@@ -107,23 +110,23 @@ export default function AboutPage() {
 
         {/* Collage */}
         <div className="grid grid-cols-[1.5fr_1fr] items-end gap-4">
-          <div className="relative aspect-[3/4] overflow-hidden">
+          <div className="relative aspect-[3/4] overflow-hidden rounded-[var(--radius-cards)] bg-[var(--color-cloud)]">
             <Image
-              src="/images/bride.webp"
-              alt="A bride in a reflective moment before the ceremony"
+              src={collage.primary.src}
+              alt={collage.primary.alt}
               fill
               sizes="(max-width: 1024px) 45vw, 280px"
-              className="object-cover"
+              className="object-cover transition-transform duration-700 ease-out hover:scale-105 select-none"
             />
           </div>
           <div className="flex flex-col gap-4">
-            <div className="relative aspect-square overflow-hidden">
+            <div className="relative aspect-square overflow-hidden rounded-[var(--radius-cards)] bg-[var(--color-cloud)]">
               <Image
-                src="/images/hands.webp"
-                alt="Hands intertwined on a wedding day"
+                src={collage.secondary.src}
+                alt={collage.secondary.alt}
                 fill
                 sizes="(max-width: 1024px) 30vw, 180px"
-                className="object-cover"
+                className="object-cover transition-transform duration-700 ease-out hover:scale-105 select-none"
               />
             </div>
             <p className="rotate-[-3deg] text-xl italic text-[#706b63] text-center leading-tight">

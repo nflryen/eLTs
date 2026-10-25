@@ -1,6 +1,10 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { getHomepageFeaturedWorks } from "../src/lib/portfolio/homepage";
+import {
+  getHomepageFeaturedWorks,
+  getAboutCollagePhotos,
+  getTwelveHourRotationOffset,
+} from "../src/lib/portfolio/homepage";
 import { normaliseLayout, type LayoutDoc } from "../src/lib/portfolio/layout";
 
 test("getHomepageFeaturedWorks returns valid work items with required attributes", async () => {
@@ -74,4 +78,23 @@ test("portfolio layout extracts photo blocks for lightbox in reading order", () 
   assert.equal(photos[0].id, "b-1");
   assert.equal(photos[1].id, "b-3");
   assert.equal(photos[2].id, "b-2");
+});
+
+test("getAboutCollagePhotos returns primary and secondary photo with valid image sources", async () => {
+  const collage = await getAboutCollagePhotos();
+  assert.ok(collage.primary, "Must have a primary collage photo");
+  assert.ok(collage.secondary, "Must have a secondary collage photo");
+  assert.ok(collage.primary.src, "Primary must have an image src");
+  assert.ok(collage.secondary.src, "Secondary must have an image src");
+  assert.ok(collage.primary.alt, "Primary must have alt text");
+  assert.ok(collage.secondary.alt, "Secondary must have alt text");
+});
+
+test("getTwelveHourRotationOffset wraps smoothly around length", () => {
+  assert.equal(getTwelveHourRotationOffset(0), 0);
+  assert.equal(getTwelveHourRotationOffset(1), 0);
+  const offset5 = getTwelveHourRotationOffset(5);
+  assert.ok(offset5 >= 0 && offset5 < 5);
+  const offset10 = getTwelveHourRotationOffset(10);
+  assert.ok(offset10 >= 0 && offset10 < 10);
 });
