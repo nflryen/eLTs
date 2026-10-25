@@ -39,7 +39,8 @@ export async function verifyClientAccess(_state: ClientAccessState, formData: Fo
     if(sessionError) { console.error('Gallery session could not be created',{code:sessionError.code}); return {error:'Gallery access needs a server update. Please contact Elts.'}; }
     const session=sessions?.[0];
     if(!session)return invalid;
-    (await cookies()).set(galleryCookieName,token,{httpOnly:true,secure:process.env.NODE_ENV==='production',sameSite:'lax',path:'/',expires:new Date(session.expires_at)});
+    const isProd = process.env.NODE_ENV === 'production' && process.env.VERCEL === '1';
+    (await cookies()).set(galleryCookieName,token,{httpOnly:true,secure:isProd,sameSite:'lax',path:'/',expires:new Date(session.expires_at)});
     destination=`/gallery/${session.access_token}`;
   } catch { return {error:'Gallery access is temporarily unavailable. Please contact Elts.'}; }
   redirect(destination);

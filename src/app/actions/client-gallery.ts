@@ -5,7 +5,7 @@ import { createServiceSupabase } from "@/lib/supabase/service";
 import { requireGallerySession } from "@/lib/auth/gallery";
 import { revalidatePath } from "next/cache";
 
-const uuid = z.string().uuid();
+const uuid = z.string().regex(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i, "ID tidak valid.");
 
 export async function toggleFavorite(projectId: string, mediaId: string, _locator?: string): Promise<{ isFavorited: boolean; error?: string }> {
   if (!uuid.safeParse(projectId).success || !uuid.safeParse(mediaId).success) return { isFavorited: false, error: "Invalid media." };

@@ -2,7 +2,10 @@ import "server-only";
 import { cookies } from "next/headers";
 import { createServiceSupabase } from "@/lib/supabase/service";
 import { hashSessionToken } from "@/lib/security/credentials";
-export const galleryCookieName = process.env.NODE_ENV === 'production' ? '__Host-elts_gallery' : 'elts_gallery_dev';
+export const galleryCookieName =
+  process.env.NODE_ENV === 'production' && process.env.VERCEL === '1'
+    ? '__Host-elts_gallery'
+    : 'elts_gallery_dev';
 export async function getGallerySession() {
   const token = (await cookies()).get(galleryCookieName)?.value;
   if (!token || !/^[A-Za-z0-9_-]{43}$/.test(token)) return null;

@@ -81,6 +81,10 @@ export function TabOverviewCallSheet({
  const [editVenueAddress, setEditVenueAddress] = useState(String(specs.venueAddress || "Jl. HR Boenyamin No. 708, Purwokerto Utara"));
  const [editVenueMapsUrl, setEditVenueMapsUrl] = useState(String(specs.venueMapsUrl || "https://maps.google.com/?q=-7.402482,109.248381"));
  const [editRollTime, setEditRollTime] = useState(String(specs.rollTime || "07:30"));
+ const [editGoogleDriveUrl, setEditGoogleDriveUrl] = useState(String(specs.googleDriveUrl || ""));
+ const [editSelectionDeadline, setEditSelectionDeadline] = useState(
+   project.selection_deadline ? project.selection_deadline.slice(0, 10) : ""
+ );
 
   // Customer Fields
  const [editCustomerName, setEditCustomerName] = useState(customer?.name || "");
@@ -115,6 +119,8 @@ export function TabOverviewCallSheet({
         venue_address: editVenueAddress,
         venue_maps_url: editVenueMapsUrl,
         roll_time: editRollTime,
+        google_drive_url: editGoogleDriveUrl,
+        selection_deadline: editSelectionDeadline ? new Date(editSelectionDeadline).toISOString() : null,
       });
 
       if (res.success) {
@@ -405,6 +411,37 @@ export function TabOverviewCallSheet({
                   onChange={(e) => setEditVenueMapsUrl(e.target.value)}
  className="contact-input text-xs"
                 />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-[#3f3f46]">
+                  Link Google Drive Master / File RAW (Opsional)
+                </label>
+                <input
+                  type="url"
+                  placeholder="https://drive.google.com/drive/folders/..."
+                  value={editGoogleDriveUrl}
+                  onChange={(e) => setEditGoogleDriveUrl(e.target.value)}
+                  className="contact-input text-xs font-mono"
+                />
+                <span className="text-[10px] text-[#a1a1aa] block">
+                  Otomatis terbuka untuk klien pada galeri proofing setelah invoice lunas 100%.
+                </span>
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-[#3f3f46]">
+                  Batas Waktu Pemilihan Foto (Selection Deadline)
+                </label>
+                <input
+                  type="date"
+                  value={editSelectionDeadline}
+                  onChange={(e) => setEditSelectionDeadline(e.target.value)}
+                  className="contact-input text-xs font-mono"
+                />
+                <span className="text-[10px] text-[#a1a1aa] block">
+                  Menentukan countdown timer pada halaman proofing klien.
+                </span>
               </div>
 
  <div className="pt-2 border-t border-[#ececee]/80 space-y-2">

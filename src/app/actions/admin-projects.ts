@@ -272,6 +272,7 @@ export async function updateProjectOverviewAction(
     name?: string;
     shoot_date?: string | null;
     rehearsal_date?: string | null;
+    selection_deadline?: string | null;
     status?: ProjectStatus;
     customer_id?: string;
     customer_name?: string;
@@ -280,6 +281,7 @@ export async function updateProjectOverviewAction(
     venue_name?: string;
     venue_address?: string;
     venue_maps_url?: string;
+    google_drive_url?: string;
     roll_time?: string;
     rehearsal_call_time?: string;
   }
@@ -311,13 +313,16 @@ export async function updateProjectOverviewAction(
     if (input.rehearsal_date !== undefined) {
       updatePayload.rehearsal_date = input.rehearsal_date || null;
     }
+    if (input.selection_deadline !== undefined) {
+      updatePayload.selection_deadline = input.selection_deadline || null;
+    }
 
     if (input.status) {
       updatePayload.status = input.status;
     }
 
     // Merge venue & staging into sector_specs if present
-    if (input.venue_name || input.venue_address || input.venue_maps_url || input.roll_time || input.rehearsal_call_time) {
+    if (input.venue_name || input.venue_address || input.venue_maps_url || input.roll_time || input.rehearsal_call_time || input.google_drive_url !== undefined) {
       const { data: currentProject } = await supabase
         .from("projects")
         .select("sector_specs")
@@ -332,6 +337,7 @@ export async function updateProjectOverviewAction(
         venueMapsUrl: input.venue_maps_url || existingSpecs.venueMapsUrl,
         rollTime: input.roll_time || existingSpecs.rollTime,
         rehearsalCallTime: input.rehearsal_call_time || existingSpecs.rehearsalCallTime,
+        googleDriveUrl: input.google_drive_url !== undefined ? input.google_drive_url.trim() : existingSpecs.googleDriveUrl,
       };
       updatePayload.sector_specs = stagingSpecs;
     }

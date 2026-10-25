@@ -71,7 +71,7 @@ export default async function GalleryPage({ params }: Props) {
   const { data: fullData } = await supabase
     .from("projects")
     .select(
-      "id, name, slug, access_token, photography_type, shoot_date, status, allow_download, watermark_enabled, expires_at, cover_media_id, selection_quota_min, selection_quota_max, selection_locked_at",
+      "id, name, slug, access_token, photography_type, shoot_date, status, allow_download, watermark_enabled, expires_at, cover_media_id, selection_quota_min, selection_quota_max, selection_locked_at, selection_deadline, is_fully_paid, sector_specs",
     )
     .eq("id", gallerySession.project_id)
     .maybeSingle();
@@ -107,6 +107,7 @@ export default async function GalleryPage({ params }: Props) {
     | "id" | "name" | "slug" | "access_token" | "photography_type" | "shoot_date"
     | "status" | "allow_download" | "watermark_enabled" | "expires_at" | "cover_media_id"
     | "selection_quota_min" | "selection_quota_max" | "selection_locked_at"
+    | "selection_deadline" | "is_fully_paid" | "sector_specs"
   >;
 
   if (project.access_token !== slug && project.slug !== slug) {
@@ -255,6 +256,9 @@ export default async function GalleryPage({ params }: Props) {
           selectionQuotaMin={project.selection_quota_min ?? 15}
           selectionQuotaMax={project.selection_quota_max ?? 20}
           selectionLockedAt={project.selection_locked_at}
+          selectionDeadline={project.selection_deadline}
+          googleDriveUrl={(project.sector_specs as Record<string, unknown> | undefined)?.googleDriveUrl as string | undefined}
+          isFullyPaid={Boolean(project.is_fully_paid)}
         />
       </div>
 

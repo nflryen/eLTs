@@ -1,8 +1,9 @@
 "use client";
 
 import { useState, useCallback, useOptimistic, useTransition } from "react";
-import { Heart, ZoomIn, Download, LockKeyhole, Loader2 } from "lucide-react";
+import { Heart, ZoomIn, Download, LockKeyhole, Loader2, CloudDownload, ExternalLink } from "lucide-react";
 import { GalleryLightbox } from "./gallery-lightbox";
+import { ProofingCountdown } from "./proofing-countdown";
 import {
   toggleFavorite,
   getMediaDownloadUrl,
@@ -28,6 +29,9 @@ interface Props {
   selectionQuotaMin?: number;
   selectionQuotaMax?: number;
   selectionLockedAt?: string | null;
+  selectionDeadline?: string | null;
+  googleDriveUrl?: string | null;
+  isFullyPaid?: boolean;
 }
 
 export function GalleryGrid({
@@ -39,6 +43,9 @@ export function GalleryGrid({
   selectionQuotaMin = 15,
   selectionQuotaMax = 20,
   selectionLockedAt = null,
+  selectionDeadline = null,
+  googleDriveUrl = null,
+  isFullyPaid = false,
 }: Props) {
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
   const [lockedAt, setLockedAt] = useState<string | null>(selectionLockedAt);
@@ -155,28 +162,73 @@ export function GalleryGrid({
 
   return (
     <>
-      {/* ── Read-only Lock Banner ────────────────────────────────────────── */}
-      {isLocked && (
-        <div className="mb-8 rounded-xl border border-amber-200/80 bg-amber-50/90 p-4 sm:p-5 text-amber-950 shadow-sm flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 animate-in fade-in">
-          <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-amber-100 text-amber-800">
-              <LockKeyhole size={20} />
+      {/* ── Proofing Status & Countdown Timer ────────────────────────────── */}
+      <div className="mb-6">
+        <ProofingCountdown
+          deadline={selectionDeadline}
+          lockedAt={lockedAt}
+          selectedCount={selectedCount}
+          quotaMin={selectionQuotaMin}
+          quotaMax={selectionQuotaMax}
+        />
+      </div>
+
+      {/* ── Google Drive Delivery Card ───────────────────────────────────── */}
+      {googleDriveUrl && (
+        <div className="mb-6 rounded-2xl border bg-white p-5 shadow-xs transition-all">
+          {isFullyPaid ? (
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div className="flex items-start gap-3">
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-blue-600 border border-blue-100">
+                  <CloudDownload size={20} />
+                </div>
+                <div>
+                  <h3 className="text-sm sm:text-base font-semibold text-zinc-900 flex items-center gap-1.5">
+                    <span>File Master &amp; Arsip Google Drive</span>
+                    <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 font-semibold">
+                      Lunas 100%
+                    </span>
+                  </h3>
+                  <p className="text-xs text-zinc-500 mt-0.5">
+                    Pelunasan invoice terverifikasi. Seluruh file master dan foto resolusi tinggi dapat diunduh langsung melalui Google Drive.
+                  </p>
+                </div>
+              </div>
+
+              <a
+                href={googleDriveUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white px-5 text-xs font-semibold transition-colors shadow-sm shrink-0"
+              >
+                <span>Buka Google Drive</span>
+                <ExternalLink size={14} />
+              </a>
             </div>
-            <div>
-              <h2 className="text-sm sm:text-base font-semibold tracking-tight text-amber-950">
-                Pilihan Foto Telah Dikunci &amp; Masuk Antrean Editing
-              </h2>
-              <p className="text-xs text-amber-800/90 mt-0.5">
-                {selectedCount} foto terpilih sedang diproses oleh tim editor. Perubahan pilihan foto telah dinonaktifkan.
-              </p>
+          ) : (
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 text-zinc-600">
+              <div className="flex items-start gap-3">
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-zinc-100 text-zinc-500 border border-zinc-200">
+                  <LockKeyhole size={20} />
+                </div>
+                <div>
+                  <h3 className="text-sm sm:text-base font-semibold text-zinc-900 flex items-center gap-1.5">
+                    <span>File Master Google Drive</span>
+                    <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-amber-50 text-amber-800 border border-amber-200 font-medium">
+                      Terkunci
+                    </span>
+                  </h3>
+                  <p className="text-xs text-zinc-500 mt-0.5">
+                    Tautan Google Drive untuk seluruh file master akan otomatis dibuka setelah pelunasan invoice 100% terverifikasi.
+                  </p>
+                </div>
+              </div>
+
+              <span className="text-xs font-medium text-amber-800 bg-amber-50 px-3 py-1.5 rounded-lg border border-amber-200 shrink-0 self-start sm:self-auto">
+                Menunggu Pelunasan Invoice
+              </span>
             </div>
-          </div>
-          <div className="flex items-center gap-2 self-end sm:self-auto">
-            <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-200/70 px-3 py-1 text-xs font-medium text-amber-900">
-              <LockKeyhole size={12} />
-              Terkunci
-            </span>
-          </div>
+          )}
         </div>
       )}
 
@@ -468,6 +520,28 @@ export function GalleryGrid({
               <p className="text-xs text-amber-800 bg-amber-50/80 p-2.5 rounded border border-amber-200/70 leading-relaxed">
                 ⚠️ <strong>Perhatian:</strong> Setelah dikunci, pilihan foto <strong>tidak dapat diubah kembali</strong> dan akan langsung dimasukkan ke antrean tim editing kami.
               </p>
+            </div>
+            {/* Thumbnails of selected photos */}
+            <div className="space-y-1.5 pt-1">
+              <span className="text-[11px] font-mono uppercase text-zinc-500">
+                Pratinjau Foto Terpilih ({selectedCount})
+              </span>
+              <div className="flex gap-1.5 overflow-x-auto pb-1 max-h-20 no-scrollbar">
+                {items
+                  .filter((item) => favoritedIds.has(item.id))
+                  .map((item) => (
+                    <div key={item.id} className="relative h-14 w-14 shrink-0 rounded overflow-hidden bg-zinc-100 border border-zinc-200">
+                      {item.thumbnail_key ? (
+                        /* eslint-disable-next-line @next/next/no-img-element */
+                        <img
+                          src={item.thumbnail_key}
+                          alt={item.file_name}
+                          className="h-full w-full object-cover"
+                        />
+                      ) : null}
+                    </div>
+                  ))}
+              </div>
             </div>
 
             {submitError && (
