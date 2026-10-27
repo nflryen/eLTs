@@ -186,3 +186,64 @@ export async function updateProjectStatus(
   revalidatePath("/admin/projects");
   return {};
 }
+
+/**
+ * Direct Client-to-Cloudinary signed upload preparation for portfolio images.
+ * Completely bypasses Vercel/Next.js serverless payload limits (HTTP 413)
+ * by allowing the browser to transfer bytes directly to Cloudinary.
+ * Restricted to Staff/Admin (rank >= 80).
+ */
+export async function prepareDirectPortfolioUploadAction(folder: string = "portfolio"): Promise<{
+  success: boolean;
+  upload?: {
+    endpoint: string;
+    fields: {
+      timestamp: string;
+      folder: string;
+      api_key: string;
+      signature: string;
+    };
+  };
+  error?: string;
+}> {
+  try {
+    await requireOps();
+    const { cloudName, apiKey, apiSecret } = getCloudinaryConfig();
+    const cleanSlug = folder.replace(/^\/+|\/+$/g, "") || "portfolio";
+    const uploadFolder = cleanSlug.startsWith("elts/") ? cleanSlug : `elts/${cleanSlug}`;
+    const timestamp = String(Math.floor(Date.now() / 1000));
+
+    const { v2: cloudinary } = await import("cloudinary");
+    cloudinary.config({
+      cloud_name: cloudName,
+      api_key: apiKey,
+      api_secret: apiSecret,
+      secure: true,
+    });
+
+    const paramsToSign = {
+      folder: uploadFolder,
+      timestamp,
+    };
+
+    const signature = cloudinary.utils.api_sign_request(paramsToSign, apiSecret);
+
+    return {
+      success: true,
+      upload: {
+        endpoint: `https://api.cloudinary.com/v1_1/${encodeURIComponent(cloudName)}/image/upload`,
+        fields: {
+          timestamp,
+          folder: uploadFolder,
+          api_key: apiKey,
+          signature,
+        },
+      },
+    };
+  } catch (err: unknown) {
+    return {
+      success: false,
+      error: err instanceof Error ? err.message : "Gagal menyiapkan izin unggah langsung.",
+    };
+  }
+}

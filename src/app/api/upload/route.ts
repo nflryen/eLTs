@@ -4,10 +4,10 @@ import { UnauthorizedError, ForbiddenError } from "@/lib/auth/admin";
 import { uploadToCloudinary } from "@/services/cloudinary";
 
 export const dynamic = "force-dynamic";
+export const maxDuration = 60;
 
-// 20MB maximum upload limit for portfolio images
-const MAX_FILE_SIZE = 20 * 1024 * 1024;
-
+// 50MB maximum upload limit for portfolio images
+const MAX_FILE_SIZE = 50 * 1024 * 1024;
 const ALLOWED_MIME_TYPES = new Set([
   "image/jpeg",
   "image/png",
@@ -37,7 +37,7 @@ export async function POST(request: Request) {
 
     if (file.size > MAX_FILE_SIZE) {
       return NextResponse.json(
-        { ok: false, error: "Ukuran file melebihi batas maksimal 20MB." },
+        { ok: false, error: "Ukuran file melebihi batas maksimal 50MB." },
         { status: 400 },
       );
     }

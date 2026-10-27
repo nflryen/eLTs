@@ -4,6 +4,7 @@ import {
   type CompressionOptions,
   type CompressionResult,
 } from "@/lib/images/compression";
+import { prepareDirectPortfolioUploadAction } from "@/app/actions/admin-media";
 
 export interface UploadClientOptions {
   folder?: string;
@@ -86,7 +87,42 @@ export async function uploadImageToCloudinary(
     throw new Error(`Ukuran file (${formatBytes(fileToUpload.size)}) melebihi batas maksimal 20MB.`);
   }
 
-  // 3. Form Data Construction & Upload
+  // 3. Attempt Direct Client-to-Cloudinary Signed Upload (Bypasses Vercel 4.5MB ceiling)
+  try {
+    const directPrep = await prepareDirectPortfolioUploadAction(folder);
+    if (directPrep.success && directPrep.upload) {
+      const directFd = new FormData();
+      directFd.append("file", fileToUpload);
+      directFd.append("folder", directPrep.upload.fields.folder);
+      directFd.append("timestamp", directPrep.upload.fields.timestamp);
+      directFd.append("api_key", directPrep.upload.fields.api_key);
+      directFd.append("signature", directPrep.upload.fields.signature);
+
+      const directRes = await fetch(directPrep.upload.endpoint, {
+        method: "POST",
+        body: directFd,
+      });
+
+      if (directRes.ok) {
+        const directJson = await directRes.json();
+        const directUrl = (directJson.secure_url || directJson.url) as string;
+        if (directUrl) {
+          opts.onProgress?.({
+            stage: "done",
+            message: compResult?.wasCompressed
+              ? `Foto berhasil dioptimasi & diunggah langsung! (${compResult.savingsMessage})`
+              : "Foto berhasil diunggah langsung!",
+            compressionResult: compResult,
+          });
+          return directUrl;
+        }
+      }
+    }
+  } catch (directErr) {
+    console.warn("Direct upload fallback to API route:", directErr);
+  }
+
+  // 4. Fallback: Upload via /api/upload endpoint
   const fd = new FormData();
   fd.append("file", fileToUpload);
   fd.append("folder", folder);
@@ -103,7 +139,6 @@ export async function uploadImageToCloudinary(
 
   const url = (json.secure_url || json.url) as string;
   if (!url) throw new Error("Server tidak mengembalikan URL gambar.");
-
   opts.onProgress?.({
     stage: "done",
     message: compResult?.wasCompressed
