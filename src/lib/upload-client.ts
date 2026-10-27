@@ -116,7 +116,12 @@ export async function uploadImageToCloudinary(
           });
           return directUrl;
         }
+      } else {
+        const errJson = await directRes.json().catch(() => null);
+        console.warn("Direct Cloudinary upload error response:", errJson);
       }
+    } else {
+      console.warn("prepareDirectPortfolioUploadAction was not successful:", directPrep.error);
     }
   } catch (directErr) {
     console.warn("Direct upload fallback to API route:", directErr);

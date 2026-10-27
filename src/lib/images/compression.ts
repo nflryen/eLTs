@@ -156,11 +156,28 @@ export async function compressImageFile(
     let sourceWidth = 0;
     let sourceHeight = 0;
     let imageSource: ImageBitmap | HTMLImageElement;
-
     if (typeof createImageBitmap === "function") {
-      imageSource = await createImageBitmap(file);
-      sourceWidth = imageSource.width;
-      sourceHeight = imageSource.height;
+      try {
+        imageSource = await createImageBitmap(file);
+        sourceWidth = imageSource.width;
+        sourceHeight = imageSource.height;
+      } catch {
+        imageSource = await new Promise<HTMLImageElement>((resolve, reject) => {
+          const img = new Image();
+          const objectUrl = URL.createObjectURL(file);
+          img.onload = () => {
+            URL.revokeObjectURL(objectUrl);
+            resolve(img);
+          };
+          img.onerror = (e) => {
+            URL.revokeObjectURL(objectUrl);
+            reject(e);
+          };
+          img.src = objectUrl;
+        });
+        sourceWidth = imageSource.naturalWidth || imageSource.width;
+        sourceHeight = imageSource.naturalHeight || imageSource.height;
+      }
     } else {
       imageSource = await new Promise<HTMLImageElement>((resolve, reject) => {
         const img = new Image();
@@ -178,7 +195,6 @@ export async function compressImageFile(
       sourceWidth = imageSource.naturalWidth || imageSource.width;
       sourceHeight = imageSource.naturalHeight || imageSource.height;
     }
-
     // 4. Calculate target dimensions
     const { width: targetWidth, height: targetHeight } = calculateConstrainedDimensions(
       sourceWidth,

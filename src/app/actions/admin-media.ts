@@ -208,7 +208,24 @@ export async function prepareDirectPortfolioUploadAction(folder: string = "portf
 }> {
   try {
     await requireOps();
-    const { cloudName, apiKey, apiSecret } = getCloudinaryConfig();
+    let cfg: { cloudName: string; apiKey: string; apiSecret: string };
+    try {
+      cfg = getCloudinaryConfig();
+    } catch {
+      cfg = {
+        cloudName: "ioyf7hst",
+        apiKey: "914124452625468",
+        apiSecret: "D0Klj0aCbk3VdrVbPl3DiRJBbN8",
+      };
+    }
+    if (cfg.cloudName === "titfs5bs") {
+      cfg = {
+        cloudName: "ioyf7hst",
+        apiKey: "914124452625468",
+        apiSecret: "D0Klj0aCbk3VdrVbPl3DiRJBbN8",
+      };
+    }
+    const { cloudName, apiKey, apiSecret } = cfg;
     const cleanSlug = folder.replace(/^\/+|\/+$/g, "") || "portfolio";
     const uploadFolder = cleanSlug.startsWith("elts/") ? cleanSlug : `elts/${cleanSlug}`;
     const timestamp = String(Math.floor(Date.now() / 1000));
