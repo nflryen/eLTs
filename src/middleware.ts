@@ -38,7 +38,10 @@ function requiredRank(pathname: string): number {
 }
 
 export async function middleware(request: NextRequest) {
-  const host = request.headers.get("host") || "";
+  const host =
+    request.headers.get("x-forwarded-host") ||
+    request.headers.get("host") ||
+    "";
   const hostname = host.split(":")[0].toLowerCase();
   const pathname = request.nextUrl.pathname;
   const isLocal = host.includes("localhost") || host.includes("127.0.0.1");

@@ -1,0 +1,20 @@
+# Supabase Project Configuration for eLTs Visual Studio
+# Project Ref: djphrpzfayjeedaxncpq
+
+[project]
+id = "djphrpzfayjeedaxncpq"
+
+[auth]
+site_url = "https://elts.co.id"
+additional_redirect_urls = [
+  "https://ops.elts.co.id/**",
+  "https://client.elts.co.id/**",
+  "http://ops.localhost:3000/**",
+  "http://client.localhost:3000/**",
+  "http://localhost:3000/**"
+]
+
+[auth.email]
+enable_signup = false
+double_confirm_changes = true
+enable_confirmations = false

@@ -12,6 +12,7 @@
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "test": "node --conditions=react-server --import=tsx --test tests/*.test.ts",
+    "test:smoke": "node --conditions=react-server --import=tsx --env-file=.env.local scripts/smoke-test-subdomains.ts",
     "seed:validation": "node --conditions=react-server --import=tsx --env-file=.env.local scripts/seed-validation.ts",
     "migrate": "node scripts/migrate.mjs",
     "check": "npm run lint && npm run typecheck && npm test",
