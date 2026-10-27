@@ -33,6 +33,7 @@ import {
   unlockProjectSelectionAction,
 } from "@/app/actions/admin-projects";
 import type { WorkspacePayload } from "@/lib/workspace";
+import { clientUrl } from "@/lib/domain";
 
 interface ProofingPanelProps {
   data: WorkspacePayload;
@@ -65,10 +66,9 @@ export function ProofingPanel({ data }: ProofingPanelProps) {
   const [copiedCode, setCopiedCode] = useState(false);
   const [copiedMagicLink, setCopiedMagicLink] = useState(false);
 
-  const origin = typeof window !== "undefined" ? window.location.origin : "https://elts.id";
   const magicLink = project.access_token
-    ? `${origin}/proofing/${project.access_token}`
-    : `${origin}/gallery/${project.slug}`;
+    ? clientUrl(`/proofing/${project.access_token}`)
+    : clientUrl(`/gallery/${project.slug}`);
 
   const copyCode = async () => {
     try {

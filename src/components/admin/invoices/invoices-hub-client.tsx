@@ -24,6 +24,7 @@ import { Card } from "@/components/ui/glass";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Button } from "@/components/ui/button";
 import type { StudioBankAccount } from "@/lib/studio/payment-methods";
+import { clientUrl } from "@/lib/domain";
 import {
   Dialog,
   DialogContent,
@@ -117,12 +118,6 @@ export function InvoicesHubClient({
 
   // Handle WhatsApp Copy / Link
   const handleCopyWhatsApp = async (inv: GlobalInvoiceListItem) => {
-    const origin = typeof window !== "undefined" ? window.location.origin : "https://elts.id";
-    /*
-     * Accounts come from configuration via props. The previous template
-     * hardcoded two account numbers, so a bank change silently kept sending
-     * clients the old details.
-     */
     const bankLines =
       bankAccounts.length > 0
         ? `Rekening Resmi Pembayaran:\n${bankAccounts
@@ -130,7 +125,7 @@ export function InvoicesHubClient({
             .join("\n")}`
         : "Rekening pembayaran belum tersedia. Silakan hubungi studio.";
 
-    const invoiceUrl = `${origin}/invoice/${encodeURIComponent(inv.invoiceNumber)}`;
+    const invoiceUrl = clientUrl(`/invoice/${encodeURIComponent(inv.invoiceNumber)}`);
 
     const text = `Halo Bapak/Ibu *${inv.customerName}*,\nBerikut kami sampaikan rincian tagihan resmi dari *ELTS Creative & Digital Studio*:\n\n📋 *Layanan:* ${inv.projectName}\n🧾 *No. Invoice:* ${inv.invoiceNumber}\n📅 *Jatuh Tempo:* ${formatDate(inv.dueDate)}\n\n💰 *Total Tagihan:* ${formatIDR(inv.grossAmount)}\n${
       inv.paidAmount > 0

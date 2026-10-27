@@ -9,6 +9,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { StudioLogo } from "@/components/ui/studio-logo";
 import type { ClientInvoiceDTO } from "@/types/invoices";
+import { clientUrl } from "@/lib/domain";
 
 interface ClientInvoiceViewProps {
   invoice: ClientInvoiceDTO;
@@ -79,8 +80,7 @@ export function ClientInvoiceView({ invoice }: ClientInvoiceViewProps) {
 
   // Formatted WhatsApp copy message
   const handleCopyWhatsApp = async () => {
-    const origin = typeof window !== "undefined" ? window.location.origin : "https://elts.id";
-    const invoiceUrl = `${origin}/invoice/${encodeURIComponent(invoice.invoice_number)}`;
+    const invoiceUrl = clientUrl(`/invoice/${encodeURIComponent(invoice.invoice_number)}`);
 
     const text = `Halo Bapak/Ibu *${invoice.customer.name}*,\nBerikut kami sampaikan rincian tagihan resmi dari *ELTS Creative & Digital Studio*:\n\n📋 *Proyek / Layanan:* ${invoice.project.name}\n🧾 *No. Invoice:* ${invoice.invoice_number}\n📅 *Jatuh Tempo:* ${formatDate(invoice.due_date)}\n\n💰 *Total Kontrak:* ${formatIDR(contractTotal)}\n${
       paidTotal > 0

@@ -40,6 +40,7 @@ import type {
 } from "@/types/operations";
 import type { InventoryAssetRow } from "@/types/inventory";
 import type { StudioBankAccount } from "@/lib/studio/payment-methods";
+import { clientUrl } from "@/lib/domain";
 
 export type ProjectWorkspaceTab =
  | "overview"
@@ -151,10 +152,9 @@ export function ProjectTabbedWorkspace({
   const [copiedWhatsApp, setCopiedWhatsApp] = useState(false);
 
   const handleCopyWhatsAppInvoice = async () => {
- const origin = typeof window !== "undefined" ? window.location.origin : "https://elts.id";
- const invoiceRef = invoiceNumber ? `🧾 *No. Invoice:* ${invoiceNumber}\n` : "";
+    const invoiceRef = invoiceNumber ? `🧾 *No. Invoice:* ${invoiceNumber}\n` : "";
     const invoiceUrl = invoiceNumber
- ? `${origin}/invoice/${encodeURIComponent(invoiceNumber)}`
+      ? clientUrl(`/invoice/${encodeURIComponent(invoiceNumber)}`)
       : null;
 
     // Payment accounts are supplied by the server, never literals here.

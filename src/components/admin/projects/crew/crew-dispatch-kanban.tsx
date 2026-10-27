@@ -23,7 +23,7 @@ import type {
 } from "@/types/operations";
 import { DispatchMicroModal } from "./dispatch-micro-modal";
 import { deleteCrewAssignment } from "@/app/actions/crew";
-
+import { opsUrl } from "@/lib/domain";
 interface CrewDispatchKanbanProps {
   projectId: string;
   projectName?: string;
@@ -94,8 +94,7 @@ export function CrewDispatchKanban({
 
   // Handle Copy Magic Link
   const handleCopyLink = async (assignment: ProjectCrewAssignmentWithCrew) => {
- const origin = typeof window !== "undefined" ? window.location.origin : "";
- const url = `${origin}/crew/${assignment.magic_token}`;
+    const url = opsUrl(`/crew/${assignment.magic_token}`);
     try {
       await navigator.clipboard.writeText(url);
       setCopiedId(assignment.id);
@@ -351,8 +350,7 @@ export function CrewDispatchKanban({
                 const isPendingOffer = !isAccepted && !isDeclined && !isExpired;
 
                 // Format WhatsApp invitation URL
- const origin = typeof window !== "undefined" ? window.location.origin : "";
- const magicUrl = `${origin}/crew/${assignment.magic_token}`;
+                const magicUrl = opsUrl(`/crew/${assignment.magic_token}`);
  const waPhone = member?.phone?.replace(/[^0-9]/g, "").replace(/^0/, "62") || "";
                 const waMessage = encodeURIComponent(
  `Halo *${member?.full_name}*,\nKamu ditugaskan pada proyek *${projectName}*:\n\n• Peran: *${assignment.role_title}*\n• Honor Ditawarkan: *Rp ${Number(assignment.fee_agreed).toLocaleString("id-ID")}*\n• Call Time: *${new Date(assignment.call_time).toLocaleString("id-ID")}*\n• Venue: *${assignment.venue_name}*\n\nBuka & konfirmasi tugasmu melalui tautan resmi ini:\n${magicUrl}\n\nTerima kasih!`

@@ -26,6 +26,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { clientUrl } from "@/lib/domain";
 import type {
   UnifiedUser,
   UserStatus,
@@ -271,9 +272,7 @@ export function UserDirectoryClient({ initialUsers }: UserDirectoryClientProps) 
           projects.find((p) => p.id === selectedProjectId) || projects[0];
         const projName = activeProj?.name || "Galeri Foto ELTs";
         const gallerySlug = activeProj?.slug || activeProj?.accessToken || "";
-        const origin =
-          typeof window !== "undefined" ? window.location.origin : "";
-        const galleryUrl = `${origin}/gallery/${gallerySlug}`;
+        const galleryUrl = clientUrl(`/gallery/${gallerySlug}`);
 
         const waMessage =
           `Halo kak ${pinDialogUser.name},\n\n` +

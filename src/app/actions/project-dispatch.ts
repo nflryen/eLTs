@@ -8,6 +8,7 @@ import { composeReminder, type PaymentMethod, type ReminderKind, type ReminderPr
 import { formatPhoneForDisplay, normalisePhone } from "@/lib/whatsapp/phone";
 import { signInvoicePdfToken } from "@/lib/pdf/token";
 import { site } from "@/config/site";
+import { clientUrl } from "@/lib/domain";
 
 /**
  * Project action bar: every reminder the operator can dispatch from the project
@@ -81,7 +82,7 @@ async function loadReminderContext(projectId: string) {
    */
   const { data: project, error } = await supabase
     .from("projects")
-    .select("id, name, shoot_date, gallery_code, selection_deadline, customer_id, status, sector_specs")
+    .select("id, name, shoot_date, gallery_code, selection_deadline, customer_id, status, sector_specs, access_token")
     .eq("id", projectId)
     .maybeSingle();
 
@@ -130,7 +131,11 @@ async function loadReminderContext(projectId: string) {
     if (Number.isFinite(balance) && balance >= 0) amountDue = balance;
   }
 
-  const galleryUrl = project.gallery_code ? `${site.url}/g/${project.gallery_code}` : null;
+  const galleryUrl = project.access_token
+    ? clientUrl(`/proofing/${project.access_token}`)
+    : project.gallery_code
+    ? clientUrl(`/gallery/${project.gallery_code}`)
+    : null;
 
   const reminderProject: ReminderProject = {
     name: project.name,

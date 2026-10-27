@@ -3,7 +3,7 @@
 import { useActionState } from "react";
 import { ArrowRight, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { verifyClientAccess } from "@/app/client/actions";
+import { verifyClientAccess } from "@/app/actions/client-access";
 
 export function ClientAccessForm() {
   const [state, action, isPending] = useActionState(verifyClientAccess, null);
