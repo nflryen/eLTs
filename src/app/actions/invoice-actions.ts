@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { notifyInvoiceIssued } from "@/lib/notifications/whatsapp/dispatcher";
 import { z } from "zod";
 import { randomBytes } from "node:crypto";
 import { requirePermission, requireOps } from "@/lib/auth/roles";
@@ -709,11 +710,48 @@ export async function generateProjectInvoiceAction(projectId: string): Promise<{
     if (insertErr || !invRecord) {
       return { success: false, error: `Gagal menyimpan invoice: ${insertErr?.message || "Kesalahan database"}` };
     }
-
     revalidatePath(`/admin/projects/${projectId}`);
     revalidatePath("/admin/invoices");
     revalidatePath("/admin/finance");
 
+    // Asynchronous out-of-band WhatsApp invoice notification
+    (async () => {
+      try {
+        const { data: customer } = await supabase
+          .from("customers")
+          .select("name, phone")
+          .eq("id", project.customer_id)
+          .maybeSingle();
+
+        const { data: paymentMethods } = await supabase
+          .from("studio_payment_methods")
+          .select("bank_name, account_number, account_holder")
+          .eq("is_active", true)
+          .order("sort_order", { ascending: true })
+          .limit(1);
+
+        const primaryBank = paymentMethods?.[0];
+
+        if (customer?.phone) {
+          await notifyInvoiceIssued({
+            invoiceId: invRecord.id,
+            projectId: projectId,
+            clientName: customer.name,
+            clientPhone: customer.phone,
+            projectName: project.name,
+            invoiceNumber: invRecord.invoice_number,
+            grossAmount: netContract,
+            minimumDpPct: 50,
+            dueDate,
+            bankName: primaryBank?.bank_name,
+            accountNumber: primaryBank?.account_number,
+            accountHolder: primaryBank?.account_holder,
+          });
+        }
+      } catch (notifyErr) {
+        console.warn("[InvoiceActions] Invoice notification dispatch failed:", notifyErr);
+      }
+    })();
     return {
       success: true,
       invoiceNumber: invRecord.invoice_number,

@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unused-vars */
 /**
  * ==============================================================================
  * eLTs Studio OS - Master Operational Ledger Synchronization Webhook

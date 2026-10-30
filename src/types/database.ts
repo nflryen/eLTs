@@ -329,6 +329,39 @@ export type UserProfileRow = {
   updated_at: string;
 };
 
+export type NotificationLogRow = {
+  id: string;
+  channel: "WHATSAPP" | "EMAIL";
+  trigger_type: string;
+  recipient: string;
+  subject_or_preview: string;
+  provider: string;
+  status: "PENDING" | "SENT" | "FAILED" | "DELIVERED";
+  project_id: string | null;
+  invoice_id: string | null;
+  payload_json: Record<string, unknown>;
+  external_id: string | null;
+  error_message: string | null;
+  retry_count: number;
+  next_retry_at: string | null;
+  created_at: string;
+  dispatched_at: string | null;
+};
+
+export type SpreadsheetSyncLogRow = {
+  id: string;
+  entity_type: "PROJECT" | "INVOICE" | "PAYMENT_RECEIPT" | "PROOFING_SELECTION";
+  entity_id: string;
+  action: "INSERT" | "UPDATE" | "DELETE";
+  sync_target: string;
+  status: "PENDING" | "SYNCED" | "FAILED";
+  payload_snapshot: Record<string, unknown>;
+  attempts: number;
+  last_error: string | null;
+  synced_at: string | null;
+  created_at: string;
+};
+
 export type Database = {
   /*
    * Required by @supabase/postgrest-js >= 1.x.
@@ -527,6 +560,14 @@ client_reminders_log: Table<
           body_snapshot: string;
         },
         never
+      >;
+      notification_logs: Table<
+        NotificationLogRow,
+        "channel" | "trigger_type" | "recipient" | "subject_or_preview" | "provider"
+      >;
+      spreadsheet_sync_logs: Table<
+        SpreadsheetSyncLogRow,
+        "entity_type" | "entity_id" | "action" | "payload_snapshot"
       >;
       document_sequences: Table<
         {

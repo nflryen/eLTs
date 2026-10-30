@@ -3,6 +3,7 @@
 import type { ProjectCrewAssignmentRow } from "@/types/operations";
 
 import { revalidatePath } from "next/cache";
+import { notifyProofingMagicLink } from "@/lib/notifications/whatsapp/dispatcher";
 import { z } from "zod";
 import { randomBytes } from "node:crypto";
 import { requireOps, type RoleSession } from "@/lib/auth/roles";
@@ -119,6 +120,36 @@ export async function changeProjectStatus(
   revalidatePath(`/admin/projects/${projectId}`);
   revalidatePath("/admin/projects");
   revalidatePath("/admin");
+
+  // Asynchronous out-of-band Proofing Magic Link dispatch if transitioning to ready
+  if (to === "ready") {
+    (async () => {
+      try {
+        const { data: proj } = await supabase
+          .from("projects")
+          .select("id, name, access_token, selection_quota_min, selection_quota_max, selection_deadline, customers!inner(name, phone)")
+          .eq("id", projectId)
+          .maybeSingle();
+
+        const customer = (proj as unknown as { customers: { name: string; phone: string | null } | null })?.customers;
+        if (proj?.access_token && customer?.phone) {
+          await notifyProofingMagicLink({
+            projectId: proj.id,
+            clientName: customer.name,
+            clientPhone: customer.phone,
+            projectName: proj.name,
+            accessToken: proj.access_token,
+            selectionQuotaMin: proj.selection_quota_min || 15,
+            selectionQuotaMax: proj.selection_quota_max || 20,
+            selectionDeadline: proj.selection_deadline,
+          });
+        }
+      } catch (notifyErr) {
+        console.warn("[ProjectLifecycle] Proofing delivery notification failed:", notifyErr);
+      }
+    })();
+  }
+
   return { ok: true, from, to };
 }
 

@@ -4,6 +4,7 @@ import { z } from "zod";
 import { createServiceSupabase } from "@/lib/supabase/service";
 import { requireGallerySession } from "@/lib/auth/gallery";
 import { revalidatePath } from "next/cache";
+import { notifySelectionConfirmation } from "@/lib/notifications/whatsapp/dispatcher";
 
 const uuid = z.string().regex(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i, "ID tidak valid.");
 
@@ -75,10 +76,39 @@ export async function submitPhotoSelection(
   if (error) {
     return { success: false, error: error.message || "Failed to submit photo selection." };
   }
-
   if (_locator) {
     revalidatePath(`/gallery/${_locator}`);
   }
+
+  // Asynchronous out-of-band WhatsApp confirmation
+  (async () => {
+    try {
+      const { data: project } = await supabase
+        .from("projects")
+        .select("id, name, customer_id, customers!inner(name, phone)")
+        .eq("id", projectId)
+        .maybeSingle();
+
+      const { count } = await supabase
+        .from("favorites")
+        .select("id", { count: "exact", head: true })
+        .eq("project_id", projectId)
+        .eq("session_id", session.session_id);
+
+      const customer = (project as unknown as { customers: { name: string; phone: string | null } | null })?.customers;
+      if (project && customer?.phone) {
+        await notifySelectionConfirmation({
+          projectId: project.id,
+          clientName: customer.name,
+          clientPhone: customer.phone,
+          projectName: project.name,
+          selectedCount: count || 0,
+        });
+      }
+    } catch (notifyErr) {
+      console.warn("[Gallery] Selection confirmation notification failed:", notifyErr);
+    }
+  })();
 
   return { success: true };
 }

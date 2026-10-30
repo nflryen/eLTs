@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { requireOps } from "@/lib/auth/roles";
+import { notifyPaymentReceiptConfirmed } from "@/lib/notifications/whatsapp/dispatcher";
 
 /**
  * Client invoice receipt ledger — the ONLY write path for payments.
@@ -241,6 +242,41 @@ export async function verifyReceipt(
     revalidatePath(consolePath(parsed.data.projectId));
     revalidatePath("/admin/finance");
     revalidatePath("/admin");
+
+    // Asynchronous out-of-band WhatsApp payment confirmation receipt
+    (async () => {
+      try {
+        const { data: fullReceipt } = await supabase
+          .from("invoice_payment_receipts")
+          .select("id, receipt_number, amount, invoice_id")
+          .eq("id", parsed.data.receiptId)
+          .maybeSingle();
+
+        const { data: project } = await supabase
+          .from("projects")
+          .select("id, name, is_fully_paid, customer_id, customers!inner(name, phone)")
+          .eq("id", parsed.data.projectId)
+          .maybeSingle();
+
+        const customer = (project as unknown as { customers: { name: string; phone: string | null } | null })?.customers;
+        if (fullReceipt && project && customer?.phone) {
+          await notifyPaymentReceiptConfirmed({
+            receiptId: fullReceipt.id,
+            invoiceId: fullReceipt.invoice_id,
+            projectId: project.id,
+            clientName: customer.name,
+            clientPhone: customer.phone,
+            projectName: project.name,
+            receiptNumber: fullReceipt.receipt_number,
+            amountPaid: Number(fullReceipt.amount) || 0,
+            isFullyPaid: Boolean(project.is_fully_paid),
+          });
+        }
+      } catch (notifyErr) {
+        console.warn("[InvoiceReceipts] Payment notification dispatch failed:", notifyErr);
+      }
+    })();
+
     return { success: true };
   } catch (error: unknown) {
     console.error("verifyReceipt failed", error);
