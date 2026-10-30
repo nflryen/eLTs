@@ -38,6 +38,9 @@ export default async function SettingsLayout({ children }: { children: React.Rea
   const tabs = [
     { href: "/settings/profile", label: "Profil Saya & Rekening" },
     { href: "/settings/security", label: "Keamanan Akun & Sesi" },
+    ...(session.rank >= 80
+      ? [{ href: "/settings/whatsapp", label: "WhatsApp Gateway" }]
+      : []),
     /*
      * RBAC tier configuration only — NOT daily crew assignments. Operational
      * crew management lives at /admin/crew in the main navigation.

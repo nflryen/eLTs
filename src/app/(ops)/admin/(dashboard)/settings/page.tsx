@@ -1,6 +1,6 @@
+import Link from "next/link";
 import { requirePageOps } from "@/lib/auth/roles";
-import { Shield, User, Globe } from "lucide-react";
-
+import { Shield, User, Globe, MessageSquare, ArrowRight } from "lucide-react";
 /**
  * Settings.
  *
@@ -125,6 +125,29 @@ export default async function SettingsPage() {
       </div>
 
       {/* Keamanan — nilai yang benar-benar berlaku */}
+      {/* WhatsApp Gateway */}
+      <div className="mb-6 overflow-hidden rounded-lg border border-border bg-white shadow-sm">
+        <div className="flex items-center justify-between border-b border-border px-6 py-5">
+          <div className="flex items-center gap-3">
+            <MessageSquare size={18} className="text-muted-foreground" />
+            <h2 className="font-medium">WhatsApp Gateway (Self-Hosted)</h2>
+          </div>
+          <Link
+            href="/settings/whatsapp"
+            className="inline-flex items-center gap-1.5 text-xs font-medium text-[#ff5a00] hover:underline"
+          >
+            <span>Buka Panel QR</span>
+            <ArrowRight size={13} />
+          </Link>
+        </div>
+        <div className="space-y-2 px-6 py-4 text-xs text-muted-foreground">
+          <p>
+            Integrasi langsung WhatsApp Web Multi-Device untuk pengiriman otomatis Proofing Magic Link, pengingat deadline, faktur komersial, dan konfirmasi pembayaran tanpa biaya langganan API.
+          </p>
+        </div>
+      </div>
+
+      {/* Keamanan */}
       <div className="overflow-hidden rounded-lg border border-border bg-white shadow-sm">
         <div className="flex items-center gap-3 border-b border-border px-6 py-5">
           <Shield size={18} className="text-muted-foreground" />

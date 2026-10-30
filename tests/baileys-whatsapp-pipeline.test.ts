@@ -168,3 +168,27 @@ test("dispatchWhatsAppNotification sends message and logs event cleanly", async 
   assert.equal(res.result.success, true);
   assert.equal(res.result.provider, "BAILEYS_SELF_HOSTED");
 });
+
+test("QRCode.toDataURL produces valid base64 image data url for Baileys QR strings", async () => {
+  const QRCode = (await import("qrcode")).default;
+  const mockQrString = "2@mockBaileysQrCodeString12345,hashABC==";
+  const dataUrl = await QRCode.toDataURL(mockQrString, {
+    width: 320,
+    margin: 2,
+    color: { dark: "#18181b", light: "#ffffff" },
+  });
+
+  assert.match(dataUrl, /^data:image\/png;base64,/);
+  assert.ok(dataUrl.length > 100);
+});
+
+test("Baileys provider disconnect resets connection state cleanly", async () => {
+  const provider = new BaileysWhatsAppProvider("/tmp/test_baileys_auth");
+  await provider.connect();
+  assert.equal(provider.getConnectionStatus().isConnected, true);
+
+  await provider.disconnect();
+  const disconnectedStatus = provider.getConnectionStatus();
+  assert.equal(disconnectedStatus.isConnected, false);
+  assert.equal(disconnectedStatus.isConnecting, false);
+});

@@ -1,6 +1,7 @@
 "use server";
 
 import { requireOps } from "@/lib/auth/roles";
+import QRCode from "qrcode";
 import { getBaileysProvider } from "@/lib/notifications/whatsapp/baileys-provider";
 import {
   notifyProofingMagicLink,
@@ -28,6 +29,47 @@ export async function connectWhatsAppAction(): Promise<WhatsAppConnectionState> 
   return provider.getConnectionStatus();
 }
 
+/**
+ * Disconnect the current Baileys WhatsApp Web session.
+ */
+export async function disconnectWhatsAppAction(): Promise<WhatsAppConnectionState> {
+  await requireOps();
+  const provider = getBaileysProvider();
+  await provider.disconnect();
+  return provider.getConnectionStatus();
+}
+
+/**
+ * Fetch WhatsApp status with QR Code pre-rendered as a PNG Data URL.
+ */
+export async function getWhatsAppStatusWithQrAction(): Promise<
+  WhatsAppConnectionState & { qrDataUrl?: string | null }
+> {
+  await requireOps();
+  const provider = getBaileysProvider();
+  const status = provider.getConnectionStatus();
+
+  let qrDataUrl: string | null = null;
+  if (status.qrCode) {
+    try {
+      qrDataUrl = await QRCode.toDataURL(status.qrCode, {
+        width: 320,
+        margin: 2,
+        color: {
+          dark: "#18181b",
+          light: "#ffffff",
+        },
+      });
+    } catch (err) {
+      console.warn("[WhatsAppAction] Could not render QR data URL:", err);
+    }
+  }
+
+  return {
+    ...status,
+    qrDataUrl,
+  };
+}
 /**
  * Operator action to manually dispatch / re-send Proofing Magic Link via WhatsApp.
  */
