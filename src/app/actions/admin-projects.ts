@@ -3,6 +3,7 @@
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { requireOps } from "@/lib/auth/roles";
+import { syncProjectToSheets } from "@/lib/sync/sheets-client";
 import type { CustomerRow, ProjectRow, ProjectStatus } from "@/types/database";
 import {
   generateGalleryCode,
@@ -243,21 +244,34 @@ export async function completeProjectScaffoldAction(
     if (updateErr) {
       return { success: false, error: updateErr.message };
     }
+    // Asynchronous out-of-band Google Sheets sync for Projects Master
+    (async () => {
+      try {
+        const { data: fullProj } = await supabase
+          .from("projects")
+          .select("id, name, contract_value, shoot_date, service_pillar, status, access_token, selection_deadline, customer_id, customers!inner(name, phone)")
+          .eq("id", projectId)
+          .maybeSingle();
 
-    /*
-     * Milestone invoices are deliberately NOT created here.
-     *
-     * This block used to insert into `public.invoices` — a table that does not
-     * exist. PostgREST answered 404, the error was discarded, and project
-     * creation still reported success, so operators believed two invoices had
-     * been raised when none had.
-     *
-     * Invoicing is a separate, deliberate action (`createRentalInvoiceAction`
-     * in invoice-actions.ts) which writes a real `project_invoices` row with a
-     * gap-free document number. Creating invoices as a side effect of project
-     * creation would also bypass the DP-floor rule.
-     */
-
+        const customer = (fullProj as unknown as { customers: { name: string; phone: string | null } | null })?.customers;
+        if (fullProj && customer) {
+          await syncProjectToSheets({
+            id: fullProj.id,
+            name: fullProj.name,
+            customerName: customer.name,
+            customerPhone: customer.phone,
+            servicePillar: fullProj.service_pillar,
+            shootDate: fullProj.shoot_date,
+            contractValue: Number(fullProj.contract_value) || 0,
+            status: fullProj.status,
+            proofingUrl: fullProj.access_token ? `https://client.elts.co.id/proofing/${fullProj.access_token}` : null,
+            selectionDeadline: fullProj.selection_deadline,
+          });
+        }
+      } catch (syncErr) {
+        console.warn("[AdminProjects] Project sync failed:", syncErr);
+      }
+    })();
     return { success: true, redirectUrl: `/admin/projects/${projectId}` };
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : "Gagal menyelesaikan pembuatan proyek";

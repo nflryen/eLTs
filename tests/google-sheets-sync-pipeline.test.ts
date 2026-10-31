@@ -1,0 +1,110 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import {
+  signSyncPayload,
+  dispatchSpreadsheetSync,
+  syncProjectToSheets,
+  syncInvoiceToSheets,
+  syncPaymentReceiptToSheets,
+  syncProofingSelectionToSheets,
+} from "../src/lib/sync/sheets-client";
+
+test("signSyncPayload computes valid HMAC-SHA256 signature and rejects tampering", () => {
+  const secret = "elts_super_secret_test_key";
+  const payload = JSON.stringify({ entityType: "PROJECT", id: "p1", name: "Test" });
+
+  const sig1 = signSyncPayload(payload, secret);
+  const sig2 = signSyncPayload(payload, secret);
+  assert.equal(sig1, sig2, "HMAC signature must be deterministic");
+  assert.match(sig1, /^[a-f0-9]{64}$/, "Signature must be 64-hex SHA256 string");
+
+  // Altering payload changes signature
+  const alteredPayload = JSON.stringify({ entityType: "PROJECT", id: "p1", name: "Tampered" });
+  const sigAltered = signSyncPayload(alteredPayload, secret);
+  assert.notEqual(sig1, sigAltered, "Altered payload must produce different signature");
+
+  // Altering secret changes signature
+  const sigWrongSecret = signSyncPayload(payload, "wrong_secret");
+  assert.notEqual(sig1, sigWrongSecret, "Different secret must produce different signature");
+});
+
+test("dispatchSpreadsheetSync operates cleanly in mock mode during tests", async () => {
+  const res = await dispatchSpreadsheetSync("PROJECT", "a0000000-0000-0000-0000-000000000001", "INSERT", {
+    id: "a0000000-0000-0000-0000-000000000001",
+    name: "Wedding Budi & Ani",
+    customerName: "Budi Santoso",
+    contractValue: 15000000,
+    status: "ready",
+  });
+
+  assert.equal(res.success, true);
+  assert.equal(res.isMock, true);
+  assert.ok(typeof res.row === "number");
+});
+
+test("syncProjectToSheets formats complete project data payload", async () => {
+  const res = await syncProjectToSheets({
+    id: "a0000000-0000-0000-0000-000000000001",
+    name: "Wisuda UI 2026",
+    customerName: "Siti Rahma",
+    customerPhone: "081234567890",
+    servicePillar: "Wisuda & Event",
+    shootDate: "2026-11-20",
+    contractValue: 3500000,
+    status: "ready",
+    proofingUrl: "https://client.elts.co.id/proofing/tok_abc123",
+    selectionDeadline: "2026-11-27",
+  });
+
+  assert.equal(res.success, true);
+});
+
+test("syncInvoiceToSheets formats commercial invoice payload", async () => {
+  const res = await syncInvoiceToSheets({
+    id: "b0000000-0000-0000-0000-000000000001",
+    invoiceNumber: "INV/2026/10/0001",
+    projectName: "Wisuda UI 2026",
+    customerName: "Siti Rahma",
+    issueDate: "2026-10-31",
+    dueDate: "2026-11-14",
+    grossContractValue: 3500000,
+    minimumDpPct: 50,
+    isDpPaid: true,
+    isFullyPaid: false,
+  });
+
+  assert.equal(res.success, true);
+});
+
+test("syncPaymentReceiptToSheets formats cash receipt ledger payload", async () => {
+  const res = await syncPaymentReceiptToSheets({
+    id: "c0000000-0000-0000-0000-000000000001",
+    receiptNumber: "RCP/2026/10/0001",
+    invoiceNumber: "INV/2026/10/0001",
+    projectName: "Wisuda UI 2026",
+    receivedAt: "2026-10-31T10:00:00Z",
+    amount: 1750000,
+    paymentMethod: "BANK_TRANSFER",
+    bankName: "BCA",
+    referenceNumber: "TRX-987654321",
+    verifiedAt: "2026-10-31T10:05:00Z",
+  });
+
+  assert.equal(res.success, true);
+});
+
+test("syncProofingSelectionToSheets formats locked editor task queue payload", async () => {
+  const res = await syncProofingSelectionToSheets({
+    projectId: "a0000000-0000-0000-0000-000000000001",
+    projectName: "Wisuda UI 2026",
+    deliverableCount: 20,
+    quotaMin: 15,
+    quotaMax: 20,
+    selectionLockedAt: "2026-10-31T14:30:00Z",
+    assignedEditor: "Azrian",
+    taskStatus: "IN_PROGRESS",
+    googleDriveUrl: "https://drive.google.com/drive/folders/test12345",
+  });
+
+  assert.equal(res.success, true);
+});

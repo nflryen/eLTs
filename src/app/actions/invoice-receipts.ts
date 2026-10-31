@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { requireOps } from "@/lib/auth/roles";
 import { notifyPaymentReceiptConfirmed } from "@/lib/notifications/whatsapp/dispatcher";
+import { syncPaymentReceiptToSheets } from "@/lib/sync/sheets-client";
 
 /**
  * Client invoice receipt ledger — the ONLY write path for payments.
@@ -248,7 +249,7 @@ export async function verifyReceipt(
       try {
         const { data: fullReceipt } = await supabase
           .from("invoice_payment_receipts")
-          .select("id, receipt_number, amount, invoice_id")
+          .select("id, receipt_number, amount, invoice_id, payment_method, bank_name, reference_number, received_at, project_invoices!inner(invoice_number)")
           .eq("id", parsed.data.receiptId)
           .maybeSingle();
 
@@ -272,8 +273,25 @@ export async function verifyReceipt(
             isFullyPaid: Boolean(project.is_fully_paid),
           });
         }
+
+        // Asynchronous out-of-band Google Sheets sync
+        if (fullReceipt && project) {
+          const invNumber = (fullReceipt as unknown as { project_invoices: { invoice_number: string } | null })?.project_invoices?.invoice_number || "INV/UNKNOWN";
+          await syncPaymentReceiptToSheets({
+            id: fullReceipt.id,
+            receiptNumber: fullReceipt.receipt_number,
+            invoiceNumber: invNumber,
+            projectName: project.name,
+            receivedAt: fullReceipt.received_at || new Date().toISOString(),
+            amount: Number(fullReceipt.amount) || 0,
+            paymentMethod: fullReceipt.payment_method || "BANK_TRANSFER",
+            bankName: fullReceipt.bank_name,
+            referenceNumber: fullReceipt.reference_number,
+            verifiedAt: new Date().toISOString(),
+          });
+        }
       } catch (notifyErr) {
-        console.warn("[InvoiceReceipts] Payment notification dispatch failed:", notifyErr);
+        console.warn("[InvoiceReceipts] Payment notification or sync dispatch failed:", notifyErr);
       }
     })();
 

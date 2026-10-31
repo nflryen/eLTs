@@ -5,6 +5,7 @@ import { createServiceSupabase } from "@/lib/supabase/service";
 import { requireGallerySession } from "@/lib/auth/gallery";
 import { revalidatePath } from "next/cache";
 import { notifySelectionConfirmation } from "@/lib/notifications/whatsapp/dispatcher";
+import { syncProofingSelectionToSheets } from "@/lib/sync/sheets-client";
 
 const uuid = z.string().regex(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i, "ID tidak valid.");
 
@@ -85,10 +86,9 @@ export async function submitPhotoSelection(
     try {
       const { data: project } = await supabase
         .from("projects")
-        .select("id, name, customer_id, customers!inner(name, phone)")
+        .select("id, name, selection_quota_min, selection_quota_max, sector_specs, customer_id, customers!inner(name, phone)")
         .eq("id", projectId)
         .maybeSingle();
-
       const { count } = await supabase
         .from("favorites")
         .select("id", { count: "exact", head: true })
@@ -104,10 +104,31 @@ export async function submitPhotoSelection(
           projectName: project.name,
           selectedCount: count || 0,
         });
+        }
+
+        // Asynchronous out-of-band Google Sheets sync for Proofing & Editor Queue
+        if (project) {
+          const { data: editorTask } = await supabase
+            .from("editor_tasks")
+            .select("assigned_editor_id, status")
+            .eq("project_id", projectId)
+            .maybeSingle();
+
+          await syncProofingSelectionToSheets({
+            projectId: project.id,
+            projectName: project.name,
+            deliverableCount: count || 0,
+            quotaMin: project.selection_quota_min || 15,
+            quotaMax: project.selection_quota_max || 20,
+            selectionLockedAt: new Date().toISOString(),
+            assignedEditor: editorTask?.assigned_editor_id || "Unassigned",
+            taskStatus: editorTask?.status || "PENDING",
+            googleDriveUrl: (project.sector_specs as { googleDriveUrl?: string })?.googleDriveUrl || null,
+          });
+        }
+      } catch (notifyErr) {
+        console.warn("[Gallery] Selection confirmation or sync dispatch failed:", notifyErr);
       }
-    } catch (notifyErr) {
-      console.warn("[Gallery] Selection confirmation notification failed:", notifyErr);
-    }
   })();
 
   return { success: true };

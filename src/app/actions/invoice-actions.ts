@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { notifyInvoiceIssued } from "@/lib/notifications/whatsapp/dispatcher";
+import { syncInvoiceToSheets } from "@/lib/sync/sheets-client";
 import { z } from "zod";
 import { randomBytes } from "node:crypto";
 import { requirePermission, requireOps } from "@/lib/auth/roles";
@@ -748,8 +749,22 @@ export async function generateProjectInvoiceAction(projectId: string): Promise<{
             accountHolder: primaryBank?.account_holder,
           });
         }
+
+        // Asynchronous out-of-band Google Sheets sync
+        await syncInvoiceToSheets({
+          id: invRecord.id,
+          invoiceNumber: invRecord.invoice_number,
+          projectName: project.name,
+          customerName: customer?.name || "Pelanggan",
+          issueDate: today,
+          dueDate,
+          grossContractValue: netContract,
+          minimumDpPct: 50,
+          isDpPaid: false,
+          isFullyPaid: false,
+        });
       } catch (notifyErr) {
-        console.warn("[InvoiceActions] Invoice notification dispatch failed:", notifyErr);
+        console.warn("[InvoiceActions] Invoice notification or sync dispatch failed:", notifyErr);
       }
     })();
     return {
