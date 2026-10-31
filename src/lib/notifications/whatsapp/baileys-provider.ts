@@ -9,6 +9,7 @@
 import type { WASocket, ConnectionState } from "@whiskeysockets/baileys";
 import path from "node:path";
 import fs from "node:fs";
+import os from "node:os";
 import { normalisePhone } from "@/lib/whatsapp/phone";
 import type {
   IWhatsAppProvider,
@@ -20,6 +21,79 @@ import type {
 /** Singleton holder across Next.js module reloads */
 declare global {
   var __elts_baileys_provider__: BaileysWhatsAppProvider | undefined;
+}
+
+/**
+ * Resolves a safe, writable directory for Baileys auth state credentials.
+ *
+ * In serverless environments (Vercel, AWS Lambda, or container runtimes where
+ * the working directory is read-only such as /var/task), attempting to write to
+ * process.cwd() fails with ENOENT, EACCES, or EROFS. In those runtimes, the only
+ * guaranteed writable directory is the OS temporary directory (/tmp).
+ */
+export function resolveBaileysAuthDir(customDir?: string): string {
+  if (customDir) {
+    try {
+      if (!fs.existsSync(customDir)) {
+        fs.mkdirSync(customDir, { recursive: true });
+      }
+    } catch (err) {
+      console.warn(`[Baileys] Unable to create custom auth dir at ${customDir}:`, err);
+    }
+    return customDir;
+  }
+
+  if (process.env.WHATSAPP_AUTH_DIR) {
+    const envDir = process.env.WHATSAPP_AUTH_DIR;
+    try {
+      if (!fs.existsSync(envDir)) {
+        fs.mkdirSync(envDir, { recursive: true });
+      }
+    } catch (err) {
+      console.warn(`[Baileys] Unable to create WHATSAPP_AUTH_DIR at ${envDir}:`, err);
+    }
+    return envDir;
+  }
+
+  // 1. Detect serverless / read-only filesystem environment
+  const isServerless =
+    Boolean(process.env.VERCEL) ||
+    Boolean(process.env.AWS_LAMBDA_FUNCTION_NAME) ||
+    Boolean(process.env.LAMBDA_TASK_ROOT) ||
+    (typeof process.cwd === "function" && process.cwd().startsWith("/var/task"));
+
+  if (isServerless) {
+    const tmpDir = path.join(os.tmpdir(), "baileys_auth");
+    try {
+      if (!fs.existsSync(tmpDir)) {
+        fs.mkdirSync(tmpDir, { recursive: true });
+      }
+    } catch (err) {
+      console.warn(`[Baileys] Unable to create serverless /tmp auth dir:`, err);
+    }
+    return tmpDir;
+  }
+
+  // 2. Standard persistent server default (.data/baileys_auth)
+  const localDefault = path.join(process.cwd(), ".data", "baileys_auth");
+  try {
+    if (!fs.existsSync(localDefault)) {
+      fs.mkdirSync(localDefault, { recursive: true });
+    }
+    return localDefault;
+  } catch (err) {
+    // If local root directory is read-only despite not matching known env flags, fallback to /tmp
+    console.warn(`[Baileys] Unable to create local auth dir at ${localDefault}, falling back to /tmp:`, err);
+    const fallbackDir = path.join(os.tmpdir(), "baileys_auth");
+    try {
+      if (!fs.existsSync(fallbackDir)) {
+        fs.mkdirSync(fallbackDir, { recursive: true });
+      }
+    } catch (fallbackErr) {
+      console.warn(`[Baileys] Unable to create fallback /tmp auth dir:`, fallbackErr);
+    }
+    return fallbackDir;
+  }
 }
 
 export class BaileysWhatsAppProvider implements IWhatsAppProvider {
@@ -38,20 +112,11 @@ export class BaileysWhatsAppProvider implements IWhatsAppProvider {
   private maxReconnectDelay = 30000;
 
   constructor(customAuthDir?: string) {
-    this.authDir =
-      customAuthDir ||
-      process.env.WHATSAPP_AUTH_DIR ||
-      path.join(process.cwd(), ".data", "baileys_auth");
+    this.authDir = resolveBaileysAuthDir(customAuthDir);
+  }
 
-    if (typeof window === "undefined") {
-      try {
-        if (!fs.existsSync(this.authDir)) {
-          fs.mkdirSync(this.authDir, { recursive: true });
-        }
-      } catch (err) {
-        console.warn("[Baileys] Unable to create auth directory:", err);
-      }
-    }
+  public getAuthDir(): string {
+    return this.authDir;
   }
 
   /**

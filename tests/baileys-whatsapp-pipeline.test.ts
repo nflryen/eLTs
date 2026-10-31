@@ -1,6 +1,10 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { BaileysWhatsAppProvider, getBaileysProvider } from "../src/lib/notifications/whatsapp/baileys-provider";
+import {
+  BaileysWhatsAppProvider,
+  getBaileysProvider,
+  resolveBaileysAuthDir,
+} from "../src/lib/notifications/whatsapp/baileys-provider";
 import {
   dispatchWhatsAppNotification,
   notifyProofingMagicLink,
@@ -191,4 +195,50 @@ test("Baileys provider disconnect resets connection state cleanly", async () => 
   const disconnectedStatus = provider.getConnectionStatus();
   assert.equal(disconnectedStatus.isConnected, false);
   assert.equal(disconnectedStatus.isConnecting, false);
+});
+
+test("resolveBaileysAuthDir handles custom paths and falls back dynamically in serverless runtimes", () => {
+  const originalVercel = process.env.VERCEL;
+  const originalAuthDir = process.env.WHATSAPP_AUTH_DIR;
+  const originalLambda = process.env.AWS_LAMBDA_FUNCTION_NAME;
+
+  try {
+    // 1. Custom directory takes highest precedence
+    const custom = resolveBaileysAuthDir("/tmp/custom_override_auth");
+    assert.equal(custom, "/tmp/custom_override_auth");
+
+    // 2. WHATSAPP_AUTH_DIR env variable is respected
+    delete process.env.VERCEL;
+    delete process.env.AWS_LAMBDA_FUNCTION_NAME;
+    process.env.WHATSAPP_AUTH_DIR = "/tmp/env_auth_dir";
+    const fromEnv = resolveBaileysAuthDir();
+    assert.equal(fromEnv, "/tmp/env_auth_dir");
+
+    // 3. Serverless Vercel runtime triggers /tmp fallback instead of .data
+    delete process.env.WHATSAPP_AUTH_DIR;
+    process.env.VERCEL = "1";
+    const vercelDir = resolveBaileysAuthDir();
+    assert.match(vercelDir, /(^\/tmp|\btemp\b|baileys_auth)/i);
+    assert.doesNotMatch(vercelDir, /\.data/);
+
+    // 4. AWS Lambda runtime triggers /tmp fallback instead of .data
+    delete process.env.VERCEL;
+    process.env.AWS_LAMBDA_FUNCTION_NAME = "elts-api-prod";
+    const lambdaDir = resolveBaileysAuthDir();
+    assert.match(lambdaDir, /(^\/tmp|\btemp\b|baileys_auth)/i);
+    assert.doesNotMatch(lambdaDir, /\.data/);
+
+    // 5. Baileys provider instance reports resolved path
+    const provider = new BaileysWhatsAppProvider();
+    assert.ok(provider.getAuthDir().length > 0);
+  } finally {
+    if (originalVercel !== undefined) process.env.VERCEL = originalVercel;
+    else delete process.env.VERCEL;
+
+    if (originalAuthDir !== undefined) process.env.WHATSAPP_AUTH_DIR = originalAuthDir;
+    else delete process.env.WHATSAPP_AUTH_DIR;
+
+    if (originalLambda !== undefined) process.env.AWS_LAMBDA_FUNCTION_NAME = originalLambda;
+    else delete process.env.AWS_LAMBDA_FUNCTION_NAME;
+  }
 });
