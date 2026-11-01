@@ -3,6 +3,7 @@
 import { z } from "zod";
 import { createServiceSupabase } from "@/lib/supabase/service";
 import { syncStudioEventToGoogleCalendar } from "@/services/calendar/google";
+import { notifyConsultationScheduled } from "@/lib/notifications/whatsapp/dispatcher";
 import { site } from "@/config/site";
 import type {
   BookingConfirmationDetails,
@@ -233,8 +234,24 @@ export async function bookStudioEventAction(data: BookingFormData): Promise<{
     }
 
     const eventId = insertedEvent?.id || gcalResult.eventId;
+    // 3. Automated dispatch via Hybrid Notification Engine (WhatsApp)
+    (async () => {
+      try {
+        await notifyConsultationScheduled({
+          clientName: validated.fullName.trim(),
+          clientPhone: validated.whatsapp.trim(),
+          sessionType: typeTitle,
+          dateStr: validated.date,
+          timeStr: validated.timeSlot,
+          meetLink: gcalResult.meetLink,
+          notes: validated.notes?.trim() || null,
+        });
+      } catch (notifyErr) {
+        console.warn("[BookingAction] Consultation notification dispatch failed:", notifyErr);
+      }
+    })();
 
-    // 3. Prepare direct WhatsApp follow-up link
+    // 4. Prepare direct WhatsApp follow-up link
     const waText = encodeURIComponent(
       `*Halo ELTs. Studio Purwokerto,*\n\n` +
         `Saya telah menjadwalkan sesi meeting:\n` +

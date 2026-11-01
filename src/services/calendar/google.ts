@@ -138,8 +138,16 @@ export async function createStudioCalendarEvent(
   payload: CalendarEventPayload,
   config?: GoogleCalendarConfig
 ): Promise<CalendarEventResult> {
-  const clientEmail = config?.clientEmail || process.env.GOOGLE_CALENDAR_CLIENT_EMAIL;
-  const privateKey = config?.privateKey || process.env.GOOGLE_CALENDAR_PRIVATE_KEY;
+  const clientEmail =
+    config?.clientEmail ||
+    process.env.GOOGLE_CALENDAR_CLIENT_EMAIL ||
+    process.env.GOOGLE_CLIENT_EMAIL ||
+    process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL;
+  const privateKey =
+    config?.privateKey ||
+    process.env.GOOGLE_CALENDAR_PRIVATE_KEY ||
+    process.env.GOOGLE_PRIVATE_KEY ||
+    process.env.GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY;
   const calendarId = config?.calendarId || process.env.GOOGLE_CALENDAR_ID || "primary";
 
   // Build standard Google Calendar API event structure

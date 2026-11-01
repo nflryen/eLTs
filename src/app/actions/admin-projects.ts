@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { requireOps } from "@/lib/auth/roles";
 import { syncProjectToSheets } from "@/lib/sync/sheets-client";
 import { provisionAndBindProjectDriveVault } from "@/lib/sync/drive-client";
+import { scheduleProjectShootCalendarEvent } from "@/services/calendar/google";
 import type { CustomerRow, ProjectRow, ProjectStatus } from "@/types/database";
 import {
   generateGalleryCode,
@@ -250,7 +251,7 @@ export async function completeProjectScaffoldAction(
       try {
         const { data: fullProj } = await supabase
           .from("projects")
-          .select("id, name, contract_value, shoot_date, service_pillar, status, access_token, selection_deadline, customer_id, customers!inner(name, phone)")
+          .select("id, name, contract_value, shoot_date, service_pillar, status, access_token, selection_deadline, sector_specs, customer_id, customers!inner(name, phone)")
           .eq("id", projectId)
           .maybeSingle();
 
@@ -272,8 +273,25 @@ export async function completeProjectScaffoldAction(
 
         // Provision Google Drive Project Vault (01_RAW, 02_Proofs, 03_Deliverables)
         await provisionAndBindProjectDriveVault(projectId);
+
+        // Provision Google Calendar Event for confirmed shoot date
+        if (fullProj && customer && fullProj.shoot_date) {
+          const specs = (fullProj.sector_specs as Record<string, unknown>) || {};
+          await scheduleProjectShootCalendarEvent({
+            projectId: fullProj.id,
+            projectName: fullProj.name,
+            customerName: customer.name,
+            customerPhone: customer.phone,
+            shootDate: fullProj.shoot_date,
+            callTime: (specs.callTime as string) || "08:00",
+            venueName: (specs.venueName as string) || "Studio eLTs",
+            venueAddress: (specs.venueAddress as string) || null,
+            venueMapsUrl: (specs.venueMapsUrl as string) || null,
+            pillar: fullProj.service_pillar,
+          });
+        }
       } catch (syncErr) {
-        console.warn("[AdminProjects] Project sync or drive vault provisioning failed:", syncErr);
+        console.warn("[AdminProjects] Project sync, drive vault, or calendar event failed:", syncErr);
       }
     })();
     return { success: true, redirectUrl: `/admin/projects/${projectId}` };

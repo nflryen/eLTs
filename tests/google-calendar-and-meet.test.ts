@@ -59,3 +59,35 @@ test("notifyConsultationScheduled formats complete WhatsApp message with Google 
   assert.equal(result.ok, true);
   assert.equal(result.result.success, true);
 });
+
+test("scheduleProjectShootCalendarEvent handles credential fallbacks smoothly", async () => {
+  const originalClientEmail = process.env.GOOGLE_CLIENT_EMAIL;
+  const originalPrivateKey = process.env.GOOGLE_PRIVATE_KEY;
+
+  try {
+    // Test with GOOGLE_CLIENT_EMAIL and GOOGLE_PRIVATE_KEY fallbacks
+    process.env.GOOGLE_CLIENT_EMAIL = "test-service-account@elts.iam.gserviceaccount.com";
+    process.env.GOOGLE_PRIVATE_KEY = "-----BEGIN PRIVATE KEY-----\\nMIIEvgIBADANBgkqhkiG9w0BAQEFAASCBKgwggSkAgEAAoIBAQC...\\n-----END PRIVATE KEY-----";
+
+    const result = await scheduleProjectShootCalendarEvent({
+      projectId: "a0000000-0000-0000-0000-000000000099",
+      projectName: "Field Shoot Commercial - Brand X",
+      customerName: "Marketing Lead",
+      customerPhone: "081234567899",
+      shootDate: "2026-11-25",
+      callTime: "06:00",
+      venueName: "Studio 1 Purwokerto",
+      venueMapsUrl: "https://maps.google.com/?q=elts+studio",
+      pillar: "Live Streaming",
+    });
+
+    assert.equal(result.success, true);
+    assert.ok(result.eventId);
+  } finally {
+    if (originalClientEmail !== undefined) process.env.GOOGLE_CLIENT_EMAIL = originalClientEmail;
+    else delete process.env.GOOGLE_CLIENT_EMAIL;
+
+    if (originalPrivateKey !== undefined) process.env.GOOGLE_PRIVATE_KEY = originalPrivateKey;
+    else delete process.env.GOOGLE_PRIVATE_KEY;
+  }
+});

@@ -28,9 +28,20 @@ export interface ProjectDriveHierarchy {
  * Determine if Drive client should execute in mock mode.
  */
 function isMockMode(): boolean {
+  const hasEmail = Boolean(
+    process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL ||
+    process.env.GOOGLE_CLIENT_EMAIL ||
+    process.env.GOOGLE_CALENDAR_CLIENT_EMAIL
+  );
+  const hasKey = Boolean(
+    process.env.GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY ||
+    process.env.GOOGLE_PRIVATE_KEY ||
+    process.env.GOOGLE_CALENDAR_PRIVATE_KEY
+  );
+
   return (
-    !process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL ||
-    !process.env.GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY ||
+    !hasEmail ||
+    !hasKey ||
     process.env.MOCK_DRIVE_API === "true" ||
     process.env.NEXT_PHASE === "phase-production-build" ||
     (process.env.NODE_ENV === "test" && process.env.ENABLE_REAL_DRIVE !== "true")
@@ -41,13 +52,18 @@ function isMockMode(): boolean {
  * Generates an OAuth2 access token for Google Drive API via Service Account JWT.
  */
 async function getDriveAccessToken(): Promise<string | null> {
-  const clientEmail = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL;
-  const privateKeyRaw = process.env.GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY;
+  const clientEmail =
+    process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL ||
+    process.env.GOOGLE_CLIENT_EMAIL ||
+    process.env.GOOGLE_CALENDAR_CLIENT_EMAIL;
+  const privateKeyRaw =
+    process.env.GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY ||
+    process.env.GOOGLE_PRIVATE_KEY ||
+    process.env.GOOGLE_CALENDAR_PRIVATE_KEY;
 
   if (!clientEmail || !privateKeyRaw) {
     return null;
   }
-
   const privateKey = privateKeyRaw.replace(/\\n/g, "\n");
   const now = Math.floor(Date.now() / 1000);
   const expiry = now + 3600;
@@ -111,6 +127,10 @@ async function createDriveFolder(
   }
 
   try {
+    const rootSharedDrive =
+      process.env.GOOGLE_SHARED_DRIVE_ID || process.env.GOOGLE_DRIVE_SHARED_DRIVE_ID;
+    const resolvedParent = parentId || rootSharedDrive;
+
     const res = await fetch("https://www.googleapis.com/drive/v3/files?supportsAllDrives=true", {
       method: "POST",
       headers: {
@@ -120,7 +140,7 @@ async function createDriveFolder(
       body: JSON.stringify({
         name,
         mimeType: "application/vnd.google-apps.folder",
-        parents: parentId ? [parentId] : undefined,
+        parents: resolvedParent ? [resolvedParent] : undefined,
       }),
     });
 
