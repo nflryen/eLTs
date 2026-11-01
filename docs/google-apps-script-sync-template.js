@@ -18,15 +18,14 @@
  *
  * Setup Instructions:
  * 1. Open your Google Sheet -> Extensions -> Apps Script.
- * 2. Paste this complete script into Code.gs.
+ * 2. Paste this complete script into Code.gs (replacing all previous content).
  * 3. In Script Properties (Project Settings), add:
  *    - SYNC_SECRET: Your strong random secret key (e.g., elts_sync_live_...)
- * 4. Deploy -> New Deployment -> Select type: Web App.
+ * 4. Deploy -> Manage Deployments -> Edit -> New Version -> Deploy.
  *    - Execute as: Me (your Google account)
  *    - Who has access: Anyone (authenticated via X-ELTS-SYNC-SECRET / HMAC)
- * 5. Copy the Web App URL into your .env.local:
- *    GOOGLE_SHEETS_WEBHOOK_URL="https://script.google.com/macros/s/.../exec"
- *    GOOGLE_SHEETS_SYNC_SECRET="elts_sync_live_..."
+ * 5. (Optional) Run 'setupOrUpgradeDashboard' from the Apps Script editor or use the
+ *    '⚡ eLTs Studio OS' menu in Google Sheets to immediately repair all tabs.
  * ==============================================================================
  */
 
@@ -84,7 +83,7 @@ function doPost(e) {
     }
 
     var ss = SpreadsheetApp.getActiveSpreadsheet();
-    ensureDashboardInitialized(ss);
+    ensureDashboardInitialized(ss, false);
 
     var entityType = payload.entityType;
     var data = payload.data;
@@ -129,6 +128,35 @@ function doPost(e) {
 }
 
 /**
+ * Standardizes all core operational tabs: auto-renames legacy aliases and ensures
+ * all 3 data tabs exist so Dashboard formulas NEVER throw #REF! or #ERROR!.
+ */
+function standardizeAllSheets(ss) {
+  var projectsSheet = getOrCreateSheet(ss, "Projects & Schedule", [
+    "Sync Timestamp", "Project ID", "Project Name", "Customer Name", 
+    "Customer Phone", "Service Pillar", "Shoot Date", "Status", 
+    "Contract Value (IDR)", "Drive Vault URL", "Proofing Link", "Selection Deadline"
+  ], "Projects Master");
+
+  var incomeSheet = getOrCreateSheet(ss, "Income & Expenses", [
+    "Sync Timestamp", "Transaction ID", "Transaction Type", "Reference Number", 
+    "Project Name", "Customer / Entity", "Amount (IDR)", "Payment Method", 
+    "Date", "Payment / Verification Status"
+  ], "Invoices & Receivables");
+
+  var payrollSheet = getOrCreateSheet(ss, "Payroll & Crew", [
+    "Sync Timestamp", "Assignment ID", "Project Name", "Crew Member Name", 
+    "Role Title", "Fee Amount (IDR)", "Payment Status", "Shoot Date", "Notes"
+  ]);
+
+  return {
+    projectsSheetName: projectsSheet.getName(),
+    incomeSheetName: incomeSheet.getName(),
+    payrollSheetName: payrollSheet.getName()
+  };
+}
+
+/**
  * Appends a row for a single operational entity into the structured operational tabs.
  */
 function appendSingleEntityRow(ss, entityType, data, nowStr) {
@@ -137,7 +165,7 @@ function appendSingleEntityRow(ss, entityType, data, nowStr) {
 
   switch (entityType) {
     case "PROJECT":
-      // Primary: 'Projects & Schedule' (fallback: 'Projects Master')
+      // Primary: 'Projects & Schedule' (auto-upgrades from 'Projects Master')
       targetSheet = getOrCreateSheet(ss, "Projects & Schedule", [
         "Sync Timestamp", "Project ID", "Project Name", "Customer Name", 
         "Customer Phone", "Service Pillar", "Shoot Date", "Status", 
@@ -161,7 +189,7 @@ function appendSingleEntityRow(ss, entityType, data, nowStr) {
       break;
 
     case "INVOICE":
-      // Primary: 'Income & Expenses' (fallback: 'Invoices & Receivables')
+      // Primary: 'Income & Expenses' (auto-upgrades from 'Invoices & Receivables')
       targetSheet = getOrCreateSheet(ss, "Income & Expenses", [
         "Sync Timestamp", "Transaction ID", "Transaction Type", "Reference Number", 
         "Project Name", "Customer / Entity", "Amount (IDR)", "Payment Method", 
@@ -183,6 +211,7 @@ function appendSingleEntityRow(ss, entityType, data, nowStr) {
       break;
 
     case "PAYMENT_RECEIPT":
+      // If payload is marked as crew payroll, route to 'Payroll & Crew'
       if (data.isPayroll || data.crewName || data.roleTitle) {
         targetSheet = getOrCreateSheet(ss, "Payroll & Crew", [
           "Sync Timestamp", "Assignment ID", "Project Name", "Crew Member Name", 
@@ -201,7 +230,8 @@ function appendSingleEntityRow(ss, entityType, data, nowStr) {
         ];
         break;
       }
-      // Primary: 'Income & Expenses' (fallback: 'Cash Receipts Ledger')
+
+      // Standard Cash Inflow -> 'Income & Expenses' (fallback: 'Cash Receipts Ledger')
       targetSheet = getOrCreateSheet(ss, "Income & Expenses", [
         "Sync Timestamp", "Transaction ID", "Transaction Type", "Reference Number", 
         "Project Name", "Customer / Entity", "Amount (IDR)", "Payment Method", 
@@ -258,7 +288,7 @@ function appendSingleEntityRow(ss, entityType, data, nowStr) {
         data.projectName || "",
         "Seleksi Foto Terkunci",
         "",
-        `Dipilih: ${data.deliverableCount || 0} foto (${data.quotaMin || 0}-${data.quotaMax || 0})`,
+        "Dipilih: " + (data.deliverableCount || 0) + " foto (" + (data.quotaMin || 0) + "-" + (data.quotaMax || 0) + ")",
         data.selectionLockedAt ? data.selectionLockedAt.slice(0, 10) : "",
         data.taskStatus || "SELECTION_LOCKED",
         0,
@@ -280,7 +310,7 @@ function appendSingleEntityRow(ss, entityType, data, nowStr) {
     targetSheet.getRange(lastRow, 9).setNumberFormat('"Rp"#,##0');
   } else if (entityType === "INVOICE" || entityType === "PAYMENT_RECEIPT") {
     targetSheet.getRange(lastRow, 7).setNumberFormat('"Rp"#,##0');
-  } else if (entityType === "PAYROLL" || entityType === "CREW") {
+  } else if (entityType === "PAYROLL" || entityType === "CREW" || entityType === "CREW_ASSIGNMENT") {
     targetSheet.getRange(lastRow, 6).setNumberFormat('"Rp"#,##0');
   }
 
@@ -288,14 +318,34 @@ function appendSingleEntityRow(ss, entityType, data, nowStr) {
 }
 
 /**
- * Ensures the Executive 'Dashboard' tab is initialized with KPI summary cards and dynamic formulas.
+ * Ensures the Executive 'Dashboard' tab is initialized and auto-healed.
+ * Dynamically binds formulas using the exact sheet names that actually exist.
  */
-function ensureDashboardInitialized(ss) {
+function ensureDashboardInitialized(ss, forceRefresh) {
+  var sheetNames = standardizeAllSheets(ss);
   var sheet = ss.getSheetByName("Dashboard");
-  if (sheet) return;
+  var isNewSheet = false;
 
-  sheet = ss.insertSheet("Dashboard", 0);
-  sheet.setTabColor("#ff5a00");
+  if (!sheet) {
+    sheet = ss.insertSheet("Dashboard", 0);
+    sheet.setTabColor("#ff5a00");
+    isNewSheet = true;
+  }
+
+  var pName = sheetNames.projectsSheetName;
+  var iName = sheetNames.incomeSheetName;
+  var payName = sheetNames.payrollSheetName;
+
+  var b7 = sheet.getRange("B7");
+  var currentVal = String(b7.getValue() || "");
+  var needsFormulaRepair =
+    isNewSheet ||
+    forceRefresh ||
+    currentVal.indexOf("#ERROR!") !== -1 ||
+    currentVal.indexOf("#REF!") !== -1 ||
+    !b7.getFormula();
+
+  if (!needsFormulaRepair) return;
 
   // Title Banner
   sheet.getRange("B2:G2").merge();
@@ -318,11 +368,19 @@ function ensureDashboardInitialized(ss) {
   sheet.getRange("B6:E6").setValues(kpiTitles);
   sheet.getRange("B6:E6").setFontWeight("bold").setBackground("#18181b").setFontColor("#ffffff");
 
-  // Dynamic Formulas for KPI Cards
-  sheet.getRange("B7").setFormula('=IFERROR(SUMIFS(\'Income & Expenses\'!G:G, \'Income & Expenses\'!C:C, "*PEMASUKAN*"), 0)');
-  sheet.getRange("C7").setFormula('=IFERROR(SUMIFS(\'Income & Expenses\'!G:G, \'Income & Expenses\'!C:C, "*INVOICE*"), 0)');
-  sheet.getRange("D7").setFormula('=IFERROR(SUM(\'Payroll & Crew\'!F:F), 0)');
-  sheet.getRange("E7").setFormula('=IFERROR(COUNTA(\'Projects & Schedule\'!C2:C), 0)');
+  // Dynamic Robust Formulas (using verified exact sheet names)
+  sheet.getRange("B7").setFormula(
+    '=IFERROR(SUMIFS(\'' + iName + '\'!G:G, \'' + iName + '\'!C:C, "*PEMASUKAN*"), 0)'
+  );
+  sheet.getRange("C7").setFormula(
+    '=IFERROR(SUMIFS(\'' + iName + '\'!G:G, \'' + iName + '\'!C:C, "*INVOICE*"), 0)'
+  );
+  sheet.getRange("D7").setFormula(
+    '=IFERROR(SUM(\'' + payName + '\'!F:F), 0)'
+  );
+  sheet.getRange("E7").setFormula(
+    '=IFERROR(COUNTA(\'' + pName + '\'!C2:C), 0)'
+  );
 
   sheet.getRange("B7:D7").setNumberFormat('"Rp"#,##0').setFontSize(13).setFontWeight("bold");
   sheet.getRange("E7").setFontSize(13).setFontWeight("bold");
@@ -330,26 +388,36 @@ function ensureDashboardInitialized(ss) {
   // Dynamic Projects Table (QUERY Formula)
   sheet.getRange("B10").setValue("📋 15 Proyek Terkini (Dynamic Feed):").setFontWeight("bold").setFontSize(12);
   sheet.getRange("B11").setFormula(
-    '=IFERROR(QUERY(\'Projects & Schedule\'!A:K, "SELECT C, D, E, F, G, H, I WHERE C IS NOT NULL ORDER BY A DESC LIMIT 15", 1), "Belum ada data proyek")'
+    '=IFERROR(QUERY(\'' + pName + '\'!A:K, "SELECT C, D, E, F, G, H, I WHERE C IS NOT NULL LIMIT 15", 1), "Belum ada data proyek")'
   );
 
   // Dynamic Payroll Table (QUERY Formula)
   sheet.getRange("B29").setValue("👥 Ringkasan Payroll & Kru Terkini:").setFontWeight("bold").setFontSize(12);
   sheet.getRange("B30").setFormula(
-    '=IFERROR(QUERY(\'Payroll & Crew\'!A:I, "SELECT C, D, E, F, G, H WHERE C IS NOT NULL ORDER BY A DESC LIMIT 15", 1), "Belum ada data kru")'
+    '=IFERROR(QUERY(\'' + payName + '\'!A:I, "SELECT C, D, E, F, G, H WHERE C IS NOT NULL LIMIT 15", 1), "Belum ada data kru")'
   );
 
   sheet.autoResizeColumns(2, 6);
 }
 
 /**
- * Helper to retrieve an existing sheet or create it with headers if missing.
- * Supports legacy name aliases for seamless backward compatibility.
+ * Helper to retrieve an existing sheet, auto-rename a legacy alias, or create with headers.
  */
 function getOrCreateSheet(ss, sheetName, headers, legacyAlias) {
   var sheet = ss.getSheetByName(sheetName);
+
+  // Auto-upgrade and rename legacy alias if present
   if (!sheet && legacyAlias) {
-    sheet = ss.getSheetByName(legacyAlias);
+    var legacySheet = ss.getSheetByName(legacyAlias);
+    if (legacySheet) {
+      try {
+        legacySheet.setName(sheetName);
+        sheet = legacySheet;
+      } catch (err) {
+        // If rename blocked, reuse legacySheet
+        sheet = legacySheet;
+      }
+    }
   }
 
   if (!sheet) {
@@ -362,6 +430,29 @@ function getOrCreateSheet(ss, sheetName, headers, legacyAlias) {
     sheet.setFrozenRows(1);
   }
   return sheet;
+}
+
+/**
+ * Google Sheets UI Menu Trigger: gives operators a 1-click button in the sheet
+ * to instantly heal, upgrade tabs, and refresh formulas.
+ */
+function onOpen() {
+  try {
+    SpreadsheetApp.getUi()
+      .createMenu("⚡ eLTs Studio OS")
+      .addItem("🔄 Perbarui & Perbaiki Dashboard", "setupOrUpgradeDashboard")
+      .addToUi();
+  } catch (err) {
+    // Ignore in non-interactive background triggers
+  }
+}
+
+/**
+ * Manual execution function: run directly from Google Apps Script editor.
+ */
+function setupOrUpgradeDashboard() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  ensureDashboardInitialized(ss, true);
 }
 
 function doGet(_e) {
