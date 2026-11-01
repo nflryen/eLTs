@@ -32,12 +32,18 @@ export function signSyncPayload(bodyString: string, secret: string): string {
  * Enabled during unit tests or when GOOGLE_SHEETS_WEBHOOK_URL is not set.
  */
 function isMockMode(): boolean {
-  return (
-    !process.env.GOOGLE_SHEETS_WEBHOOK_URL ||
-    process.env.MOCK_SHEETS_SYNC === "true" ||
-    process.env.NEXT_PHASE === "phase-production-build" ||
-    (process.env.NODE_ENV === "test" && process.env.ENABLE_REAL_SHEETS_SYNC !== "true")
-  );
+  if (process.env.ENABLE_REAL_SHEETS_SYNC === "true") return false;
+  if (!process.env.GOOGLE_SHEETS_WEBHOOK_URL) return true;
+  if (process.env.MOCK_SHEETS_SYNC === "true") return true;
+  if (process.env.NEXT_PHASE === "phase-production-build" || process.env.NEXT_PHASE === "phase-export") return true;
+  if (
+    process.env.NODE_ENV === "test" ||
+    process.execArgv.includes("--test") ||
+    process.argv.some((a) => a.includes("test"))
+  ) {
+    return true;
+  }
+  return false;
 }
 
 /**
@@ -129,6 +135,7 @@ export async function dispatchSpreadsheetSync<T extends AnySyncData>(
         "X-ELTS-TIMESTAMP": unixSeconds,
       },
       body: bodyString,
+      redirect: "follow",
     });
 
     const json = (await res.json().catch(() => null)) as {
@@ -283,6 +290,7 @@ export async function dispatchSpreadsheetSyncBatch(
         "X-ELTS-TIMESTAMP": unixSeconds,
       },
       body: bodyString,
+      redirect: "follow",
     });
 
     const json = (await res.json().catch(() => null)) as {

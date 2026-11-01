@@ -23,8 +23,8 @@
 function doPost(e) {
   var lock = LockService.getScriptLock();
   try {
-    // Acquire lock for up to 15 seconds to guarantee atomic row appending
-    lock.waitLock(15000);
+    // Acquire lock for up to 10 seconds to guarantee atomic row appending
+    lock.waitLock(10000);
 
     var rawContent = e.postData.contents;
     var payload = JSON.parse(rawContent);
