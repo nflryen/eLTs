@@ -16,7 +16,9 @@ import type {
   InvoiceSyncData,
   PaymentReceiptSyncData,
   ProofingSelectionSyncData,
+  CrewPayrollSyncData,
   WebhookEnvelope,
+  WebhookEnvelopeEntityType,
   AnySyncData,
 } from "./types";
 
@@ -115,7 +117,9 @@ export async function dispatchSpreadsheetSync<T extends AnySyncData>(
   const unixSeconds = String(Math.floor(Date.now() / 1000));
 
   const envelope: WebhookEnvelope<T> = {
-    entityType,
+    entityType:
+      (data as { entityTypeOverride?: WebhookEnvelopeEntityType })?.entityTypeOverride ||
+      entityType,
     action,
     data,
     timestamp,
@@ -384,4 +388,37 @@ export async function syncProofingSelectionToSheets(
   action: SyncAction = "INSERT"
 ): Promise<SyncResult> {
   return dispatchSpreadsheetSync("PROOFING_SELECTION", data.projectId, action, data);
+}
+
+/**
+ * Synchronize per-project crew fee/salary breakdown to 'Payroll & Crew' tab.
+ */
+export async function syncCrewPayrollToSheets(
+  data: CrewPayrollSyncData,
+  action: SyncAction = "INSERT"
+): Promise<SyncResult> {
+  const entityId = data.assignmentId || data.id || `crew-${Date.now()}`;
+  return dispatchSpreadsheetSync(
+    "PAYMENT_RECEIPT" as SyncEntityType,
+    entityId,
+    action,
+    {
+      id: entityId,
+      receiptNumber: `PAYROLL/${(data.roleTitle || "CREW").slice(0, 3).toUpperCase()}`,
+      invoiceNumber: data.projectName,
+      projectName: data.projectName,
+      receivedAt: data.shootDate || new Date().toISOString(),
+      amount: data.feeAmount,
+      paymentMethod: "FEE_KRU",
+      bankName: data.crewName,
+      referenceNumber: data.paymentStatus || "PENDING",
+      verifiedAt: data.paymentStatus === "CONFIRMED" ? new Date().toISOString() : null,
+      isPayroll: true,
+      crewName: data.crewName,
+      roleTitle: data.roleTitle,
+      feeAmount: data.feeAmount,
+      shootDate: data.shootDate,
+      notes: data.notes,
+    } as unknown as AnySyncData
+  );
 }

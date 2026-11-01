@@ -8,7 +8,11 @@ export type SyncEntityType =
   | "PAYMENT_RECEIPT"
   | "PROOFING_SELECTION";
 
-export type WebhookEnvelopeEntityType = SyncEntityType | "BATCH";
+export type WebhookEnvelopeEntityType =
+  | SyncEntityType
+  | "BATCH"
+  | "CREW_ASSIGNMENT"
+  | "PAYROLL";
 export type SyncAction = "INSERT" | "UPDATE" | "DELETE";
 
 export type SyncStatus = "PENDING" | "SYNCED" | "FAILED";
@@ -64,11 +68,24 @@ export interface ProofingSelectionSyncData {
   googleDriveUrl?: string | null;
 }
 
+
+export interface CrewPayrollSyncData {
+  id?: string;
+  assignmentId?: string;
+  projectName: string;
+  crewName: string;
+  roleTitle: string;
+  feeAmount: number;
+  paymentStatus?: string;
+  shootDate?: string | null;
+  notes?: string | null;
+}
 export type AnySyncData =
   | ProjectSyncData
   | InvoiceSyncData
   | PaymentReceiptSyncData
-  | ProofingSelectionSyncData;
+  | ProofingSelectionSyncData
+  | CrewPayrollSyncData;
 
 export interface WebhookEnvelope<T = AnySyncData> {
   entityType: WebhookEnvelopeEntityType;

@@ -130,66 +130,65 @@ sequenceDiagram
     end
 ```
 
-### 2.2 Table-to-Sheet Mapping Specifications
+### 2.2 Master Operational Ledger Tab Architecture (4 Structured Tabs)
 
-#### 1. Entity: `projects` $\longrightarrow$ Tab: `Projects Master`
+The workbook **`eLTs Studio OS - Master Operational Ledger`** is restructured into four purpose-built tabs designed for clean operational auditing and dynamic reporting:
+
+#### Tab 1: `Dashboard` (Executive Operations & Financial KPI Center)
+- **Dynamic Dropdown Controls:**
+  - Cell `C4`: Filter Tahun (e.g. `2026`)
+  - Cell `E4`: Filter Bulan (e.g. `11` or `ALL`)
+- **KPI Summary Cards:**
+  - **Total Pemasukan Kas:** `=IFERROR(SUMIFS('Income & Expenses'!G:G, 'Income & Expenses'!C:C, "*PEMASUKAN*"), 0)`
+  - **Total Tagihan Invoice:** `=IFERROR(SUMIFS('Income & Expenses'!G:G, 'Income & Expenses'!C:C, "*INVOICE*"), 0)`
+  - **Total Biaya & Payroll Kru:** `=IFERROR(SUM('Payroll & Crew'!F:F), 0)`
+  - **Total Proyek Aktif:** `=IFERROR(COUNTA('Projects & Schedule'!C2:C), 0)`
+- **Interactive QUERY Tables:**
+  - **15 Proyek Terkini:** `=IFERROR(QUERY('Projects & Schedule'!A:K, "SELECT C, D, E, F, G, H, I WHERE C IS NOT NULL ORDER BY A DESC LIMIT 15", 1), "Belum ada data")`
+  - **Ringkasan Penugasan & Fee Kru:** `=IFERROR(QUERY('Payroll & Crew'!A:I, "SELECT C, D, E, F, G, H WHERE C IS NOT NULL ORDER BY A DESC LIMIT 15", 1), "Belum ada data")`
+
+#### Tab 2: `Projects & Schedule` (Master Project & Booking Database)
 | Target Column | Source Field / Expression | Transformation / Formatting Rule |
 | :--- | :--- | :--- |
 | **Col A: Sync Timestamp** | `now()` | ISO 8601 formatted in Asia/Jakarta timezone (`yyyy-MM-dd HH:mm:ss`). |
 | **Col B: Project ID** | `projects.id` | UUID string. |
-| **Col C: Project Name** | `projects.name` | Clean trimmed string. |
-| **Col D: Customer Name** | `customers.name` | Resolved via foreign key join. |
+| **Col C: Project Name** | `projects.name` | Clean project title. |
+| **Col D: Customer Name** | `customers.name` | Resolved customer name. |
 | **Col E: Customer Phone** | `customers.phone` | Normalized Indonesian phone (`08...` or `628...`). |
-| **Col F: Service Pillar** | `projects.service_pillar` | Display label (e.g., `Wisuda & Event`, `Komersial & Siaran`). |
+| **Col F: Service Pillar** | `projects.service_pillar` | Display label (e.g., `Wisuda & Event`, `Live Streaming`). |
 | **Col G: Shoot Date** | `projects.shoot_date` | `YYYY-MM-DD` or `Belum ditentukan`. |
-| **Col H: Contract Value** | `projects.contract_value` | Numeric IDR integer. |
-| **Col I: Project Status** | `projects.status` | State machine label (`draft`, `editing`, `ready`, `archived`). |
-| **Col J: Proofing Magic Link** | `projects.access_token` | Deep link: `https://client.elts.co.id/proofing/<access_token>`. |
-| **Col K: Selection Deadline**| `projects.selection_deadline`| Formatted Indonesian date or empty. |
+| **Col H: Project Status** | `projects.status` | State machine label (`draft`, `ready`, `archived`). |
+| **Col I: Contract Value** | `projects.contract_value` | Formatted IDR integer (`"Rp"#,##0`). |
+| **Col J: Drive Vault URL** | `sector_specs.googleDriveUrl` | Master Google Drive delivery folder link. |
+| **Col K: Proofing Link** | `projects.access_token` | Deep link: `https://client.elts.co.id/proofing/<token>`. |
+| **Col L: Selection Deadline**| `projects.selection_deadline`| Formatted Indonesian date or empty. |
 
-#### 2. Entity: `project_invoices` $\longrightarrow$ Tab: `Invoices & Receivables`
+#### Tab 3: `Payroll & Crew` (Per-Project Crew Remuneration & Individual Lookup)
 | Target Column | Source Field / Expression | Transformation / Formatting Rule |
 | :--- | :--- | :--- |
 | **Col A: Sync Timestamp** | `now()` | Asia/Jakarta wall-clock timestamp. |
-| **Col B: Invoice ID** | `project_invoices.id` | UUID string. |
-| **Col C: Invoice Number** | `project_invoices.invoice_number`| Format: `INV/YYYY/MM/NNNN`. |
-| **Col D: Project Name** | `projects.name` | Resolved via join. |
-| **Col E: Customer Name** | `customers.name` | Resolved via join. |
-| **Col F: Issue Date** | `project_invoices.issue_date` | Date string. |
-| **Col G: Due Date** | `project_invoices.due_date` | Date string. |
-| **Col H: Gross Contract** | `gross_contract_value` | Integer IDR amount. |
-| **Col I: Minimum DP %** | `minimum_dp_pct` | Number (e.g., `50`). |
-| **Col J: Is DP Paid** | `projects.is_dp_paid` | `YES` / `NO`. |
-| **Col K: Is Fully Paid** | `projects.is_fully_paid` | `YES` / `NO`. |
+| **Col B: Assignment ID** | `assignmentId` | Unique assignment UUID. |
+| **Col C: Project Name** | `projects.name` | Associated project title. |
+| **Col D: Crew Member Name**| `crewName` | Freelancer or team member name. |
+| **Col E: Role Title** | `roleTitle` | Production role (e.g. `Lead Videographer`, `Photographer`). |
+| **Col F: Fee Amount (IDR)**| `feeAmount` | Formatted IDR currency (`"Rp"#,##0`). |
+| **Col G: Payment Status** | `paymentStatus` | `PENDING_OFFER`, `CONFIRMED`, `PAID`. |
+| **Col H: Shoot Date** | `shootDate` | Date of assignment. |
+| **Col I: Notes** | `notes` | Special technical notes or empty. |
 
-#### 3. Entity: `invoice_payment_receipts` $\longrightarrow$ Tab: `Cash Receipts Ledger`
+#### Tab 4: `Income & Expenses` (Unified Cash Flow Ledger)
 | Target Column | Source Field / Expression | Transformation / Formatting Rule |
 | :--- | :--- | :--- |
 | **Col A: Sync Timestamp** | `now()` | Asia/Jakarta wall-clock timestamp. |
-| **Col B: Receipt ID** | `invoice_payment_receipts.id` | UUID string. |
-| **Col C: Receipt Number** | `receipt_number` | Format: `RCP/YYYY/MM/NNNN`. |
-| **Col D: Invoice Number** | `project_invoices.invoice_number`| Format: `INV/...`. |
-| **Col E: Project Name** | `projects.name` | Resolved via join. |
-| **Col F: Received At** | `received_at` | Payment timestamp. |
-| **Col G: Amount IDR** | `amount` | Verified IDR integer. |
-| **Col H: Payment Method** | `payment_method` | `BANK_TRANSFER`, `CASH`, `QRIS`, `CREDIT_CARD`. |
-| **Col I: Bank Name** | `bank_name` | Bank name or payment gateway. |
-| **Col J: Reference Number**| `reference_number` | Bank transfer reference or empty. |
-| **Col K: Verified Status** | `verified_at` | `VERIFIED` or `PENDING`. |
-
-#### 4. Entity: `editor_tasks` + Proofing $\longrightarrow$ Tab: `Proofing & Editor Queue`
-| Target Column | Source Field / Expression | Transformation / Formatting Rule |
-| :--- | :--- | :--- |
-| **Col A: Sync Timestamp** | `now()` | Asia/Jakarta wall-clock timestamp. |
-| **Col B: Project ID** | `projects.id` | UUID string. |
-| **Col C: Project Name** | `projects.name` | Project title. |
-| **Col D: Selected Count** | `editor_tasks.deliverable_count` | Number of client-selected photos. |
-| **Col E: Quota Min-Max** | `quota_min - quota_max` | Quota string (e.g., `15 - 20`). |
-| **Col F: Locked At** | `projects.selection_locked_at` | Submission timestamp. |
-| **Col G: Assigned Editor** | `editor_tasks.assigned_editor_id`| Editor name or `Unassigned`. |
-| **Col H: Task Status** | `editor_tasks.status` | `PENDING`, `IN_PROGRESS`, `REVIEW`, `COMPLETED`. |
-| **Col I: Google Drive URL**| `sector_specs.googleDriveUrl` | Final deliverable Google Drive link. |
-
+| **Col B: Transaction ID** | `id` | Unique invoice or payment receipt UUID. |
+| **Col C: Transaction Type**| `TAGIHAN / INVOICE` or `PEMASUKAN / KAS MASUK` | Operational categorization. |
+| **Col D: Reference Number**| `invoice_number` or `receipt_number` | Document number (e.g. `INV/2026/11/0001` or `RCP/...`). |
+| **Col E: Project Name** | `projectName` | Associated project. |
+| **Col F: Customer / Entity**| `customerName` | Payer or vendor entity. |
+| **Col G: Amount (IDR)** | `amount` or `grossContractValue` | Formatted IDR currency (`"Rp"#,##0`). |
+| **Col H: Payment Method** | `paymentMethod` | `TRANSFER_BANK`, `QRIS`, `CASH`. |
+| **Col I: Date** | `issueDate` or `receivedAt` | Transaction calendar date. |
+| **Col J: Verification Status**| `isFullyPaid` or `verifiedAt` | `LUNAS 100%`, `DP_TERBAYAR`, `VERIFIED`. |
 ---
 
 ### 2.3 Rate Limit Management & Quota Protection

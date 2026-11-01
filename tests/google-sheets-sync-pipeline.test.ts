@@ -8,7 +8,9 @@ import {
   syncInvoiceToSheets,
   syncPaymentReceiptToSheets,
   syncProofingSelectionToSheets,
+  syncCrewPayrollToSheets,
 } from "../src/lib/sync/sheets-client";
+import { readFileSync } from "node:fs";
 
 test("signSyncPayload computes valid HMAC-SHA256 signature and rejects tampering", () => {
   const secret = "elts_super_secret_test_key";
@@ -159,4 +161,44 @@ test("replay protection detects and rejects drifted client timestamps exceeding 
 
   assert.equal(isFresh, true, "10-second drift must be within valid replay window");
   assert.equal(isExpired, true, "350-second drift must be flagged as expired");
+});
+
+test("syncCrewPayrollToSheets formats individual crew compensation row", async () => {
+  const res = await syncCrewPayrollToSheets({
+    assignmentId: "asg-test-77",
+    projectName: "Wisuda UI 2026",
+    crewName: "Azrian",
+    roleTitle: "Lead Photographer",
+    feeAmount: 1500000,
+    paymentStatus: "CONFIRMED",
+    shootDate: "2026-11-20",
+    notes: "Full day event coverage",
+  });
+
+  assert.equal(res.success, true);
+});
+
+test("Google Apps Script template implements 4-tab layout and dynamic formulas", () => {
+  const gas = readFileSync("docs/google-apps-script-sync-template.js", "utf-8");
+
+  // Tab 1: Dashboard with KPI formulas
+  assert.match(gas, /"Dashboard"/);
+  assert.match(gas, /Total Pemasukan Kas/);
+  assert.match(gas, /Total Tagihan Invoice/);
+  assert.match(gas, /Total Biaya & Payroll Kru/);
+  assert.match(gas, /SUMIFS/);
+  assert.match(gas, /QUERY/);
+
+  // Tab 2: Projects & Schedule
+  assert.match(gas, /"Projects & Schedule"/);
+  assert.match(gas, /Drive Vault URL/);
+
+  // Tab 3: Payroll & Crew
+  assert.match(gas, /"Payroll & Crew"/);
+  assert.match(gas, /Crew Member Name/);
+  assert.match(gas, /Fee Amount \(IDR\)/);
+
+  // Tab 4: Income & Expenses
+  assert.match(gas, /"Income & Expenses"/);
+  assert.match(gas, /Transaction Type/);
 });

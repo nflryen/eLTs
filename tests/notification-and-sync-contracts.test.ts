@@ -33,11 +33,11 @@ test("Google Apps Script template implements atomic locking, auth verification, 
   // Verify auth header check
   assert.match(gas, /X-ELTS-SYNC-SECRET/i);
 
-  // Verify all 4 tabs
-  assert.match(gas, /"Projects Master"/);
-  assert.match(gas, /"Invoices & Receivables"/);
-  assert.match(gas, /"Cash Receipts Ledger"/);
-  assert.match(gas, /"Proofing & Editor Queue"/);
+  // Verify 4-tab architecture
+  assert.match(gas, /"Dashboard"/);
+  assert.match(gas, /"Projects & Schedule"|"Projects Master"/);
+  assert.match(gas, /"Payroll & Crew"/);
+  assert.match(gas, /"Income & Expenses"|"Invoices & Receivables"/);
 });
 
 test("Architecture blueprint enforces non-blocking fire-and-forget spreadsheet sync invariant", () => {

@@ -1,10 +1,20 @@
 /* eslint-disable @typescript-eslint/no-unused-vars */
 /**
  * ==============================================================================
- * eLTs Studio OS - Master Operational Ledger Synchronization Webhook
+ * eLTs Studio OS - Master Operational Ledger & Executive Dashboard Webhook
  * ==============================================================================
  * Deploy this script as a Web App in Google Apps Script attached to your
  * Master Operational Google Sheet.
+ *
+ * Tab Architecture:
+ * 1. 'Dashboard'           : Executive summary cards, monthly income/expense overviews,
+ *                            total payroll obligations, and dynamic month/year filters.
+ * 2. 'Projects & Schedule' : Master project database, shoot dates, client details,
+ *                            service pillars, contract values, and Drive vault links.
+ * 3. 'Payroll & Crew'      : Per-project crew fee/salary breakdown for team members
+ *                            and freelancers, allowing individual lookup.
+ * 4. 'Income & Expenses'   : Unified cash flow ledger tracking operational costs,
+ *                            invoice settlements, and receipts.
  *
  * Setup Instructions:
  * 1. Open your Google Sheet -> Extensions -> Apps Script.
@@ -74,6 +84,8 @@ function doPost(e) {
     }
 
     var ss = SpreadsheetApp.getActiveSpreadsheet();
+    ensureDashboardInitialized(ss);
+
     var entityType = payload.entityType;
     var data = payload.data;
     var nowStr = Utilities.formatDate(new Date(), "Asia/Jakarta", "yyyy-MM-dd HH:mm:ss");
@@ -117,7 +129,7 @@ function doPost(e) {
 }
 
 /**
- * Appends a row for a single operational entity into the appropriate sheet tab.
+ * Appends a row for a single operational entity into the structured operational tabs.
  */
 function appendSingleEntityRow(ss, entityType, data, nowStr) {
   var targetSheet;
@@ -125,11 +137,13 @@ function appendSingleEntityRow(ss, entityType, data, nowStr) {
 
   switch (entityType) {
     case "PROJECT":
-      targetSheet = getOrCreateSheet(ss, "Projects Master", [
+      // Primary: 'Projects & Schedule' (fallback: 'Projects Master')
+      targetSheet = getOrCreateSheet(ss, "Projects & Schedule", [
         "Sync Timestamp", "Project ID", "Project Name", "Customer Name", 
-        "Customer Phone", "Service Pillar", "Shoot Date", "Contract IDR", 
-        "Status", "Proofing Link", "Selection Deadline"
-      ]);
+        "Customer Phone", "Service Pillar", "Shoot Date", "Status", 
+        "Contract Value (IDR)", "Drive Vault URL", "Proofing Link", "Selection Deadline"
+      ], "Projects Master");
+
       rowData = [
         nowStr,
         data.id || "",
@@ -138,71 +152,119 @@ function appendSingleEntityRow(ss, entityType, data, nowStr) {
         data.customerPhone || "",
         data.servicePillar || "",
         data.shootDate || "",
-        data.contractValue || 0,
         data.status || "",
+        data.contractValue || 0,
+        data.googleDriveUrl || "",
         data.proofingUrl || "",
         data.selectionDeadline || ""
       ];
       break;
 
     case "INVOICE":
-      targetSheet = getOrCreateSheet(ss, "Invoices & Receivables", [
-        "Sync Timestamp", "Invoice ID", "Invoice Number", "Project Name", 
-        "Customer Name", "Issue Date", "Due Date", "Gross Contract IDR", 
-        "Minimum DP %", "Is DP Paid", "Is Fully Paid"
-      ]);
+      // Primary: 'Income & Expenses' (fallback: 'Invoices & Receivables')
+      targetSheet = getOrCreateSheet(ss, "Income & Expenses", [
+        "Sync Timestamp", "Transaction ID", "Transaction Type", "Reference Number", 
+        "Project Name", "Customer / Entity", "Amount (IDR)", "Payment Method", 
+        "Date", "Payment / Verification Status"
+      ], "Invoices & Receivables");
+
       rowData = [
         nowStr,
         data.id || "",
+        "TAGIHAN / INVOICE",
         data.invoiceNumber || "",
         data.projectName || "",
         data.customerName || "",
-        data.issueDate || "",
-        data.dueDate || "",
         data.grossContractValue || 0,
-        data.minimumDpPct || 30,
-        data.isDpPaid ? "YES" : "NO",
-        data.isFullyPaid ? "YES" : "NO"
+        "-",
+        data.issueDate || "",
+        data.isFullyPaid ? "LUNAS 100%" : (data.isDpPaid ? "DP_TERBAYAR" : "BELUM_LUNAS")
       ];
       break;
 
     case "PAYMENT_RECEIPT":
-      targetSheet = getOrCreateSheet(ss, "Cash Receipts Ledger", [
-        "Sync Timestamp", "Receipt ID", "Receipt Number", "Invoice Number", 
-        "Project Name", "Received At", "Amount IDR", "Payment Method", 
-        "Bank Name", "Reference Number", "Verified Status"
-      ]);
+      if (data.isPayroll || data.crewName || data.roleTitle) {
+        targetSheet = getOrCreateSheet(ss, "Payroll & Crew", [
+          "Sync Timestamp", "Assignment ID", "Project Name", "Crew Member Name", 
+          "Role Title", "Fee Amount (IDR)", "Payment Status", "Shoot Date", "Notes"
+        ]);
+        rowData = [
+          nowStr,
+          data.id || data.assignmentId || "",
+          data.projectName || "",
+          data.crewName || data.bankName || "",
+          data.roleTitle || "Crew Member",
+          data.amount || data.feeAmount || 0,
+          data.paymentStatus || (data.verifiedAt ? "CONFIRMED" : "PENDING"),
+          data.shootDate || (data.receivedAt ? data.receivedAt.slice(0, 10) : ""),
+          data.notes || ""
+        ];
+        break;
+      }
+      // Primary: 'Income & Expenses' (fallback: 'Cash Receipts Ledger')
+      targetSheet = getOrCreateSheet(ss, "Income & Expenses", [
+        "Sync Timestamp", "Transaction ID", "Transaction Type", "Reference Number", 
+        "Project Name", "Customer / Entity", "Amount (IDR)", "Payment Method", 
+        "Date", "Payment / Verification Status"
+      ], "Cash Receipts Ledger");
+
       rowData = [
         nowStr,
         data.id || "",
+        "PEMASUKAN / KAS MASUK",
         data.receiptNumber || "",
-        data.invoiceNumber || "",
         data.projectName || "",
-        data.receivedAt || "",
+        data.customerName || "Klien eLTs",
         data.amount || 0,
-        data.paymentMethod || "",
-        data.bankName || "",
-        data.referenceNumber || "",
+        data.paymentMethod || "TRANSFER_BANK",
+        data.receivedAt ? data.receivedAt.slice(0, 10) : "",
         data.verifiedAt ? "VERIFIED" : "PENDING"
       ];
       break;
 
-    case "PROOFING_SELECTION":
-      targetSheet = getOrCreateSheet(ss, "Proofing & Editor Queue", [
-        "Sync Timestamp", "Project ID", "Project Name", "Selected Photos Count", 
-        "Quota Min-Max", "Locked At", "Assigned Editor", "Editor Task Status", 
-        "Google Drive Delivery URL"
+    case "PAYROLL":
+    case "CREW":
+    case "CREW_ASSIGNMENT":
+      // Primary: 'Payroll & Crew'
+      targetSheet = getOrCreateSheet(ss, "Payroll & Crew", [
+        "Sync Timestamp", "Assignment ID", "Project Name", "Crew Member Name", 
+        "Role Title", "Fee Amount (IDR)", "Payment Status", "Shoot Date", "Notes"
       ]);
+
+      rowData = [
+        nowStr,
+        data.id || data.assignmentId || "",
+        data.projectName || "",
+        data.crewName || "",
+        data.roleTitle || "",
+        data.feeAmount || 0,
+        data.paymentStatus || "PENDING",
+        data.shootDate || "",
+        data.notes || ""
+      ];
+      break;
+
+    case "PROOFING_SELECTION":
+      // Primary: 'Projects & Schedule' (fallback: 'Proofing & Editor Queue')
+      targetSheet = getOrCreateSheet(ss, "Projects & Schedule", [
+        "Sync Timestamp", "Project ID", "Project Name", "Customer Name", 
+        "Customer Phone", "Service Pillar", "Shoot Date", "Status", 
+        "Contract Value (IDR)", "Drive Vault URL", "Proofing Link", "Selection Deadline"
+      ], "Proofing & Editor Queue");
+
       rowData = [
         nowStr,
         data.projectId || "",
         data.projectName || "",
-        data.deliverableCount || 0,
-        (data.quotaMin || 0) + " - " + (data.quotaMax || 0),
-        data.selectionLockedAt || nowStr,
-        data.assignedEditor || "Unassigned",
-        data.taskStatus || "PENDING",
-        data.googleDriveUrl || ""
+        "Seleksi Foto Terkunci",
+        "",
+        `Dipilih: ${data.deliverableCount || 0} foto (${data.quotaMin || 0}-${data.quotaMax || 0})`,
+        data.selectionLockedAt ? data.selectionLockedAt.slice(0, 10) : "",
+        data.taskStatus || "SELECTION_LOCKED",
+        0,
+        data.googleDriveUrl || "",
+        "",
+        ""
       ];
       break;
 
@@ -211,14 +273,85 @@ function appendSingleEntityRow(ss, entityType, data, nowStr) {
   }
 
   targetSheet.appendRow(rowData);
+
+  // Format currency column (Amount / Contract Value) with IDR format
+  var lastRow = targetSheet.getLastRow();
+  if (entityType === "PROJECT") {
+    targetSheet.getRange(lastRow, 9).setNumberFormat('"Rp"#,##0');
+  } else if (entityType === "INVOICE" || entityType === "PAYMENT_RECEIPT") {
+    targetSheet.getRange(lastRow, 7).setNumberFormat('"Rp"#,##0');
+  } else if (entityType === "PAYROLL" || entityType === "CREW") {
+    targetSheet.getRange(lastRow, 6).setNumberFormat('"Rp"#,##0');
+  }
+
   return targetSheet;
 }
 
 /**
- * Helper to retrieve an existing sheet or create it with headers if missing.
+ * Ensures the Executive 'Dashboard' tab is initialized with KPI summary cards and dynamic formulas.
  */
-function getOrCreateSheet(ss, sheetName, headers) {
+function ensureDashboardInitialized(ss) {
+  var sheet = ss.getSheetByName("Dashboard");
+  if (sheet) return;
+
+  sheet = ss.insertSheet("Dashboard", 0);
+  sheet.setTabColor("#ff5a00");
+
+  // Title Banner
+  sheet.getRange("B2:G2").merge();
+  var titleCell = sheet.getRange("B2");
+  titleCell.setValue("eLTs Visual Studio OS — Executive Operational Dashboard");
+  titleCell.setFontSize(16);
+  titleCell.setFontWeight("bold");
+  titleCell.setFontColor("#18181b");
+
+  // Filter Dropdowns
+  sheet.getRange("B4").setValue("Filter Tahun:").setFontWeight("bold");
+  sheet.getRange("C4").setValue("2026").setFontWeight("bold");
+  sheet.getRange("D4").setValue("Filter Bulan:").setFontWeight("bold");
+  sheet.getRange("E4").setValue("ALL").setFontWeight("bold");
+
+  // KPI Summary Cards
+  var kpiTitles = [
+    ["Total Pemasukan Kas", "Total Tagihan Invoice", "Total Biaya & Payroll Kru", "Total Proyek Aktif"]
+  ];
+  sheet.getRange("B6:E6").setValues(kpiTitles);
+  sheet.getRange("B6:E6").setFontWeight("bold").setBackground("#18181b").setFontColor("#ffffff");
+
+  // Dynamic Formulas for KPI Cards
+  sheet.getRange("B7").setFormula('=IFERROR(SUMIFS(\'Income & Expenses\'!G:G, \'Income & Expenses\'!C:C, "*PEMASUKAN*"), 0)');
+  sheet.getRange("C7").setFormula('=IFERROR(SUMIFS(\'Income & Expenses\'!G:G, \'Income & Expenses\'!C:C, "*INVOICE*"), 0)');
+  sheet.getRange("D7").setFormula('=IFERROR(SUM(\'Payroll & Crew\'!F:F), 0)');
+  sheet.getRange("E7").setFormula('=IFERROR(COUNTA(\'Projects & Schedule\'!C2:C), 0)');
+
+  sheet.getRange("B7:D7").setNumberFormat('"Rp"#,##0').setFontSize(13).setFontWeight("bold");
+  sheet.getRange("E7").setFontSize(13).setFontWeight("bold");
+
+  // Dynamic Projects Table (QUERY Formula)
+  sheet.getRange("B10").setValue("📋 15 Proyek Terkini (Dynamic Feed):").setFontWeight("bold").setFontSize(12);
+  sheet.getRange("B11").setFormula(
+    '=IFERROR(QUERY(\'Projects & Schedule\'!A:K, "SELECT C, D, E, F, G, H, I WHERE C IS NOT NULL ORDER BY A DESC LIMIT 15", 1), "Belum ada data proyek")'
+  );
+
+  // Dynamic Payroll Table (QUERY Formula)
+  sheet.getRange("B29").setValue("👥 Ringkasan Payroll & Kru Terkini:").setFontWeight("bold").setFontSize(12);
+  sheet.getRange("B30").setFormula(
+    '=IFERROR(QUERY(\'Payroll & Crew\'!A:I, "SELECT C, D, E, F, G, H WHERE C IS NOT NULL ORDER BY A DESC LIMIT 15", 1), "Belum ada data kru")'
+  );
+
+  sheet.autoResizeColumns(2, 6);
+}
+
+/**
+ * Helper to retrieve an existing sheet or create it with headers if missing.
+ * Supports legacy name aliases for seamless backward compatibility.
+ */
+function getOrCreateSheet(ss, sheetName, headers, legacyAlias) {
   var sheet = ss.getSheetByName(sheetName);
+  if (!sheet && legacyAlias) {
+    sheet = ss.getSheetByName(legacyAlias);
+  }
+
   if (!sheet) {
     sheet = ss.insertSheet(sheetName);
     sheet.appendRow(headers);
@@ -235,6 +368,12 @@ function doGet(_e) {
   return ContentService.createTextOutput(JSON.stringify({
     status: "healthy",
     service: "eLTs Studio OS Master Ledger Webhook",
+    architecture: [
+      "Dashboard",
+      "Projects & Schedule",
+      "Payroll & Crew",
+      "Income & Expenses"
+    ],
     timestamp: new Date().toISOString()
   })).setMimeType(ContentService.MimeType.JSON);
 }

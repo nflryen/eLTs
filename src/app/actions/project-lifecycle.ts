@@ -4,6 +4,7 @@ import type { ProjectCrewAssignmentRow } from "@/types/operations";
 
 import { revalidatePath } from "next/cache";
 import { notifyProofingMagicLink } from "@/lib/notifications/whatsapp/dispatcher";
+import { syncCrewPayrollToSheets } from "@/lib/sync/sheets-client";
 import { z } from "zod";
 import { randomBytes } from "node:crypto";
 import { requireOps, type RoleSession } from "@/lib/auth/roles";
@@ -323,6 +324,30 @@ export async function assignCrewToProjectAction(input: {
 
     revalidatePath(`/admin/projects/${v.projectId}`);
     revalidatePath("/admin");
+
+    // Asynchronous out-of-band Google Sheets sync to Payroll & Crew
+    (async () => {
+      try {
+        const { data: crewInfo } = await supabase
+          .from("v_crew_identity")
+          .select("full_name")
+          .eq("crew_member_id", v.crewMemberId)
+          .maybeSingle();
+
+        await syncCrewPayrollToSheets({
+          assignmentId: data.id,
+          projectName: project.name,
+          crewName: crewInfo?.full_name || "Crew Member",
+          roleTitle: v.roleTitle,
+          feeAmount: v.feeAgreed,
+          paymentStatus: "PENDING_OFFER",
+          shootDate: project.shoot_date,
+        });
+      } catch (crewSyncErr) {
+        console.warn("[ProjectLifecycle] Crew payroll sync failed:", crewSyncErr);
+      }
+    })();
+
     return { ok: true, assignmentId: data.id };
   } catch {
     return { ok: false, error: "Gagal menugaskan kru." };
