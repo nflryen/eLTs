@@ -436,3 +436,80 @@ export async function syncStudioEventToGoogleCalendar(
 
   return result;
 }
+
+export interface ProjectShootCalendarInput {
+  projectId: string;
+  projectName: string;
+  customerName: string;
+  customerPhone?: string | null;
+  customerEmail?: string | null;
+  shootDate: string; // YYYY-MM-DD
+  callTime?: string | null;
+  venueName?: string | null;
+  venueAddress?: string | null;
+  venueMapsUrl?: string | null;
+  pillar?: string | null;
+  notes?: string | null;
+}
+
+/**
+ * Creates an official Google Calendar event for confirmed project shoot dates.
+ * Injects customer contact info, venue maps link, and direct Workspace link.
+ */
+export async function scheduleProjectShootCalendarEvent(
+  input: ProjectShootCalendarInput,
+  config?: GoogleCalendarConfig
+): Promise<CalendarEventResult> {
+  const summary = `[eLTs Shoot] ${input.projectName} - ${input.customerName}`;
+  const callTimeStr = input.callTime || "08:00";
+  const startDateTime = `${input.shootDate}T${callTimeStr}:00+07:00`;
+  const endHour = Math.min(23, parseInt(callTimeStr.slice(0, 2), 10) + 8);
+  const endDateTime = `${input.shootDate}T${String(endHour).padStart(2, "0")}:${callTimeStr.slice(3, 5)}:00+07:00`;
+
+  const descriptionLines = [
+    "eLTs Photography & Visual Studio - Field Shoot Session",
+    "======================================================",
+    `Proyek: ${input.projectName}`,
+    `Klien: ${input.customerName} (${input.customerPhone || "Tanpa telepon"})`,
+    input.customerEmail ? `Email: ${input.customerEmail}` : null,
+    `Pilar: ${input.pillar || "Pictures / Event"}`,
+    `Waktu Call Time: ${callTimeStr} WIB`,
+    `Lokasi / Venue: ${input.venueName || "On Location"}`,
+    input.venueAddress ? `Alamat: ${input.venueAddress}` : null,
+    input.venueMapsUrl ? `Peta Lokasi: ${input.venueMapsUrl}` : null,
+    input.notes ? `\nCatatan Khusus:\n"${input.notes}"` : null,
+    "",
+    "---",
+    `Workspace Proyek: https://ops.elts.co.id/admin/projects/${input.projectId}`,
+  ].filter(Boolean);
+
+  const attendees: CalendarEventAttendee[] = [];
+  if (input.customerEmail && input.customerEmail.includes("@")) {
+    attendees.push({
+      email: input.customerEmail.trim(),
+      displayName: input.customerName.trim(),
+    });
+  }
+
+  const payload: CalendarEventPayload = {
+    summary,
+    description: descriptionLines.join("\n"),
+    location: input.venueName || input.venueAddress || "Studio eLTs",
+    start: {
+      dateTime: startDateTime,
+      timeZone: "Asia/Jakarta",
+    },
+    end: {
+      dateTime: endDateTime,
+      timeZone: "Asia/Jakarta",
+    },
+    attendees,
+    metadata: {
+      projectId: input.projectId,
+      customerPhone: input.customerPhone,
+      pillar: input.pillar,
+    },
+  };
+
+  return createStudioCalendarEvent(payload, config);
+}

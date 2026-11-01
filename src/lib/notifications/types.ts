@@ -11,8 +11,8 @@ export type NotificationTrigger =
   | "SELECTION_CONFIRMATION"
   | "INVOICE_ISSUED"
   | "PAYMENT_RECEIPT_CONFIRMED"
-  | "SHOOT_CALLSHEET_T_MINUS_1";
-
+  | "SHOOT_CALLSHEET_T_MINUS_1"
+  | "CONSULTATION_SCHEDULED";
 export type NotificationStatus = "PENDING" | "SENT" | "FAILED" | "DELIVERED";
 
 export interface NotificationAttachment {

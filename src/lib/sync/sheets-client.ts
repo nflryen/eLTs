@@ -194,6 +194,148 @@ export async function dispatchSpreadsheetSync<T extends AnySyncData>(
   }
 }
 
+export interface BatchSyncItem {
+  entityType: SyncEntityType;
+  entityId: string;
+  action: SyncAction;
+  data: AnySyncData;
+}
+
+/**
+ * Batch-aggregation synchronization executor.
+ * Groups multiple operational records into a single HTTP payload to respect
+ * Google Sheets API rate limits (300 requests/minute).
+ */
+export async function dispatchSpreadsheetSyncBatch(
+  items: BatchSyncItem[]
+): Promise<SyncResult> {
+  const timestamp = new Date().toISOString();
+  if (items.length === 0) {
+    return { success: true, timestamp, row: 0 };
+  }
+
+  const logIds: string[] = [];
+  try {
+    const supabase = createServiceSupabase();
+    const rowsToInsert = items.map((it) => ({
+      entity_type: it.entityType,
+      entity_id: it.entityId,
+      action: it.action,
+      sync_target: "GOOGLE_SHEETS",
+      status: "PENDING" as const,
+      payload_snapshot: it.data as unknown as Record<string, unknown>,
+      attempts: 1,
+    }));
+    const { data: inserted } = await supabase
+      .from("spreadsheet_sync_logs")
+      .insert(rowsToInsert)
+      .select("id");
+    if (inserted) {
+      logIds.push(...inserted.map((r) => r.id));
+    }
+  } catch (err) {
+    console.warn("[SheetsSync] Could not batch insert spreadsheet_sync_logs:", err);
+  }
+
+  if (isMockMode()) {
+    if (logIds.length > 0) {
+      try {
+        const supabase = createServiceSupabase();
+        await supabase
+          .from("spreadsheet_sync_logs")
+          .update({ status: "SYNCED", synced_at: timestamp })
+          .in("id", logIds);
+      } catch {
+        // ignore
+      }
+    }
+    return {
+      success: true,
+      sheet: "BATCH",
+      row: items.length,
+      timestamp,
+      isMock: true,
+    };
+  }
+
+  const webhookUrl = process.env.GOOGLE_SHEETS_WEBHOOK_URL!;
+  const secret = process.env.GOOGLE_SHEETS_SYNC_SECRET || "elts_dev_secret";
+  const unixSeconds = String(Math.floor(Date.now() / 1000));
+
+  const envelope = {
+    entityType: "BATCH" as const,
+    action: "INSERT" as const,
+    data: items,
+    timestamp,
+    secret,
+  };
+
+  const bodyString = JSON.stringify(envelope);
+  const signature = signSyncPayload(bodyString, secret);
+
+  try {
+    const res = await fetch(webhookUrl, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-ELTS-SYNC-SECRET": secret,
+        "X-ELTS-SYNC-SIGNATURE": signature,
+        "X-ELTS-TIMESTAMP": unixSeconds,
+      },
+      body: bodyString,
+    });
+
+    const json = (await res.json().catch(() => null)) as {
+      success?: boolean;
+      sheet?: string;
+      row?: number;
+      error?: string;
+    } | null;
+
+    const isSuccess = res.ok && Boolean(json?.success);
+
+    if (logIds.length > 0) {
+      const supabase = createServiceSupabase();
+      if (isSuccess) {
+        await supabase
+          .from("spreadsheet_sync_logs")
+          .update({ status: "SYNCED", synced_at: new Date().toISOString() })
+          .in("id", logIds);
+      } else {
+        await supabase
+          .from("spreadsheet_sync_logs")
+          .update({
+            status: "FAILED",
+            last_error: json?.error || `HTTP ${res.status} from Google Apps Script`,
+          })
+          .in("id", logIds);
+      }
+    }
+
+    return {
+      success: isSuccess,
+      sheet: json?.sheet || "BATCH",
+      row: json?.row,
+      error: json?.error || (!res.ok ? `HTTP ${res.status}` : undefined),
+      timestamp,
+    };
+  } catch (err: unknown) {
+    const errorMsg = err instanceof Error ? err.message : String(err);
+    if (logIds.length > 0) {
+      try {
+        const supabase = createServiceSupabase();
+        await supabase
+          .from("spreadsheet_sync_logs")
+          .update({ status: "FAILED", last_error: errorMsg })
+          .in("id", logIds);
+      } catch {
+        // ignore
+      }
+    }
+    return { success: false, error: errorMsg, timestamp };
+  }
+}
+
 // ── Domain-Specific Synchronization Helpers ──────────────────────────────────
 
 /**

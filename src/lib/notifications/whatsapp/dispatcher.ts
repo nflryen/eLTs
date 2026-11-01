@@ -357,3 +357,51 @@ export async function notifyPaymentReceiptConfirmed(params: {
     }
   );
 }
+
+/**
+ * Dispatch Google Meet consultation & briefing details to client via WhatsApp.
+ */
+export async function notifyConsultationScheduled(params: {
+  clientName: string;
+  clientPhone: string;
+  sessionType: string;
+  dateStr: string;
+  timeStr: string;
+  meetLink?: string | null;
+  notes?: string | null;
+}): Promise<DispatchResult> {
+  const messageText = [
+    `Halo Kak ${params.clientName || "Pelanggan"}, sesi konsultasi kreatif bersama eLTs Photography telah dijadwalkan! 📹✨`,
+    "",
+    `📋 *Detail Sesi:*`,
+    `• Jenis Konsultasi: *${params.sessionType}*`,
+    `• Tanggal: *${params.dateStr}*`,
+    `• Waktu: *${params.timeStr} WIB*`,
+    "",
+    params.meetLink
+      ? [
+          `🔗 *Tautan Google Meet:*`,
+          `${params.meetLink}`,
+          "",
+          `Mohon bergabung 5 menit sebelum sesi dimulai.`,
+        ].join("\n")
+      : "Sesi tatap muka di Studio eLTs.",
+    "",
+    params.notes ? `📝 *Catatan Tambahan:* "${params.notes}"\n` : "",
+    `Tim kreatif eLTs siap mendiskusikan konsep visual dan kebutuhan produksi Anda. Sampai jumpa!`,
+    "",
+    `Salam hangat,`,
+    `*eLTs Photography Studio Operations*`,
+  ].filter(Boolean).join("\n");
+
+  return dispatchWhatsAppNotification("CONSULTATION_SCHEDULED", {
+    recipientPhone: params.clientPhone,
+    messageText,
+    metadata: {
+      sessionType: params.sessionType,
+      dateStr: params.dateStr,
+      timeStr: params.timeStr,
+      meetLink: params.meetLink,
+    },
+  });
+}

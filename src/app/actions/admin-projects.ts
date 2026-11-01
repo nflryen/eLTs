@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { requireOps } from "@/lib/auth/roles";
 import { syncProjectToSheets } from "@/lib/sync/sheets-client";
+import { provisionAndBindProjectDriveVault } from "@/lib/sync/drive-client";
 import type { CustomerRow, ProjectRow, ProjectStatus } from "@/types/database";
 import {
   generateGalleryCode,
@@ -268,8 +269,11 @@ export async function completeProjectScaffoldAction(
             selectionDeadline: fullProj.selection_deadline,
           });
         }
+
+        // Provision Google Drive Project Vault (01_RAW, 02_Proofs, 03_Deliverables)
+        await provisionAndBindProjectDriveVault(projectId);
       } catch (syncErr) {
-        console.warn("[AdminProjects] Project sync failed:", syncErr);
+        console.warn("[AdminProjects] Project sync or drive vault provisioning failed:", syncErr);
       }
     })();
     return { success: true, redirectUrl: `/admin/projects/${projectId}` };

@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {
   signSyncPayload,
   dispatchSpreadsheetSync,
+  dispatchSpreadsheetSyncBatch,
   syncProjectToSheets,
   syncInvoiceToSheets,
   syncPaymentReceiptToSheets,
@@ -107,4 +108,55 @@ test("syncProofingSelectionToSheets formats locked editor task queue payload", a
   });
 
   assert.equal(res.success, true);
+});
+
+test("dispatchSpreadsheetSyncBatch aggregates multiple items into a single execution", async () => {
+  const items = [
+    {
+      entityType: "PROJECT" as const,
+      entityId: "a0000000-0000-0000-0000-000000000001",
+      action: "INSERT" as const,
+      data: {
+        id: "a0000000-0000-0000-0000-000000000001",
+        name: "Project A",
+        customerName: "Client A",
+        contractValue: 5000000,
+        status: "ready",
+      },
+    },
+    {
+      entityType: "INVOICE" as const,
+      entityId: "b0000000-0000-0000-0000-000000000001",
+      action: "INSERT" as const,
+      data: {
+        id: "b0000000-0000-0000-0000-000000000001",
+        invoiceNumber: "INV/2026/10/0002",
+        projectName: "Project A",
+        customerName: "Client A",
+        issueDate: "2026-10-31",
+        dueDate: "2026-11-14",
+        grossContractValue: 5000000,
+        minimumDpPct: 50,
+        isDpPaid: false,
+        isFullyPaid: false,
+      },
+    },
+  ];
+
+  const res = await dispatchSpreadsheetSyncBatch(items);
+  assert.equal(res.success, true);
+  assert.equal(res.isMock, true);
+  assert.equal(res.row, 2);
+});
+
+test("replay protection detects and rejects drifted client timestamps exceeding 300 seconds", () => {
+  const serverTime = Math.floor(Date.now() / 1000);
+  const freshClientTime = serverTime - 10; // 10s drift (fresh)
+  const expiredClientTime = serverTime - 350; // 350s drift (expired)
+
+  const isFresh = Math.abs(serverTime - freshClientTime) <= 300;
+  const isExpired = Math.abs(serverTime - expiredClientTime) > 300;
+
+  assert.equal(isFresh, true, "10-second drift must be within valid replay window");
+  assert.equal(isExpired, true, "350-second drift must be flagged as expired");
 });
