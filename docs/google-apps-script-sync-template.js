@@ -368,17 +368,25 @@ function ensureDashboardInitialized(ss, forceRefresh) {
   sheet.getRange("B6:E6").setValues(kpiTitles);
   sheet.getRange("B6:E6").setFontWeight("bold").setBackground("#18181b").setFontColor("#ffffff");
 
-  // Dynamic Robust Formulas (using verified exact sheet names)
-  sheet.getRange("B7").setFormula(
+  // Dynamic Robust Locale-Safe Formulas (using verified exact sheet names and locale separator)
+  setLocaleSafeFormula(
+    ss,
+    sheet.getRange("B7"),
     '=IFERROR(SUMIFS(\'' + iName + '\'!G:G, \'' + iName + '\'!C:C, "*PEMASUKAN*"), 0)'
   );
-  sheet.getRange("C7").setFormula(
+  setLocaleSafeFormula(
+    ss,
+    sheet.getRange("C7"),
     '=IFERROR(SUMIFS(\'' + iName + '\'!G:G, \'' + iName + '\'!C:C, "*INVOICE*"), 0)'
   );
-  sheet.getRange("D7").setFormula(
+  setLocaleSafeFormula(
+    ss,
+    sheet.getRange("D7"),
     '=IFERROR(SUM(\'' + payName + '\'!F:F), 0)'
   );
-  sheet.getRange("E7").setFormula(
+  setLocaleSafeFormula(
+    ss,
+    sheet.getRange("E7"),
     '=IFERROR(COUNTA(\'' + pName + '\'!C2:C), 0)'
   );
 
@@ -387,16 +395,19 @@ function ensureDashboardInitialized(ss, forceRefresh) {
 
   // Dynamic Projects Table (QUERY Formula)
   sheet.getRange("B10").setValue("📋 15 Proyek Terkini (Dynamic Feed):").setFontWeight("bold").setFontSize(12);
-  sheet.getRange("B11").setFormula(
+  setLocaleSafeFormula(
+    ss,
+    sheet.getRange("B11"),
     '=IFERROR(QUERY(\'' + pName + '\'!A:K, "SELECT C, D, E, F, G, H, I WHERE C IS NOT NULL LIMIT 15", 1), "Belum ada data proyek")'
   );
 
   // Dynamic Payroll Table (QUERY Formula)
   sheet.getRange("B29").setValue("👥 Ringkasan Payroll & Kru Terkini:").setFontWeight("bold").setFontSize(12);
-  sheet.getRange("B30").setFormula(
+  setLocaleSafeFormula(
+    ss,
+    sheet.getRange("B30"),
     '=IFERROR(QUERY(\'' + payName + '\'!A:I, "SELECT C, D, E, F, G, H WHERE C IS NOT NULL LIMIT 15", 1), "Belum ada data kru")'
   );
-
   sheet.autoResizeColumns(2, 6);
 }
 
@@ -467,4 +478,88 @@ function doGet(_e) {
     ],
     timestamp: new Date().toISOString()
   })).setMimeType(ContentService.MimeType.JSON);
+}
+
+/**
+ * Detects whether the spreadsheet uses comma (,) or semicolon (;) as function argument separator.
+ */
+function getSpreadsheetArgumentSeparator(ss) {
+  var locale = "";
+  try {
+    locale = String(ss.getSpreadsheetLocale() || "").toLowerCase();
+  } catch (err) {
+    locale = "";
+  }
+
+  // Indonesian ('id', 'id_id', 'in_id') and Continental European locales
+  // where comma is the decimal separator (10,5) and semicolon is the function argument separator
+  var semicolonLocales = [
+    "id", "id_id", "in_id", "de", "de_de", "de_at", "de_ch",
+    "fr", "fr_fr", "fr_be", "es", "es_es", "it", "it_it",
+    "nl", "nl_nl", "nl_be", "pt", "pt_br", "pt_pt", "ru", "ru_ru",
+    "da_dk", "fi_fi", "nb_no", "nn_no", "sv_se", "pl_pl", "tr_tr"
+  ];
+
+  for (var i = 0; i < semicolonLocales.length; i++) {
+    if (locale === semicolonLocales[i] || locale.indexOf("id") === 0) {
+      return ";";
+    }
+  }
+
+  return ",";
+}
+
+/**
+ * Converts function argument separators from comma to semicolon outside of string quotes.
+ * Leaves column lists inside SQL queries like "SELECT C, D, E..." untouched.
+ */
+function convertFormulaSeparators(formula, sep) {
+  if (sep === ",") return formula;
+  var inDoubleQuotes = false;
+  var inSingleQuotes = false;
+  var result = "";
+  for (var i = 0; i < formula.length; i++) {
+    var char = formula[i];
+    if (char === '"' && !inSingleQuotes) {
+      inDoubleQuotes = !inDoubleQuotes;
+      result += char;
+    } else if (char === "'" && !inDoubleQuotes) {
+      inSingleQuotes = !inSingleQuotes;
+      result += char;
+    } else if (char === "," && !inDoubleQuotes && !inSingleQuotes) {
+      result += sep;
+    } else {
+      result += char;
+    }
+  }
+  return result;
+}
+
+/**
+ * Injects a formula into a range with automatic locale adaptation and error recovery.
+ * Tries the detected separator first; if Google Sheets flags #ERROR!, auto-switches to the alternative.
+ */
+function setLocaleSafeFormula(ss, range, formulaWithComma) {
+  var preferredSep = getSpreadsheetArgumentSeparator(ss);
+  var primary = convertFormulaSeparators(formulaWithComma, preferredSep);
+  var fallbackSep = preferredSep === ";" ? "," : ";";
+  var fallback = convertFormulaSeparators(formulaWithComma, fallbackSep);
+
+  try {
+    range.setFormula(primary);
+    SpreadsheetApp.flush();
+    var val = String(range.getValue() || "");
+    if (val.indexOf("#ERROR!") === -1) {
+      return;
+    }
+  } catch (err) {
+    // Primary failed, proceed to fallback
+  }
+
+  try {
+    range.setFormula(fallback);
+  } catch (err2) {
+    // If both failed, re-assert primary formula
+    range.setFormula(primary);
+  }
 }

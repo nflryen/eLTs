@@ -202,3 +202,21 @@ test("Google Apps Script template implements 4-tab layout and dynamic formulas",
   assert.match(gas, /"Income & Expenses"/);
   assert.match(gas, /Transaction Type/);
 });
+
+test("Google Apps Script template implements locale-safe formula injection and separator conversion", () => {
+  const gas = readFileSync("docs/google-apps-script-sync-template.js", "utf-8");
+
+  // Verify presence of helper functions
+  assert.match(gas, /function getSpreadsheetArgumentSeparator/);
+  assert.match(gas, /function convertFormulaSeparators/);
+  assert.match(gas, /function setLocaleSafeFormula/);
+
+  // Verify Indonesian locale detection
+  assert.match(gas, /"id"/);
+  assert.match(gas, /"id_id"/);
+  assert.match(gas, /"in_id"/);
+
+  // Verify fallback error detection
+  assert.match(gas, /#ERROR!/);
+  assert.match(gas, /fallbackSep/);
+});
